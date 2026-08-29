@@ -1,0 +1,601 @@
+actor_id,risk_category,filler_word,avg_sentence_len,punct_style,typo_rate,uses_emoji
+A00001,terror_financing,real talk,7,...,0.089,True
+A00002,drugs,tbh,16,;,0.01,False
+A00003,terror_financing,lowkey,9,;,0.072,False
+A00004,other_illicit,no cap,14,-,0.026,False
+A00005,arms,ngl,18,!!,0.084,False
+A00006,money_laundering,honestly,7,...,0.046,False
+A00007,drugs,basically,18,...,0.088,False
+A00008,terror_financing,bro,10,;,0.106,False
+A00009,arms,tbh,6,!!,0.093,False
+A00010,stolen_data,tbh,12,.,0.054,False
+A00011,money_laundering,honestly,9,.,0.084,False
+A00012,stolen_data,real talk,8,;,0.087,True
+A00013,other_illicit,real talk,17,;,0.026,False
+A00014,arms,ngl,9,...,0.097,False
+A00015,hacking_services,fam,17,.,0.026,False
+A00016,terror_financing,fr fr,10,!!,0.03,False
+A00017,money_laundering,fam,12,;,0.048,True
+A00018,other_illicit,listen,7,...,0.103,True
+A00019,money_laundering,real talk,12,;,0.008,False
+A00020,other_illicit,basically,14,...,0.082,True
+A00021,drugs,basically,18,.,0.013,False
+A00022,drugs,no cap,17,.,0.117,False
+A00023,arms,real talk,10,;,0.073,True
+A00024,drugs,bro,18,;,0.11,False
+A00025,drugs,tbh,11,.,0.029,True
+A00026,other_illicit,tbh,17,-,0.098,False
+A00027,other_illicit,fr fr,8,-,0.114,True
+A00028,arms,fam,12,!!,0.111,False
+A00029,money_laundering,no cap,10,-,0.119,False
+A00030,money_laundering,listen,7,!!,0.027,False
+A00031,arms,lowkey,15,!!,0.001,False
+A00032,hacking_services,tbh,6,.,0.009,True
+A00033,hacking_services,lowkey,14,!!,0.087,False
+A00034,terror_financing,lowkey,18,-,0.097,True
+A00035,terror_financing,look,11,-,0.049,False
+A00036,other_illicit,real talk,16,...,0.007,False
+A00037,arms,tbh,9,!!,0.023,False
+A00038,other_illicit,basically,13,!!,0.105,True
+A00039,drugs,bro,7,...,0.078,False
+A00040,drugs,lowkey,8,-,0.058,True
+A00041,other_illicit,fr fr,12,...,0.118,True
+A00042,money_laundering,listen,10,-,0.084,False
+A00043,money_laundering,real talk,17,-,0.019,True
+A00044,hacking_services,no cap,14,...,0.09,True
+A00045,arms,bro,14,!!,0.007,False
+A00046,money_laundering,tbh,15,...,0.081,True
+A00047,money_laundering,lowkey,15,;,0.005,True
+A00048,stolen_data,fam,14,.,0.112,True
+A00049,stolen_data,lowkey,10,-,0.016,False
+A00050,drugs,tbh,6,-,0.075,False
+A00051,arms,bro,9,;,0.032,False
+A00052,money_laundering,honestly,10,!!,0.053,False
+A00053,drugs,real talk,14,...,0.08,False
+A00054,stolen_data,fr fr,10,...,0.107,False
+A00055,other_illicit,basically,15,!!,0.086,True
+A00056,drugs,basically,14,-,0.03,False
+A00057,terror_financing,real talk,12,.,0.005,False
+A00058,drugs,basically,8,-,0.066,False
+A00059,money_laundering,tbh,17,!!,0.065,False
+A00060,other_illicit,fr fr,12,!!,0.005,False
+A00061,other_illicit,ngl,11,!!,0.082,False
+A00062,other_illicit,bro,12,;,0.09,False
+A00063,stolen_data,fr fr,18,!!,0.106,True
+A00064,hacking_services,look,18,!!,0.032,False
+A00065,stolen_data,ngl,13,!!,0.024,False
+A00066,other_illicit,lowkey,9,...,0.079,False
+A00067,other_illicit,tbh,18,.,0.042,False
+A00068,money_laundering,bro,11,...,0.014,False
+A00069,stolen_data,basically,6,...,0.072,False
+A00070,stolen_data,look,15,;,0.014,False
+A00071,terror_financing,ngl,17,-,0.0,False
+A00072,stolen_data,no cap,17,!!,0.044,True
+A00073,terror_financing,fam,11,...,0.086,False
+A00074,hacking_services,look,11,-,0.084,False
+A00075,other_illicit,real talk,12,!!,0.074,False
+A00076,terror_financing,ngl,10,.,0.025,False
+A00077,other_illicit,honestly,13,-,0.053,True
+A00078,stolen_data,no cap,8,...,0.034,False
+A00079,arms,tbh,18,!!,0.081,True
+A00080,drugs,ngl,6,!!,0.118,False
+A00081,hacking_services,listen,12,;,0.023,False
+A00082,other_illicit,lowkey,8,...,0.107,False
+A00083,drugs,look,9,!!,0.096,False
+A00084,money_laundering,bro,9,...,0.055,False
+A00085,other_illicit,bro,15,.,0.114,False
+A00086,terror_financing,no cap,14,-,0.1,False
+A00087,other_illicit,listen,13,.,0.09,False
+A00088,arms,bro,13,!!,0.033,True
+A00089,arms,basically,11,.,0.107,True
+A00090,stolen_data,look,17,!!,0.085,True
+A00091,other_illicit,bro,13,-,0.007,False
+A00092,hacking_services,fam,17,...,0.103,False
+A00093,hacking_services,ngl,11,.,0.09,False
+A00094,arms,bro,17,;,0.096,False
+A00095,other_illicit,basically,12,-,0.003,False
+A00096,money_laundering,look,17,!!,0.101,False
+A00097,hacking_services,ngl,12,;,0.068,True
+A00098,hacking_services,fr fr,13,!!,0.006,False
+A00099,stolen_data,honestly,11,-,0.033,False
+A00100,arms,tbh,13,...,0.09,True
+A00101,other_illicit,real talk,7,...,0.091,False
+A00102,money_laundering,ngl,15,!!,0.029,False
+A00103,terror_financing,lowkey,13,.,0.092,True
+A00104,stolen_data,no cap,7,!!,0.116,True
+A00105,money_laundering,fam,16,-,0.048,False
+A00106,terror_financing,no cap,16,!!,0.012,False
+A00107,stolen_data,fam,18,...,0.096,False
+A00108,other_illicit,bro,12,.,0.008,False
+A00109,hacking_services,look,13,...,0.052,False
+A00110,stolen_data,no cap,8,-,0.021,False
+A00111,terror_financing,fam,18,;,0.093,False
+A00112,stolen_data,fam,10,.,0.102,False
+A00113,drugs,listen,9,-,0.068,False
+A00114,stolen_data,listen,11,!!,0.059,False
+A00115,drugs,basically,15,.,0.067,False
+A00116,hacking_services,lowkey,17,-,0.059,False
+A00117,arms,real talk,17,-,0.054,True
+A00118,money_laundering,look,17,!!,0.037,False
+A00119,terror_financing,bro,11,-,0.12,False
+A00120,stolen_data,listen,10,.,0.03,True
+A00121,arms,tbh,17,;,0.114,False
+A00122,money_laundering,no cap,13,.,0.087,False
+A00123,drugs,basically,7,!!,0.036,False
+A00124,stolen_data,no cap,14,!!,0.033,False
+A00125,hacking_services,no cap,8,-,0.012,True
+A00126,hacking_services,listen,13,.,0.022,True
+A00127,drugs,tbh,7,-,0.059,False
+A00128,drugs,fr fr,8,;,0.114,True
+A00129,other_illicit,bro,18,-,0.073,False
+A00130,hacking_services,bro,12,-,0.109,True
+A00131,other_illicit,basically,15,;,0.007,False
+A00132,arms,lowkey,16,!!,0.032,True
+A00133,hacking_services,bro,7,!!,0.0,False
+A00134,hacking_services,basically,6,!!,0.035,True
+A00135,money_laundering,tbh,16,!!,0.111,False
+A00136,arms,real talk,18,!!,0.051,False
+A00137,terror_financing,basically,8,...,0.007,False
+A00138,hacking_services,fam,10,-,0.015,False
+A00139,hacking_services,basically,14,;,0.059,True
+A00140,other_illicit,no cap,11,;,0.03,True
+A00141,money_laundering,fam,15,...,0.12,False
+A00142,arms,ngl,18,!!,0.056,False
+A00143,stolen_data,fam,12,-,0.116,False
+A00144,hacking_services,honestly,16,...,0.103,False
+A00145,drugs,basically,16,-,0.098,False
+A00146,money_laundering,honestly,10,.,0.014,False
+A00147,stolen_data,ngl,16,;,0.055,True
+A00148,stolen_data,fam,18,-,0.075,False
+A00149,drugs,bro,8,.,0.053,False
+A00150,money_laundering,real talk,15,!!,0.085,False
+A00151,drugs,look,7,!!,0.119,False
+A00152,stolen_data,real talk,8,-,0.112,True
+A00153,arms,look,13,-,0.029,False
+A00154,other_illicit,fam,14,!!,0.104,True
+A00155,stolen_data,look,11,;,0.032,True
+A00156,stolen_data,fam,15,-,0.104,False
+A00157,arms,honestly,14,;,0.045,False
+A00158,drugs,no cap,9,;,0.046,False
+A00159,terror_financing,honestly,17,-,0.085,False
+A00160,stolen_data,real talk,8,-,0.116,True
+A00161,arms,tbh,13,...,0.063,False
+A00162,stolen_data,look,16,!!,0.009,False
+A00163,terror_financing,fam,17,-,0.078,False
+A00164,other_illicit,bro,12,.,0.075,False
+A00165,arms,bro,6,;,0.008,False
+A00166,other_illicit,no cap,7,-,0.117,False
+A00167,stolen_data,tbh,13,!!,0.083,False
+A00168,hacking_services,ngl,10,.,0.045,True
+A00169,hacking_services,fam,16,!!,0.02,True
+A00170,hacking_services,fam,16,!!,0.06,False
+A00171,hacking_services,real talk,10,-,0.031,True
+A00172,money_laundering,basically,16,;,0.019,False
+A00173,arms,basically,16,-,0.083,False
+A00174,stolen_data,look,13,...,0.028,False
+A00175,drugs,no cap,10,...,0.117,False
+A00176,stolen_data,fam,16,...,0.109,False
+A00177,terror_financing,lowkey,15,.,0.026,True
+A00178,drugs,no cap,18,!!,0.075,False
+A00179,drugs,basically,18,-,0.004,False
+A00180,stolen_data,basically,11,-,0.021,True
+A00181,hacking_services,bro,14,.,0.1,True
+A00182,arms,basically,17,.,0.097,False
+A00183,drugs,lowkey,16,-,0.116,False
+A00184,terror_financing,look,6,.,0.064,False
+A00185,drugs,real talk,10,;,0.046,False
+A00186,stolen_data,real talk,9,-,0.003,False
+A00187,stolen_data,fam,9,...,0.076,False
+A00188,hacking_services,real talk,12,...,0.017,False
+A00189,stolen_data,tbh,7,!!,0.106,True
+A00190,hacking_services,real talk,17,;,0.05,False
+A00191,drugs,real talk,7,-,0.074,False
+A00192,stolen_data,no cap,11,!!,0.053,False
+A00193,drugs,tbh,16,.,0.065,False
+A00194,hacking_services,look,10,!!,0.116,False
+A00195,drugs,tbh,16,!!,0.077,False
+A00196,other_illicit,honestly,9,!!,0.094,True
+A00197,other_illicit,bro,9,;,0.026,False
+A00198,arms,fr fr,18,;,0.0,False
+A00199,drugs,bro,10,!!,0.013,False
+A00200,drugs,honestly,18,!!,0.071,True
+A00201,hacking_services,fr fr,17,-,0.063,False
+A00202,drugs,honestly,14,;,0.013,False
+A00203,drugs,no cap,18,;,0.036,False
+A00204,drugs,listen,12,-,0.082,False
+A00205,terror_financing,tbh,11,;,0.018,True
+A00206,hacking_services,fam,14,.,0.046,False
+A00207,terror_financing,bro,15,-,0.012,False
+A00208,arms,real talk,18,;,0.087,True
+A00209,hacking_services,look,11,-,0.048,False
+A00210,drugs,honestly,16,.,0.045,True
+A00211,other_illicit,tbh,7,...,0.052,False
+A00212,terror_financing,fr fr,14,...,0.07,False
+A00213,other_illicit,tbh,12,.,0.105,False
+A00214,money_laundering,no cap,6,.,0.072,False
+A00215,money_laundering,lowkey,8,-,0.027,True
+A00216,money_laundering,honestly,7,.,0.069,False
+A00217,terror_financing,fam,15,;,0.003,False
+A00218,stolen_data,basically,6,!!,0.033,False
+A00219,terror_financing,ngl,8,!!,0.068,False
+A00220,hacking_services,real talk,6,...,0.09,True
+A00221,money_laundering,honestly,8,.,0.037,False
+A00222,drugs,tbh,6,!!,0.019,False
+A00223,arms,basically,13,-,0.058,False
+A00224,money_laundering,bro,7,.,0.052,True
+A00225,drugs,listen,14,.,0.005,False
+A00226,stolen_data,ngl,9,.,0.113,False
+A00227,arms,basically,11,...,0.001,False
+A00228,stolen_data,look,14,!!,0.06,False
+A00229,other_illicit,tbh,12,...,0.052,False
+A00230,stolen_data,honestly,15,-,0.069,False
+A00231,hacking_services,tbh,12,...,0.116,True
+A00232,money_laundering,no cap,11,...,0.052,True
+A00233,arms,look,14,...,0.047,False
+A00234,money_laundering,honestly,18,!!,0.009,False
+A00235,other_illicit,lowkey,18,.,0.042,False
+A00236,arms,fr fr,9,...,0.018,True
+A00237,other_illicit,real talk,7,!!,0.114,False
+A00238,terror_financing,fam,18,;,0.054,False
+A00239,hacking_services,real talk,15,.,0.104,False
+A00240,drugs,tbh,13,-,0.076,False
+A00241,stolen_data,honestly,14,...,0.037,False
+A00242,money_laundering,basically,7,...,0.074,False
+A00243,arms,bro,18,...,0.054,False
+A00244,drugs,honestly,15,-,0.06,False
+A00245,terror_financing,honestly,17,...,0.061,True
+A00246,stolen_data,listen,13,;,0.063,True
+A00247,terror_financing,look,12,.,0.081,True
+A00248,stolen_data,honestly,7,.,0.011,False
+A00249,terror_financing,no cap,16,;,0.105,False
+A00250,arms,fr fr,11,.,0.116,False
+A00251,stolen_data,fam,17,...,0.037,False
+A00252,stolen_data,fr fr,16,;,0.011,False
+A00253,hacking_services,ngl,11,.,0.022,True
+A00254,drugs,lowkey,9,!!,0.019,True
+A00255,terror_financing,bro,18,;,0.1,False
+A00256,arms,honestly,18,;,0.016,False
+A00257,drugs,no cap,18,;,0.097,True
+A00258,terror_financing,look,11,!!,0.116,False
+A00259,hacking_services,listen,9,;,0.029,False
+A00260,other_illicit,lowkey,11,;,0.118,False
+A00261,other_illicit,look,14,;,0.05,True
+A00262,money_laundering,fam,8,.,0.006,False
+A00263,arms,tbh,17,;,0.102,True
+A00264,other_illicit,basically,13,;,0.018,False
+A00265,arms,listen,11,...,0.05,False
+A00266,other_illicit,look,7,.,0.027,False
+A00267,other_illicit,no cap,16,.,0.095,True
+A00268,drugs,listen,17,!!,0.091,False
+A00269,money_laundering,tbh,6,.,0.026,True
+A00270,drugs,bro,12,...,0.093,True
+A00271,money_laundering,lowkey,12,;,0.055,True
+A00272,hacking_services,bro,6,;,0.069,False
+A00273,terror_financing,ngl,15,.,0.029,False
+A00274,other_illicit,tbh,14,.,0.008,False
+A00275,hacking_services,bro,14,...,0.047,False
+A00276,terror_financing,honestly,10,...,0.043,True
+A00277,arms,real talk,16,...,0.093,False
+A00278,other_illicit,ngl,11,;,0.041,False
+A00279,terror_financing,real talk,13,-,0.076,False
+A00280,stolen_data,listen,6,.,0.024,False
+A00281,drugs,basically,14,-,0.119,False
+A00282,terror_financing,real talk,9,.,0.043,False
+A00283,terror_financing,honestly,10,...,0.096,False
+A00284,stolen_data,listen,12,.,0.117,False
+A00285,other_illicit,bro,10,...,0.087,True
+A00286,stolen_data,fr fr,14,.,0.039,True
+A00287,stolen_data,basically,13,;,0.086,True
+A00288,other_illicit,listen,6,.,0.074,False
+A00289,arms,ngl,7,-,0.044,False
+A00290,drugs,ngl,8,;,0.081,False
+A00291,money_laundering,lowkey,18,.,0.043,False
+A00292,drugs,fr fr,16,-,0.114,False
+A00293,arms,fam,8,;,0.044,False
+A00294,drugs,tbh,6,!!,0.06,False
+A00295,stolen_data,basically,18,.,0.084,True
+A00296,arms,no cap,13,!!,0.015,False
+A00297,terror_financing,no cap,13,...,0.097,False
+A00298,other_illicit,honestly,17,...,0.066,True
+A00299,arms,fr fr,17,!!,0.095,False
+A00300,hacking_services,fr fr,9,-,0.003,False
+A00301,terror_financing,bro,8,;,0.106,True
+A00302,drugs,no cap,13,;,0.049,False
+A00303,arms,fr fr,11,...,0.054,False
+A00304,money_laundering,bro,16,;,0.022,False
+A00305,terror_financing,ngl,7,;,0.018,True
+A00306,arms,lowkey,11,;,0.107,False
+A00307,drugs,real talk,14,.,0.015,False
+A00308,terror_financing,bro,16,!!,0.071,False
+A00309,other_illicit,fam,17,;,0.041,False
+A00310,terror_financing,ngl,7,...,0.114,False
+A00311,terror_financing,lowkey,18,;,0.05,False
+A00312,hacking_services,bro,10,.,0.058,False
+A00313,hacking_services,basically,13,...,0.083,True
+A00314,stolen_data,listen,9,.,0.073,False
+A00315,drugs,no cap,11,-,0.016,False
+A00316,drugs,honestly,9,-,0.015,False
+A00317,arms,ngl,10,-,0.104,False
+A00318,hacking_services,honestly,15,.,0.023,True
+A00319,hacking_services,listen,10,-,0.003,False
+A00320,money_laundering,lowkey,9,;,0.042,True
+A00321,hacking_services,real talk,16,-,0.034,True
+A00322,drugs,fr fr,10,.,0.092,False
+A00323,money_laundering,fam,14,!!,0.044,True
+A00324,money_laundering,listen,18,;,0.034,False
+A00325,money_laundering,tbh,8,...,0.047,False
+A00326,drugs,honestly,18,!!,0.024,False
+A00327,hacking_services,ngl,6,!!,0.086,False
+A00328,arms,fr fr,15,;,0.017,False
+A00329,money_laundering,look,15,.,0.071,False
+A00330,stolen_data,listen,17,;,0.036,False
+A00331,other_illicit,real talk,7,-,0.07,False
+A00332,other_illicit,no cap,16,...,0.072,True
+A00333,money_laundering,fam,15,!!,0.087,False
+A00334,terror_financing,real talk,17,;,0.093,False
+A00335,hacking_services,lowkey,6,;,0.114,True
+A00336,other_illicit,honestly,12,!!,0.05,True
+A00337,stolen_data,fam,13,...,0.085,False
+A00338,money_laundering,real talk,13,;,0.045,False
+A00339,terror_financing,honestly,14,.,0.081,False
+A00340,money_laundering,no cap,10,;,0.058,False
+A00341,terror_financing,basically,9,.,0.093,False
+A00342,terror_financing,listen,11,-,0.042,False
+A00343,other_illicit,basically,10,...,0.069,False
+A00344,drugs,honestly,18,!!,0.035,True
+A00345,money_laundering,honestly,13,.,0.09,True
+A00346,arms,basically,14,.,0.016,False
+A00347,hacking_services,lowkey,6,;,0.027,True
+A00348,money_laundering,honestly,17,-,0.012,False
+A00349,stolen_data,fr fr,12,-,0.057,True
+A00350,arms,basically,16,...,0.109,True
+A00351,arms,bro,17,...,0.11,True
+A00352,stolen_data,ngl,12,-,0.022,False
+A00353,stolen_data,ngl,6,.,0.068,True
+A00354,other_illicit,listen,16,;,0.063,False
+A00355,terror_financing,bro,13,.,0.023,True
+A00356,other_illicit,listen,16,.,0.086,True
+A00357,other_illicit,basically,15,!!,0.021,False
+A00358,arms,look,14,.,0.01,False
+A00359,other_illicit,listen,11,!!,0.001,False
+A00360,terror_financing,basically,11,.,0.07,False
+A00361,arms,honestly,17,!!,0.007,True
+A00362,stolen_data,look,16,;,0.111,False
+A00363,hacking_services,no cap,7,.,0.044,True
+A00364,other_illicit,fr fr,13,;,0.045,False
+A00365,other_illicit,bro,18,!!,0.091,False
+A00366,drugs,tbh,14,-,0.063,False
+A00367,stolen_data,ngl,14,;,0.024,False
+A00368,drugs,bro,13,...,0.082,False
+A00369,money_laundering,bro,13,...,0.054,False
+A00370,hacking_services,ngl,14,-,0.081,False
+A00371,terror_financing,basically,6,!!,0.069,True
+A00372,drugs,tbh,14,...,0.112,True
+A00373,terror_financing,basically,12,!!,0.092,False
+A00374,hacking_services,look,11,-,0.054,False
+A00375,arms,tbh,16,;,0.016,False
+A00376,drugs,bro,12,;,0.015,False
+A00377,hacking_services,ngl,10,-,0.081,False
+A00378,other_illicit,lowkey,9,-,0.042,True
+A00379,arms,tbh,6,-,0.074,False
+A00380,terror_financing,lowkey,7,...,0.071,False
+A00381,other_illicit,ngl,9,...,0.048,True
+A00382,money_laundering,ngl,8,;,0.119,True
+A00383,stolen_data,honestly,15,;,0.093,False
+A00384,money_laundering,fr fr,16,;,0.027,False
+A00385,drugs,fam,17,!!,0.075,False
+A00386,hacking_services,honestly,16,-,0.094,False
+A00387,other_illicit,fr fr,10,-,0.022,False
+A00388,hacking_services,lowkey,10,!!,0.097,False
+A00389,stolen_data,look,14,;,0.016,True
+A00390,other_illicit,real talk,7,-,0.102,True
+A00391,other_illicit,lowkey,6,.,0.045,False
+A00392,arms,tbh,9,;,0.087,False
+A00393,drugs,honestly,10,...,0.025,True
+A00394,arms,no cap,18,-,0.11,False
+A00395,money_laundering,look,9,;,0.039,True
+A00396,hacking_services,real talk,11,.,0.031,False
+A00397,stolen_data,tbh,18,-,0.091,False
+A00398,drugs,honestly,12,...,0.068,True
+A00399,arms,basically,14,;,0.069,False
+A00400,terror_financing,honestly,9,-,0.068,True
+A00401,terror_financing,real talk,11,.,0.092,False
+A00402,arms,no cap,13,-,0.02,False
+A00403,drugs,no cap,14,-,0.022,False
+A00404,drugs,bro,6,...,0.113,False
+A00405,money_laundering,look,8,!!,0.008,True
+A00406,hacking_services,listen,11,...,0.074,False
+A00407,drugs,real talk,13,...,0.001,False
+A00408,other_illicit,bro,17,.,0.064,True
+A00409,drugs,no cap,16,-,0.097,False
+A00410,stolen_data,bro,8,!!,0.023,False
+A00411,money_laundering,basically,18,-,0.009,False
+A00412,terror_financing,lowkey,17,!!,0.036,False
+A00413,hacking_services,real talk,18,...,0.011,False
+A00414,hacking_services,ngl,16,...,0.084,True
+A00415,money_laundering,real talk,18,.,0.068,False
+A00416,hacking_services,ngl,9,!!,0.108,False
+A00417,money_laundering,basically,6,...,0.082,True
+A00418,money_laundering,real talk,6,!!,0.111,False
+A00419,arms,fr fr,18,-,0.111,True
+A00420,other_illicit,fam,12,;,0.04,False
+A00421,drugs,no cap,17,...,0.06,False
+A00422,hacking_services,look,9,...,0.041,False
+A00423,stolen_data,honestly,6,.,0.094,False
+A00424,drugs,bro,12,-,0.022,False
+A00425,hacking_services,fam,10,!!,0.086,True
+A00426,drugs,no cap,18,!!,0.089,False
+A00427,drugs,ngl,10,-,0.043,True
+A00428,drugs,fr fr,12,-,0.067,False
+A00429,other_illicit,tbh,11,;,0.011,False
+A00430,money_laundering,look,6,.,0.05,False
+A00431,stolen_data,lowkey,15,;,0.02,False
+A00432,hacking_services,basically,10,-,0.018,True
+A00433,terror_financing,basically,13,...,0.043,False
+A00434,drugs,listen,15,;,0.023,True
+A00435,stolen_data,look,11,;,0.046,False
+A00436,arms,look,16,;,0.016,False
+A00437,terror_financing,listen,11,!!,0.116,False
+A00438,hacking_services,no cap,16,-,0.116,False
+A00439,money_laundering,basically,18,-,0.044,False
+A00440,arms,bro,8,;,0.003,False
+A00441,other_illicit,listen,18,.,0.1,True
+A00442,terror_financing,look,16,-,0.017,False
+A00443,hacking_services,fr fr,17,-,0.095,True
+A00444,hacking_services,fam,12,;,0.061,False
+A00445,terror_financing,bro,6,.,0.084,False
+A00446,money_laundering,tbh,7,!!,0.079,False
+A00447,hacking_services,ngl,15,-,0.116,False
+A00448,money_laundering,tbh,6,...,0.031,False
+A00449,other_illicit,fam,17,;,0.027,False
+A00450,drugs,real talk,15,;,0.018,False
+A00451,stolen_data,basically,12,...,0.014,False
+A00452,hacking_services,basically,11,-,0.094,False
+A00453,terror_financing,tbh,13,-,0.038,False
+A00454,terror_financing,tbh,6,.,0.078,False
+A00455,hacking_services,lowkey,14,!!,0.066,False
+A00456,hacking_services,lowkey,18,-,0.076,True
+A00457,hacking_services,look,6,;,0.106,False
+A00458,other_illicit,ngl,17,!!,0.025,False
+A00459,stolen_data,tbh,15,...,0.096,False
+A00460,terror_financing,lowkey,13,...,0.031,False
+A00461,stolen_data,honestly,15,-,0.073,False
+A00462,money_laundering,listen,15,!!,0.098,False
+A00463,arms,fam,7,!!,0.038,True
+A00464,money_laundering,honestly,17,!!,0.061,False
+A00465,arms,look,12,!!,0.058,False
+A00466,hacking_services,bro,8,-,0.035,True
+A00467,other_illicit,fam,6,.,0.114,False
+A00468,hacking_services,look,14,;,0.078,False
+A00469,other_illicit,no cap,13,-,0.02,False
+A00470,other_illicit,lowkey,10,...,0.033,False
+A00471,stolen_data,listen,15,-,0.066,True
+A00472,hacking_services,bro,11,;,0.099,True
+A00473,arms,bro,9,-,0.012,False
+A00474,hacking_services,basically,6,-,0.032,False
+A00475,stolen_data,tbh,18,!!,0.025,False
+A00476,other_illicit,no cap,15,-,0.02,True
+A00477,money_laundering,lowkey,18,...,0.068,False
+A00478,money_laundering,fr fr,11,.,0.035,True
+A00479,stolen_data,real talk,7,!!,0.116,False
+A00480,arms,real talk,8,!!,0.03,False
+A00481,hacking_services,real talk,12,-,0.017,False
+A00482,hacking_services,look,13,...,0.076,False
+A00483,hacking_services,bro,17,.,0.083,False
+A00484,terror_financing,honestly,15,...,0.104,False
+A00485,arms,listen,16,.,0.102,False
+A00486,money_laundering,look,9,-,0.032,False
+A00487,other_illicit,fam,8,;,0.102,False
+A00488,drugs,ngl,6,...,0.075,False
+A00489,terror_financing,fr fr,13,-,0.0,False
+A00490,drugs,fr fr,16,.,0.019,False
+A00491,arms,real talk,11,.,0.01,False
+A00492,terror_financing,ngl,12,.,0.087,False
+A00493,money_laundering,tbh,17,...,0.0,False
+A00494,drugs,lowkey,14,-,0.001,False
+A00495,terror_financing,look,17,!!,0.057,True
+A00496,other_illicit,tbh,7,.,0.044,True
+A00497,terror_financing,fr fr,16,!!,0.008,False
+A00498,hacking_services,fr fr,13,.,0.087,False
+A00499,arms,fam,16,-,0.103,True
+A00500,arms,tbh,15,-,0.042,False
+A00501,money_laundering,lowkey,10,...,0.03,False
+A00502,arms,basically,18,...,0.102,False
+A00503,drugs,bro,15,;,0.023,False
+A00504,drugs,lowkey,13,-,0.014,False
+A00505,other_illicit,bro,6,.,0.112,True
+A00506,other_illicit,fam,12,.,0.066,True
+A00507,drugs,tbh,6,;,0.008,True
+A00508,hacking_services,look,14,.,0.075,False
+A00509,stolen_data,no cap,12,...,0.077,False
+A00510,arms,tbh,10,...,0.061,True
+A00511,terror_financing,bro,11,-,0.07,False
+A00512,arms,real talk,7,.,0.084,False
+A00513,money_laundering,ngl,9,...,0.111,True
+A00514,drugs,ngl,10,!!,0.014,False
+A00515,stolen_data,fr fr,13,.,0.063,False
+A00516,drugs,fr fr,11,!!,0.09,False
+A00517,money_laundering,ngl,11,-,0.033,True
+A00518,other_illicit,real talk,7,-,0.055,False
+A00519,terror_financing,fam,8,.,0.019,False
+A00520,other_illicit,no cap,7,!!,0.089,True
+A00521,arms,ngl,9,...,0.057,False
+A00522,stolen_data,ngl,14,-,0.027,True
+A00523,arms,basically,7,;,0.045,False
+A00524,hacking_services,lowkey,18,;,0.118,False
+A00525,stolen_data,basically,18,.,0.039,False
+A00526,hacking_services,lowkey,10,;,0.094,False
+A00527,money_laundering,honestly,15,-,0.12,False
+A00528,stolen_data,lowkey,8,...,0.112,True
+A00529,hacking_services,real talk,17,...,0.114,True
+A00530,hacking_services,no cap,17,.,0.012,False
+A00531,other_illicit,listen,6,!!,0.085,True
+A00532,drugs,bro,12,.,0.055,False
+A00533,terror_financing,bro,8,-,0.009,False
+A00534,hacking_services,fr fr,9,.,0.031,False
+A00535,arms,no cap,17,.,0.038,True
+A00536,hacking_services,fr fr,18,;,0.013,True
+A00537,hacking_services,honestly,12,...,0.064,False
+A00538,terror_financing,basically,13,.,0.102,True
+A00539,arms,basically,17,;,0.005,False
+A00540,terror_financing,tbh,17,!!,0.116,False
+A00541,money_laundering,basically,10,!!,0.004,False
+A00542,arms,no cap,14,!!,0.011,True
+A00543,arms,tbh,6,...,0.1,False
+A00544,drugs,look,11,...,0.07,True
+A00545,drugs,ngl,7,!!,0.108,False
+A00546,hacking_services,honestly,7,...,0.113,True
+A00547,stolen_data,no cap,12,-,0.004,False
+A00548,money_laundering,lowkey,8,.,0.034,False
+A00549,hacking_services,fam,15,!!,0.078,False
+A00550,other_illicit,ngl,7,.,0.046,False
+A00551,terror_financing,bro,9,;,0.095,False
+A00552,money_laundering,honestly,13,;,0.094,False
+A00553,drugs,honestly,12,.,0.022,False
+A00554,arms,basically,6,-,0.064,False
+A00555,drugs,tbh,9,!!,0.032,False
+A00556,arms,lowkey,15,-,0.043,False
+A00557,money_laundering,fr fr,9,;,0.038,False
+A00558,arms,ngl,17,.,0.114,False
+A00559,arms,listen,14,.,0.021,True
+A00560,arms,fam,9,...,0.063,True
+A00561,drugs,fr fr,11,!!,0.11,False
+A00562,other_illicit,ngl,8,;,0.085,True
+A00563,money_laundering,bro,11,...,0.045,False
+A00564,hacking_services,tbh,11,.,0.039,False
+A00565,money_laundering,real talk,13,.,0.021,False
+A00566,terror_financing,honestly,9,;,0.098,False
+A00567,hacking_services,basically,8,!!,0.087,False
+A00568,arms,fam,6,!!,0.072,False
+A00569,drugs,real talk,15,...,0.112,True
+A00570,other_illicit,lowkey,11,.,0.02,False
+A00571,terror_financing,no cap,16,.,0.054,True
+A00572,hacking_services,tbh,11,.,0.094,False
+A00573,hacking_services,listen,17,-,0.116,False
+A00574,money_laundering,honestly,14,-,0.012,False
+A00575,drugs,real talk,18,!!,0.02,True
+A00576,arms,basically,6,.,0.031,True
+A00577,stolen_data,look,8,...,0.066,False
+A00578,arms,fam,15,-,0.085,False
+A00579,hacking_services,fam,12,!!,0.006,False
+A00580,drugs,no cap,14,;,0.032,True
+A00581,stolen_data,ngl,12,;,0.066,False
+A00582,hacking_services,ngl,12,...,0.035,False
+A00583,hacking_services,lowkey,7,...,0.025,False
+A00584,drugs,tbh,10,-,0.057,False
+A00585,arms,real talk,14,-,0.022,False
+A00586,stolen_data,listen,6,.,0.053,True
+A00587,terror_financing,fam,6,!!,0.09,False
+A00588,money_laundering,honestly,18,;,0.05,False
+A00589,hacking_services,ngl,12,;,0.05,False
+A00590,terror_financing,fam,9,-,0.036,False
+A00591,money_laundering,ngl,14,;,0.108,False
+A00592,other_illicit,fr fr,7,-,0.021,False
+A00593,arms,lowkey,8,...,0.051,False
+A00594,drugs,real talk,8,;,0.031,False
+A00595,money_laundering,tbh,12,;,0.048,False
+A00596,hacking_services,listen,6,;,0.071,False
+A00597,drugs,fr fr,8,;,0.071,False
+A00598,hacking_services,fam,18,...,0.094,False
+A00599,stolen_data,basically,12,-,0.069,False
+A00600,hacking_services,look,8,;,0.073,False
