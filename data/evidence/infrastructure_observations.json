@@ -1,0 +1,38 @@
+[
+  {
+    "observation_id": null,
+    "indicator_type": "default_banner",
+    "target": "https://127.0.0.1:8443/",
+    "detected": true,
+    "observed_value": "MOCK-SERVER-V1",
+    "clearnet_match_domain": null,
+    "confidence": 0.85,
+    "scan_date": "2026-08-29T16:38:26.671146+00:00",
+    "source": "authorized-test-service",
+    "evidence": "Test server banner detected."
+  },
+  {
+    "observation_id": null,
+    "indicator_type": "ssl_cert_reuse",
+    "target": "https://127.0.0.1:8443/",
+    "detected": true,
+    "observed_value": "66:42:4A:13:DA:88:8F:DA:FE:F1:1B:76:5F:49:4C:D3:4F:A8:F4:DC:51:3A:8C:DC:70:28:F1:09:20:70:C0:3D",
+    "clearnet_match_domain": "demo-clearnet.example",
+    "confidence": 0.9,
+    "scan_date": "2026-08-29T16:38:26.671146+00:00",
+    "source": "authorized-test-service",
+    "evidence": "TLS certificate fingerprint matched known infrastructure."
+  },
+  {
+    "observation_id": null,
+    "indicator_type": "descriptor_timing",
+    "target": "https://127.0.0.1:8443/descriptor-timing",
+    "detected": true,
+    "observed_value": "DESCRIPTOR_TIMING_TEST",
+    "clearnet_match_domain": null,
+    "confidence": 0.75,
+    "scan_date": "2026-08-29T16:38:26.671146+00:00",
+    "source": "authorized-test-service",
+    "evidence": "Authorized descriptor timing test signal detected."
+  }
+]
