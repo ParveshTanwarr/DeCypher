@@ -1,4 +1,4 @@
-# ShadowTrace Synthetic Dataset
+# DeCypher Synthetic Dataset
 
 Fully synthetic dark-web-style dataset built for prototype development. No real dark-web
 content, no real people, no real infrastructure — safe to use, share, and demo publicly.
