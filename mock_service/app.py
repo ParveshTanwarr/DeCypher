@@ -28,3 +28,9 @@ def server_status():
         "server_status": "operational",
         "test_indicator": "EXPOSED_STATUS_PAGE_TEST"
     }
+@app.get("/descriptor-timing")
+def descriptor_timing():
+    return {
+        "marker": "DESCRIPTOR_TIMING_TEST",
+        "timing": "authorized-test-signal"
+    }
