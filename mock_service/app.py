@@ -20,3 +20,11 @@ def status():
         "status": "operational",
         "environment": "authorized-test"
     }
+@app.get("/server-status")
+def server_status():
+    return {
+        "service": "DeCypher Mock Service",
+        "page_type": "authorized-test-status-page",
+        "server_status": "operational",
+        "test_indicator": "EXPOSED_STATUS_PAGE_TEST"
+    }
