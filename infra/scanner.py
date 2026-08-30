@@ -2,6 +2,8 @@ import json
 from datetime import datetime, timezone
 from urllib.parse import urlparse
 from infra.evidence import save_observations
+from infra.observation_mapper import map_observations
+from infra.backend_client import send_observations
 
 import requests
 
@@ -216,3 +218,20 @@ if __name__ == "__main__":
     print(
         f"Evidence saved to: {output_path}"
     )
+
+    # -------------------------------------------------
+    # Send observations to backend
+    # -------------------------------------------------
+
+    mapped_observations = map_observations(
+        results,
+        "ACT-8821"
+    )
+
+    backend_result = send_observations(
+        mapped_observations
+    )
+
+    print()
+    print("Backend response:")
+    print(backend_result)
