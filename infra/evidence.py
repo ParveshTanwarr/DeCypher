@@ -1,8 +1,24 @@
 import json
+import uuid
 from pathlib import Path
 
 
 EVIDENCE_DIR = Path("data") / "evidence"
+def ensure_observation_ids(
+    observations: list[dict]
+) -> list[dict]:
+    """
+    Ensure every observation has a unique ID.
+    """
+
+    for observation in observations:
+        if not observation.get("observation_id"):
+            observation["observation_id"] = (
+                "OBS-INFRA-"
+                + uuid.uuid4().hex[:12].upper()
+            )
+
+    return observations
 
 
 def save_observations(
@@ -10,9 +26,12 @@ def save_observations(
     filename: str = "infrastructure_observations.json"
 ):
     """
-    Save scanner observations as a JSON file
-    that can later be consumed by the backend.
+    Save scanner observations as JSON.
     """
+
+    observations = ensure_observation_ids(
+        observations
+    )
 
     EVIDENCE_DIR.mkdir(
         parents=True,
