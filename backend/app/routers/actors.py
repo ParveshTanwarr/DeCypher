@@ -1,6 +1,17 @@
-from fastapi import APIRouter, HTTPException, Query
 from typing import List, Optional
-from app.models.schemas import ActorSummary, ActorDetail, EvidenceSignal, GraphPayload, GraphNode, GraphEdge
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy.orm import Session
+
+from app.database.postgres import get_db
+from app.models.schemas import (
+    ActorDetail,
+    ActorSummary,
+    EvidenceSignal,
+    GraphEdge,
+    GraphNode,
+    GraphPayload,
+)
+from app.models.sql_models import Observation
 
 router = APIRouter(prefix="/actors", tags=["Actors"])
 
@@ -22,15 +33,15 @@ MOCK_ACTORS: List[ActorDetail] = [
                 signal_type="wallet_reuse",
                 confidence=0.98,
                 description="Shared BTC deposit address found across ShadowBroker_99 and GhostOperator",
-                details={"wallet": "bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh", "overlap_count": 4}
+                details={"wallet": "bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh", "overlap_count": 4},
             ),
             EvidenceSignal(
                 signal_type="stylometry",
                 confidence=0.89,
                 description="Punctuation and function-word stylometric match across forum listings",
-                details={"cosine_similarity": 0.892, "model": "stylometry-v1"}
-            )
-        ]
+                details={"cosine_similarity": 0.892, "model": "stylometry-v1"},
+            ),
+        ],
     ),
     ActorDetail(
         actor_id="ACT-4102",
@@ -48,16 +59,17 @@ MOCK_ACTORS: List[ActorDetail] = [
                 signal_type="infrastructure",
                 confidence=0.85,
                 description="Exposed status page and SSL certificate reuse between onion mirrors",
-                details={"cert_sha256": "4a7d...391e", "port": 443}
+                details={"cert_sha256": "4a7d...391e", "port": 443},
             )
-        ]
-    )
+        ],
+    ),
 ]
+
 
 @router.get("", response_model=List[ActorSummary])
 def get_actors(
     category: Optional[str] = Query(None, description="Filter by risk category (e.g. Critical, High)"),
-    min_confidence: Optional[float] = Query(0.0, description="Minimum confidence threshold")
+    min_confidence: Optional[float] = Query(0.0, description="Minimum confidence threshold"),
 ):
     results = []
     for actor in MOCK_ACTORS:
@@ -72,10 +84,11 @@ def get_actors(
                 risk_category=actor.risk_category,
                 confidence_score=actor.confidence_score,
                 associated_handles=actor.handles,
-                last_active=actor.last_seen
+                last_active=actor.last_seen,
             )
         )
     return results
+
 
 @router.get("/{actor_id}", response_model=ActorDetail)
 def get_actor_detail(actor_id: str):
@@ -84,12 +97,68 @@ def get_actor_detail(actor_id: str):
             return actor
     raise HTTPException(status_code=404, detail="Actor not found")
 
+
 @router.get("/{actor_id}/evidence", response_model=List[EvidenceSignal])
-def get_actor_evidence(actor_id: str):
+def get_actor_evidence(
+    actor_id: str,
+    db: Session = Depends(get_db),
+):
+    target_actor: Optional[ActorDetail] = None
     for actor in MOCK_ACTORS:
         if actor.actor_id.lower() == actor_id.lower():
-            return actor.evidence_trail
-    raise HTTPException(status_code=404, detail="Actor not found")
+            target_actor = actor
+            break
+
+    # Build target identifiers to match against database observations
+    target_keys = [actor_id.lower()]
+    evidence_list: List[EvidenceSignal] = []
+
+    if target_actor:
+        evidence_list.extend(target_actor.evidence_trail)
+        target_keys.append(target_actor.actor_id.lower())
+        target_keys.append(target_actor.primary_handle.lower())
+        target_keys.extend([h.lower() for h in target_actor.handles])
+
+    # Query observations from PostgreSQL
+    db_observations = (
+        db.query(Observation)
+        .all()
+    )
+    
+    # Filter matching observations for this actor / handles
+    matched_observations = [
+        obs for obs in db_observations
+        if obs.target and obs.target.lower() in target_keys
+    ]
+
+    for obs in matched_observations:
+        signal = EvidenceSignal(
+            observation_id=obs.observation_id,
+            signal_type=obs.indicator_type or "infrastructure",
+            indicator_type=obs.indicator_type,
+            confidence=obs.confidence if obs.confidence is not None else 1.0,
+            description=obs.description or f"Observed {obs.indicator_type}: {obs.value}",
+            detected=obs.detected,
+            value=obs.value,
+            target=obs.target,
+            source=obs.source or "scanner",
+            timestamp=obs.timestamp,
+            details={
+                "indicator_type": obs.indicator_type,
+                "value": obs.value,
+                "source": obs.source,
+            },
+        )
+        evidence_list.append(signal)
+
+    if not target_actor and not matched_observations:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Actor with ID '{actor_id}' not found.",
+        )
+
+    return evidence_list
+
 
 @router.get("/{actor_id}/graph", response_model=GraphPayload)
 def get_actor_subgraph(actor_id: str):
@@ -108,5 +177,5 @@ def get_actor_subgraph(actor_id: str):
                 links.append(GraphEdge(source=actor.primary_handle, target=w, relation="SHARES_WALLET"))
 
             return GraphPayload(nodes=nodes, links=links)
-            
+
     raise HTTPException(status_code=404, detail="Actor graph not found")
