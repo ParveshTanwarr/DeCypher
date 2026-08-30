@@ -94,25 +94,25 @@ class FeedbackResponse(BaseModel):
 # ------------------------------------------------------------------
 
 class ObservationCreate(BaseModel):
-    indicator_type: str = "general"
+    observation_id: str = Field(default_factory=lambda: f"obs_{uuid.uuid4().hex[:8]}")
+    indicator_type: str
+    detected: bool = True
     value: str
+    target: str
     source: str = "scanner"
-    target: Optional[str] = None
-    details: Dict[str, Any] = Field(default_factory=dict)
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     confidence: Optional[float] = 1.0
+    description: Optional[str] = None
 
 
 class ObservationBatchCreate(BaseModel):
     observations: List[ObservationCreate] = Field(default_factory=list)
-    batch_source: Optional[str] = "scanner_batch"
-    metadata: Dict[str, Any] = Field(default_factory=dict)
 
 
-class ObservationResponse(BaseModel):
+class BatchIngestionResponse(BaseModel):
     status: str = "success"
-    processed_count: int = 0
-    observation_ids: List[str] = Field(default_factory=list)
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    inserted_count: int = 0
+    message: str = "Successfully ingested scanner observations."
 
 
 class ScanRequest(BaseModel):
