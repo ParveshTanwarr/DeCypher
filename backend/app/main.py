@@ -3,7 +3,8 @@ from contextlib import asynccontextmanager
 from prometheus_fastapi_instrumentator import Instrumentator
 
 from app.services.ingestion import init_db_and_load_csvs
-from app.routers import actors, search, feedback, export, auth
+# 1. Added 'scanner' to the imports list here:
+from app.routers import actors, search, feedback, export, auth, scanner
 from app.middleware.audit_log import AuditLogMiddleware
 
 @asynccontextmanager
@@ -19,18 +20,20 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# 1. Attach Audit Log Middleware
+# Attach Audit Log Middleware
 app.add_middleware(AuditLogMiddleware)
 
-# 2. Attach Prometheus metrics monitoring at /metrics
+# Attach Prometheus monitoring
 Instrumentator().instrument(app).expose(app)
 
-# 3. Include all endpoint routers
+# Include endpoint routers
 app.include_router(auth.router)
 app.include_router(actors.router)
 app.include_router(search.router)
 app.include_router(feedback.router)
 app.include_router(export.router)
+# 2. Registered scanner router here:
+app.include_router(scanner.router)
 
 @app.get("/health", tags=["Health"])
 def health_check():
