@@ -1,0 +1,139 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --font-sans: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+    --font-mono: 'JetBrains Mono', monospace;
+
+    /* Light mode variables */
+    --bg-primary: #f4f6fb;
+    --bg-secondary: #ffffff;
+    --bg-tertiary: #e9eef7;
+    --bg-card: #ffffff;
+    --bg-card-hover: #f8fafc;
+    --bg-surface: #ffffff;
+    --bg-glass: rgba(255, 255, 255, 0.85);
+
+    --border-subtle: #e2e8f0;
+    --border-medium: #cbd5e1;
+    --border-glow: rgba(6, 182, 212, 0.25);
+
+    --text-primary: #0f172a;
+    --text-secondary: #475569;
+    --text-muted: #64748b;
+    --text-accent: #0284c7;
+
+    --accent-cyan: #0284c7;
+    --accent-indigo: #4f46e5;
+    --accent-blue: #2563eb;
+    
+    --risk-critical: #e11d48;
+    --risk-critical-bg: rgba(225, 29, 72, 0.08);
+    --risk-high: #ea580c;
+    --risk-high-bg: rgba(234, 88, 12, 0.08);
+    --risk-medium: #d97706;
+    --risk-medium-bg: rgba(217, 119, 6, 0.08);
+    --risk-low: #059669;
+    --risk-low-bg: rgba(5, 150, 105, 0.08);
+
+    --shadow-soft: 0 4px 20px -2px rgba(15, 23, 42, 0.06), 0 2px 6px -1px rgba(15, 23, 42, 0.04);
+    --shadow-glow: 0 0 24px -4px rgba(2, 132, 199, 0.18);
+  }
+
+  .dark {
+    /* Sleek Interface Dark Theme - Deep cyber space palette */
+    --bg-primary: #05070a;
+    --bg-secondary: #0d1117;
+    --bg-tertiary: #161b22;
+    --bg-card: #0d1117;
+    --bg-card-hover: #161b22;
+    --bg-surface: #0d1117;
+    --bg-glass: rgba(13, 17, 23, 0.85);
+
+    --border-subtle: #1e293b;
+    --border-medium: #30363d;
+    --border-glow: rgba(6, 182, 212, 0.4);
+
+    --text-primary: #f1f5f9;
+    --text-secondary: #94a3b8;
+    --text-muted: #64748b;
+    --text-accent: #38bdf8;
+
+    --accent-cyan: #06b6d4;
+    --accent-indigo: #6366f1;
+    --accent-blue: #3b82f6;
+
+    --risk-critical: #f85149;
+    --risk-critical-bg: rgba(248, 81, 73, 0.15);
+    --risk-high: #f97316;
+    --risk-high-bg: rgba(249, 115, 22, 0.15);
+    --risk-medium: #f59e0b;
+    --risk-medium-bg: rgba(245, 158, 11, 0.15);
+    --risk-low: #10b981;
+    --risk-low-bg: rgba(16, 185, 129, 0.15);
+
+    --shadow-soft: 0 8px 30px rgba(0, 0, 0, 0.6);
+    --shadow-glow: 0 0 25px rgba(6, 182, 212, 0.25);
+  }
+
+  body {
+    font-family: var(--font-sans);
+    background-color: var(--bg-primary);
+    color: var(--text-primary);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+}
+
+.font-mono-code {
+  font-family: var(--font-mono);
+}
+
+/* Custom scrollbars for forensic workstations */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: var(--bg-primary);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border-medium);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
+}
+
+/* Sleek Radial & Grid backgrounds */
+.sleek-radial-bg {
+  background: radial-gradient(circle at center, rgba(13, 17, 23, 0.85) 0%, rgba(5, 7, 10, 1) 100%);
+}
+
+.cyber-grid {
+  background-size: 32px 32px;
+  background-image: 
+    linear-gradient(to right, rgba(100, 116, 139, 0.04) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(100, 116, 139, 0.04) 1px, transparent 1px);
+}
+
+.dark .cyber-grid {
+  background-image: 
+    linear-gradient(to right, rgba(56, 189, 248, 0.025) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(56, 189, 248, 0.025) 1px, transparent 1px);
+}
+
+/* Pulsing radar effect */
+@keyframes radar-sweep {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+@keyframes pulse-subtle {
+  0%, 100% { opacity: 0.8; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.04); }
+}
+
+.animate-pulse-subtle {
+  animation: pulse-subtle 3s ease-in-out infinite;
+}
