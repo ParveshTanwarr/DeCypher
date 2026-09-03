@@ -1,8 +1,8 @@
+import csv
 import io
 from typing import Any, Dict, List
 from fastapi import APIRouter, Depends, Response
 from fastapi.responses import JSONResponse
-import pandas as pd
 from sqlalchemy.orm import Session
 
 from app.database.postgres import get_db
@@ -10,20 +10,50 @@ from app.models.sql_models import Actor, DarkWebHandle, Wallet
 
 router = APIRouter(prefix="/export", tags=["Export"])
 
+CSV_HEADERS = [
+    "actor_id",
+    "primary_handle",
+    "risk_category",
+    "confidence_score",
+    "priority_score",
+    "first_seen",
+    "last_seen",
+    "handles_count",
+    "associated_handles",
+    "wallets_count",
+    "wallet_addresses",
+]
+
 
 def _get_live_actor_records(db: Session) -> List[Dict[str, Any]]:
     actors = db.query(Actor).all()
+    if not actors:
+        return []
+
+    actor_ids = [a.actor_id for a in actors]
+
+    # Pre-fetch handles and wallets in two batch queries (avoids 2N+1 query bottleneck)
+    all_handles = db.query(DarkWebHandle).filter(DarkWebHandle.actor_id.in_(actor_ids)).all()
+    all_wallets = db.query(Wallet).filter(Wallet.actor_id.in_(actor_ids)).all()
+
+    handles_by_actor: Dict[str, list] = {}
+    for h in all_handles:
+        handles_by_actor.setdefault(h.actor_id, []).append(h)
+
+    wallets_by_actor: Dict[str, list] = {}
+    for w in all_wallets:
+        wallets_by_actor.setdefault(w.actor_id, []).append(w)
+
     records = []
-
     for a in actors:
-        handles = db.query(DarkWebHandle).filter(DarkWebHandle.actor_id == a.actor_id).all()
-        wallets = db.query(Wallet).filter(Wallet.actor_id == a.actor_id).all()
+        actor_handles = handles_by_actor.get(a.actor_id, [])
+        actor_wallets = wallets_by_actor.get(a.actor_id, [])
 
-        handle_list = [h.handle for h in handles]
-        wallet_list = [w.address for w in wallets]
+        handle_list = [h.handle for h in actor_handles]
+        wallet_list = [w.address for w in actor_wallets]
 
-        first_dates = [h.first_seen for h in handles if h.first_seen]
-        last_dates = [h.last_seen for h in handles if h.last_seen]
+        first_dates = [h.first_seen for h in actor_handles if h.first_seen]
+        last_dates = [h.last_seen for h in actor_handles if h.last_seen]
 
         first_seen_str = min(first_dates).strftime("%Y-%m-%d") if first_dates else "N/A"
         last_seen_str = max(last_dates).strftime("%Y-%m-%d") if last_dates else "N/A"
@@ -55,10 +85,12 @@ def export_json(db: Session = Depends(get_db)):
 def export_csv(db: Session = Depends(get_db)):
     records = _get_live_actor_records(db)
 
-    # Flatten nested arrays for CSV serialization
-    csv_rows = []
+    output = io.StringIO()
+    writer = csv.DictWriter(output, fieldnames=CSV_HEADERS)
+    writer.writeheader()
+
     for r in records:
-        csv_rows.append({
+        writer.writerow({
             "actor_id": r["actor_id"],
             "primary_handle": r["primary_handle"],
             "risk_category": r["risk_category"],
@@ -72,13 +104,15 @@ def export_csv(db: Session = Depends(get_db)):
             "wallet_addresses": "; ".join(r["wallets"]),
         })
 
-    df = pd.DataFrame(csv_rows)
 
-    stream = io.StringIO()
-    df.to_csv(stream, index=False)
+
+
+
+
+
 
     return Response(
-        content=stream.getvalue(),
+        content=output.getvalue(),
         media_type="text/csv",
         headers={"Content-Disposition": "attachment; filename=threat_actors.csv"},
     )

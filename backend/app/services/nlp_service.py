@@ -2,13 +2,17 @@ import os
 import joblib
 import numpy as np
 import pandas as pd
-from typing import Dict, Any, Tuple, Optional
-from scipy.spatial.distance import cosine
+from typing import Dict, Any, Optional
+from sklearn.metrics.pairwise import cosine_similarity
+from scipy.sparse import hstack
 
-# Resolve paths relative to project root
-BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../"))
+# Resolve paths correctly to the repo root
+CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
+# app/services -> app -> backend -> project_root
+BASE_DIR = os.path.abspath(os.path.join(CURRENT_DIR, "..", "..", ".."))
 MODEL_DIR = os.path.join(BASE_DIR, "ai", "nlp", "models")
 DATA_DIR = os.path.join(BASE_DIR, "data")
+
 
 class NLPStylometryService:
     def __init__(self):
@@ -16,7 +20,9 @@ class NLPStylometryService:
         self.word_vectorizer = None
         self.expert_model = None
         self.threshold = 0.65
+        self._posts_df: Optional[pd.DataFrame] = None
         self._load_models()
+        self._load_posts_cache()
 
     def _load_models(self):
         char_vec_path = os.path.join(MODEL_DIR, "pan20_character_vectorizer.joblib")
@@ -31,23 +37,31 @@ class NLPStylometryService:
         if os.path.exists(model_path):
             self.expert_model = joblib.load(model_path)
         if os.path.exists(thresh_path):
-            data = np.load(thresh_path)
-            if "threshold" in data:
-                self.threshold = float(data["threshold"])
+            try:
+                data = np.load(thresh_path)
+                if "threshold" in data:
+                    self.threshold = float(data["threshold"])
+            except Exception:
+                pass
+
+    def _load_posts_cache(self):
+        posts_path = os.path.join(DATA_DIR, "posts.csv")
+        if os.path.exists(posts_path):
+            try:
+                df = pd.read_csv(posts_path)
+                handle_col = "handle" if "handle" in df.columns else ("author" if "author" in df.columns else None)
+                text_col = "content" if "content" in df.columns else ("post" if "post" in df.columns else "text")
+                if handle_col and text_col in df.columns:
+                    self._posts_df = df[[handle_col, text_col]].dropna()
+                    self._posts_df["_search_handle"] = self._posts_df[handle_col].astype(str).str.lower()
+                    self._posts_df["_content"] = self._posts_df[text_col].astype(str)
+            except Exception:
+                self._posts_df = None
 
     def _get_posts_for_handle(self, handle: str) -> str:
-        posts_path = os.path.join(DATA_DIR, "posts.csv")
-        if not os.path.exists(posts_path):
+        if self._posts_df is None or handle is None:
             return ""
-
-        df = pd.read_csv(posts_path)
-        handle_col = "handle" if "handle" in df.columns else ("author" if "author" in df.columns else None)
-        text_col = "content" if "content" in df.columns else ("post" if "post" in df.columns else "text")
-
-        if not handle_col or text_col not in df.columns:
-            return ""
-
-        matched = df[df[handle_col].str.lower() == handle.lower()][text_col].dropna()
+        matched = self._posts_df[self._posts_df["_search_handle"] == handle.lower()]["_content"]
         return " \n ".join(matched.tolist())
 
     def compare(
@@ -69,19 +83,23 @@ class NLPStylometryService:
                 "error": f"Insufficient sample text found for comparison between '{handle_a}' and '{handle_b}'."
             }
 
-        # Vector extraction
+        # Sparse Vector Extraction
         if self.char_vectorizer and self.word_vectorizer:
-            c_vec_a = self.char_vectorizer.transform([body_a]).toarray()[0]
-            c_vec_b = self.char_vectorizer.transform([body_b]).toarray()[0]
-            w_vec_a = self.word_vectorizer.transform([body_a]).toarray()[0]
-            w_vec_b = self.word_vectorizer.transform([body_b]).toarray()[0]
+            c_vec_a = self.char_vectorizer.transform([body_a])
+            c_vec_b = self.char_vectorizer.transform([body_b])
+            w_vec_a = self.word_vectorizer.transform([body_a])
+            w_vec_b = self.word_vectorizer.transform([body_b])
 
-            feat_a = np.hstack([c_vec_a, w_vec_a])
-            feat_b = np.hstack([c_vec_b, w_vec_b])
+            feat_a = hstack([c_vec_a, w_vec_a])
+            feat_b = hstack([c_vec_b, w_vec_b])
 
-            # Cosine similarity
-            cosine_sim = 1.0 - cosine(feat_a, feat_b) if (np.any(feat_a) and np.any(feat_b)) else 0.0
-            score = float(max(0.0, min(1.0, cosine_sim)))
+            if self.expert_model and hasattr(self.expert_model, "predict_proba"):
+                # Use trained classifier if available
+                diff_feat = np.abs(feat_a - feat_b)
+                score = float(self.expert_model.predict_proba(diff_feat)[0][1])
+            else:
+                sim_matrix = cosine_similarity(feat_a, feat_b)
+                score = float(max(0.0, min(1.0, sim_matrix[0][0])))
         else:
             # Fallback heuristic: word set Jaccard
             words_a = set(body_a.lower().split())
@@ -92,9 +110,9 @@ class NLPStylometryService:
         is_same = bool(score >= self.threshold)
         confidence = float(min(1.0, score + 0.05 if is_same else (1.0 - score)))
 
-        # Find overlapping tokens of length >= 4
-        tokens_a = set([w.strip(",.?!;:") for w in body_a.lower().split() if len(w) >= 4])
-        tokens_b = set([w.strip(",.?!;:") for w in body_b.lower().split() if len(w) >= 4])
+        # Overlapping distinctive tokens (length >= 4)
+        tokens_a = {w.strip(",.?!;:\"'()[]{}") for w in body_a.lower().split() if len(w) >= 4}
+        tokens_b = {w.strip(",.?!;:\"'()[]{}") for w in body_b.lower().split() if len(w) >= 4}
         markers = list(tokens_a & tokens_b)[:10]
 
         return {
@@ -104,5 +122,6 @@ class NLPStylometryService:
             "shared_markers": markers,
             "threshold_used": self.threshold
         }
+
 
 nlp_service = NLPStylometryService()

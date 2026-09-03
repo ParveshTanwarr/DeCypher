@@ -4,6 +4,7 @@ from app.services.nlp_service import nlp_service
 
 router = APIRouter(prefix="/nlp", tags=["NLP & Stylometry"])
 
+
 @router.post("/compare", response_model=HandleCompareResponse)
 def compare_authorship(payload: HandleCompareRequest):
     result = nlp_service.compare(
@@ -13,7 +14,7 @@ def compare_authorship(payload: HandleCompareRequest):
         text_b=payload.sample_text_b,
     )
 
-    if "error" in result and result["similarity_score"] == 0.0:
+    if result.get("error"):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=result["error"],

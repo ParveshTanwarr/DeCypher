@@ -1,8 +1,7 @@
-# Backward compatibility stub for legacy routers
-MOCK_ACTORS = []
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
+from sqlalchemy import func
 
 from app.database.postgres import get_db
 from app.models.schemas import (
@@ -59,11 +58,21 @@ def get_actors(
         query = query.filter(Actor.risk_category.ilike(category))
 
     actors = query.all()
-    results = []
+    if not actors:
+        return []
 
+    actor_ids = [a.actor_id for a in actors]
+
+    # Batch fetch all handles in 1 query to prevent N+1 overhead
+    handles = db.query(DarkWebHandle).filter(DarkWebHandle.actor_id.in_(actor_ids)).all()
+    handles_by_actor = {}
+    for h in handles:
+        handles_by_actor.setdefault(h.actor_id, []).append(h)
+
+    results = []
     for actor in actors:
-        handles = db.query(DarkWebHandle).filter(DarkWebHandle.actor_id == actor.actor_id).all()
-        last_dates = [h.last_seen for h in handles if h.last_seen]
+        actor_handles = handles_by_actor.get(actor.actor_id, [])
+        last_dates = [h.last_seen for h in actor_handles if h.last_seen]
         last_active_str = max(last_dates).strftime("%Y-%m-%d") if last_dates else "N/A"
 
         results.append(
@@ -72,7 +81,7 @@ def get_actors(
                 primary_handle=actor.primary_handle,
                 risk_category=actor.risk_category,
                 confidence_score=actor.confidence_score,
-                associated_handles=[h.handle for h in handles],
+                associated_handles=[h.handle for h in actor_handles],
                 last_active=last_active_str,
             )
         )
@@ -97,11 +106,12 @@ def get_actor_evidence(actor_id: str, db: Session = Depends(get_db)):
         handles = db.query(DarkWebHandle).filter(DarkWebHandle.actor_id == actor.actor_id).all()
         target_keys.extend([h.handle.lower() for h in handles])
 
-    db_observations = db.query(Observation).all()
-    matched_observations = [
-        obs for obs in db_observations
-        if obs.target and obs.target.lower() in target_keys
-    ]
+    # Query filtered directly in SQL instead of doing full table scan
+    matched_observations = (
+        db.query(Observation)
+        .filter(func.lower(Observation.target).in_(target_keys))
+        .all()
+    )
 
     if not actor and not matched_observations:
         raise HTTPException(
@@ -151,6 +161,7 @@ def get_actor_subgraph(actor_id: str, db: Session = Depends(get_db)):
 
     for w in wallets:
         nodes.append(GraphNode(id=w.address, label="Wallet", name=w.address, category="Wallet"))
-        links.append(GraphEdge(source=actor.primary_handle, target=w.address, relation="SHARES_WALLET"))
+        # Fix source ID to match actor.actor_id
+        links.append(GraphEdge(source=actor.actor_id, target=w.address, relation="SHARES_WALLET"))
 
     return GraphPayload(nodes=nodes, links=links)

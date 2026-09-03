@@ -10,50 +10,36 @@ from app.models.sql_models import DarkWebHandle, Wallet, Marketplace, Actor
 logger = logging.getLogger(__name__)
 
 
-def _seed_default_actors(session: Session):
-    default_actors = [
-        {
-            "actor_id": "ACT-1001",
-            "primary_handle": "dark_shadow",
-            "risk_category": "Critical",
-            "confidence_score": 0.94,
-            "priority_score": 92,
+def _upsert_actors(session: Session, df: pd.DataFrame):
+    df_deduped = df.drop_duplicates(subset=["actor_id"], keep="last")
+    valid_cols = ["actor_id", "primary_handle", "risk_category", "confidence_score", "priority_score"]
+    df_filtered = df_deduped[[c for c in valid_cols if c in df_deduped.columns]]
+    records = df_filtered.where(pd.notnull(df_filtered), None).to_dict(orient="records")
+    if not records:
+        return 0
+
+    stmt = insert(Actor).values(records)
+    stmt = stmt.on_conflict_do_update(
+        index_elements=["actor_id"],
+        set_={
+            "primary_handle": stmt.excluded.primary_handle,
+            "risk_category": stmt.excluded.risk_category,
+            "confidence_score": stmt.excluded.confidence_score,
+            "priority_score": stmt.excluded.priority_score,
         },
-        {
-            "actor_id": "ACT-1002",
-            "primary_handle": "byte_bandit",
-            "risk_category": "High",
-            "confidence_score": 0.82,
-            "priority_score": 78,
-        },
-        {
-            "actor_id": "ACT-1003",
-            "primary_handle": "crypto_phantom",
-            "risk_category": "Critical",
-            "confidence_score": 0.91,
-            "priority_score": 88,
-        },
-    ]
-    for act in default_actors:
-        stmt = insert(Actor).values(act)
-        stmt = stmt.on_conflict_do_update(
-            index_elements=["actor_id"],
-            set_={
-                "primary_handle": stmt.excluded.primary_handle,
-                "risk_category": stmt.excluded.risk_category,
-                "confidence_score": stmt.excluded.confidence_score,
-                "priority_score": stmt.excluded.priority_score,
-            },
-        )
-        session.execute(stmt)
-    session.commit()
-    print(f"[+] Safely seeded {len(default_actors)} core actor profiles into 'actors'")
+    )
+    session.execute(stmt)
+    return len(records)
 
 
 def _upsert_darkweb_handles(session: Session, df: pd.DataFrame):
-    # Only keep columns matching the DarkWebHandle model
     valid_cols = ["handle", "platform", "actor_id", "first_seen", "last_seen", "registration_date", "status"]
-    df_filtered = df[[c for c in valid_cols if c in df.columns]]
+    df_filtered = df[[c for c in valid_cols if c in df.columns]].copy()
+    
+    # Deduplicate composite unique constraint (handle, platform)
+    if "handle" in df_filtered.columns and "platform" in df_filtered.columns:
+        df_filtered = df_filtered.drop_duplicates(subset=["handle", "platform"], keep="last")
+        
     records = df_filtered.where(pd.notnull(df_filtered), None).to_dict(orient="records")
     if not records:
         return 0
@@ -72,16 +58,10 @@ def _upsert_darkweb_handles(session: Session, df: pd.DataFrame):
 
 
 def _upsert_wallets(session: Session, df: pd.DataFrame):
-    # 1. Rename wallet_address to match the Wallet model's address column
-    rename_map = {
-        "wallet_address": "address",
-    }
+    rename_map = {"wallet_address": "address"}
     df_renamed = df.rename(columns=rename_map)
-
-    # 2. Deduplicate by address within the CSV batch to prevent Postgres batch conflict error
     df_deduped = df_renamed.drop_duplicates(subset=["address"], keep="last")
 
-    # 3. Filter only valid columns that exist in the Wallet ORM model
     valid_cols = ["address", "currency", "actor_id", "associated_handle", "first_seen"]
     df_filtered = df_deduped[[c for c in valid_cols if c in df_deduped.columns]]
     records = df_filtered.where(pd.notnull(df_filtered), None).to_dict(orient="records")
@@ -102,15 +82,15 @@ def _upsert_wallets(session: Session, df: pd.DataFrame):
 
 
 def _upsert_marketplaces(session: Session, df: pd.DataFrame):
-    # Map CSV column headers to Marketplace model field names
     rename_map = {
         "market_name": "name",
         "url_onion": "onion_url",
     }
     df_renamed = df.rename(columns=rename_map)
+    df_deduped = df_renamed.drop_duplicates(subset=["name"], keep="last")
 
     valid_cols = ["name", "onion_url", "status"]
-    df_filtered = df_renamed[[c for c in valid_cols if c in df_renamed.columns]]
+    df_filtered = df_deduped[[c for c in valid_cols if c in df_deduped.columns]]
     records = df_filtered.where(pd.notnull(df_filtered), None).to_dict(orient="records")
     if not records:
         return 0
@@ -126,11 +106,15 @@ def _upsert_marketplaces(session: Session, df: pd.DataFrame):
     return len(records)
 
 
-LOADERS = {
-    "darkweb_handles": ("data/datahandles.csv", _upsert_darkweb_handles),
-    "wallets": ("data/datawallets.csv", _upsert_wallets),
-    "marketplaces": ("data/datamarketplaces.csv", _upsert_marketplaces),
-}
+# Correct relative data paths based on project structure
+DATA_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "data"))
+
+LOADERS = [
+    ("actors", os.path.join(DATA_DIR, "actors.csv"), _upsert_actors),
+    ("marketplaces", os.path.join(DATA_DIR, "marketplaces.csv"), _upsert_marketplaces),
+    ("darkweb_handles", os.path.join(DATA_DIR, "handles.csv"), _upsert_darkweb_handles),
+    ("wallets", os.path.join(DATA_DIR, "wallets.csv"), _upsert_wallets),
+]
 
 
 def init_db_and_load_csvs(reset_tables: bool = False):
@@ -138,17 +122,12 @@ def init_db_and_load_csvs(reset_tables: bool = False):
         print("[*] Resetting old tables to apply updated schema...")
         Base.metadata.drop_all(bind=engine)
 
-    # 1. Create tables with new columns and constraints
     Base.metadata.create_all(bind=engine)
     print("[+] SQL Tables verified/created with latest schema.")
 
-    # 2. Ingest CSVs safely via Session and upsert
     session = SessionLocal()
     try:
-        # Seed core threat actors first
-        _seed_default_actors(session)
-
-        for table_name, (file_path, loader_func) in LOADERS.items():
+        for table_name, file_path, loader_func in LOADERS:
             if not os.path.exists(file_path):
                 print(f"[*] Notice: {file_path} not found. Skipping auto-load.")
                 continue
@@ -167,4 +146,4 @@ def init_db_and_load_csvs(reset_tables: bool = False):
 
 if __name__ == "__main__":
     print("[*] Starting manual database ingestion...")
-    init_db_and_load_csvs(reset_tables=True)
+    init_db_and_load_csvs(reset_tables=False)

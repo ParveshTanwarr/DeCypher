@@ -1,5 +1,7 @@
-from fastapi import FastAPI
+import asyncio
 from contextlib import asynccontextmanager
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from prometheus_fastapi_instrumentator import Instrumentator
 
 from app.database.postgres import Base, engine
@@ -10,11 +12,16 @@ from app.middleware.audit_log import AuditLogMiddleware
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Automatically creates all database tables on startup
+    # Setup
     print("[*] Creating and verifying database tables...")
-    Base.metadata.create_all(bind=engine)
+    await asyncio.to_thread(Base.metadata.create_all, bind=engine)
     print("[*] Database tables ready.")
+    
     yield
+    
+    # Teardown / Cleanup
+    print("[*] Shutting down services and database connections...")
+    engine.dispose()
 
 
 app = FastAPI(
@@ -24,13 +31,23 @@ app = FastAPI(
     lifespan=lifespan
 )
 
+# CORS Middleware (must be registered before custom route middlewares)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 # Attach Audit Log Middleware
 app.add_middleware(AuditLogMiddleware)
 
 # Attach Prometheus Monitoring
 Instrumentator().instrument(app).expose(app)
 
-# Include All Routers
+# Include Routers
+# Include Routers
 app.include_router(auth.router)
 app.include_router(actors.router)
 app.include_router(search.router)
@@ -38,7 +55,7 @@ app.include_router(feedback.router)
 app.include_router(export.router)
 app.include_router(scanner.router)
 app.include_router(nlp.router)
-app.include_router(nlp.router)
+
 
 
 @app.get("/health", tags=["Health"])
