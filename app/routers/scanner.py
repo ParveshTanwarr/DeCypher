@@ -1,12 +1,37 @@
 from datetime import datetime, timezone
-from fastapi import APIRouter, Depends, status
+from typing import List, Optional
+from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.orm import Session
 
 from app.database.postgres import get_db
 from app.models.sql_models import Observation
-from app.models.schemas import ObservationBatchCreate, BatchIngestionResponse
+from app.models.schemas import (
+    ObservationBatchCreate,
+    BatchIngestionResponse,
+    ObservationResponse,
+)
 
 router = APIRouter(prefix="/scanner", tags=["Scanner Ingestion"])
+
+
+@router.get(
+    "/observations",
+    response_model=List[ObservationResponse],
+    status_code=status.HTTP_200_OK,
+)
+def get_observations(
+    limit: int = Query(50, ge=1, le=500),
+    target: Optional[str] = Query(None, description="Filter by target host or onion address"),
+    indicator_type: Optional[str] = Query(None, description="Filter by indicator type"),
+    db: Session = Depends(get_db),
+):
+    query = db.query(Observation)
+    if target:
+        query = query.filter(Observation.target.ilike(f"%{target}%"))
+    if indicator_type:
+        query = query.filter(Observation.indicator_type.ilike(f"%{indicator_type}%"))
+
+    return query.order_by(Observation.timestamp.desc()).limit(limit).all()
 
 
 @router.post(
