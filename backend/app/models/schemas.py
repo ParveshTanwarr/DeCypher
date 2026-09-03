@@ -154,3 +154,18 @@ class Token(BaseModel):
 class ExportRequest(BaseModel):
     format: str = "json"
     filters: Dict[str, Any] = Field(default_factory=dict)
+
+class HandleCompareRequest(BaseModel):
+    handle_a: str = Field(..., description="First dark web handle identifier")
+    handle_b: str = Field(..., description="Second dark web handle identifier")
+    sample_text_a: Optional[str] = Field(None, description="Optional raw text sample for handle A")
+    sample_text_b: Optional[str] = Field(None, description="Optional raw text sample for handle B")
+
+class HandleCompareResponse(BaseModel):
+    handle_a: str
+    handle_b: str
+    similarity_score: float
+    is_same_author: bool
+    confidence: float
+    shared_linguistic_markers: List[str] = []
+    details: Dict[str, Any] = {}

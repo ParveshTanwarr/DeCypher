@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Float, DateTime, Boolean, Text
+from sqlalchemy import Column, Integer, String, Float, DateTime, Boolean, Text, UniqueConstraint
 from datetime import datetime
 from app.database.postgres import Base
 
@@ -6,15 +6,25 @@ class DarkWebHandle(Base):
     __tablename__ = "darkweb_handles"
 
     id = Column(Integer, primary_key=True, index=True)
+    actor_id = Column(String(64), index=True, nullable=True)
     handle = Column(String(128), index=True, nullable=False)
     platform = Column(String(64), nullable=True)
+    status = Column(String(32), default="active")
+    registration_date = Column(DateTime, nullable=True)
+    first_seen = Column(DateTime, nullable=True)
+    last_seen = Column(DateTime, nullable=True)
     stylometry_vector_hash = Column(String(256), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
+
+    __table_args__ = (
+        UniqueConstraint("handle", "platform", name="uq_handle_platform"),
+    )
 
 class Wallet(Base):
     __tablename__ = "wallets"
 
     id = Column(Integer, primary_key=True, index=True)
+    actor_id = Column(String(64), index=True, nullable=True)
     address = Column(String(256), unique=True, index=True, nullable=False)
     currency = Column(String(16), default="BTC")
     associated_handle = Column(String(128), index=True, nullable=True)
@@ -25,7 +35,7 @@ class Marketplace(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(128), unique=True, index=True, nullable=False)
-    onion_url = Column(String(256), nullable=True)
+    onion_url = Column(String(256), unique=True, nullable=True)
     status = Column(String(32), default="active")
 
 class InvestigatorFeedback(Base):
@@ -61,4 +71,14 @@ class Observation(Base):
     timestamp = Column(DateTime, default=datetime.utcnow)
     confidence = Column(Float, default=1.0)
     description = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+class Actor(Base):
+    __tablename__ = "actors"
+
+    actor_id = Column(String(64), primary_key=True, index=True)
+    primary_handle = Column(String(128), nullable=False)
+    risk_category = Column(String(32), default="High")
+    confidence_score = Column(Float, default=0.85)
+    priority_score = Column(Integer, default=70)
     created_at = Column(DateTime, default=datetime.utcnow)

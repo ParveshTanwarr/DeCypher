@@ -4,18 +4,16 @@ from prometheus_fastapi_instrumentator import Instrumentator
 
 from app.database.postgres import Base, engine
 import app.models.sql_models
-from app.services.ingestion import init_db_and_load_csvs
-from app.routers import actors, search, feedback, export, auth, scanner
+from app.routers import actors, search, feedback, export, auth, scanner, nlp
 from app.middleware.audit_log import AuditLogMiddleware
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Automatically creates all database tables (including observations) on startup
+    # Automatically creates all database tables on startup
     print("[*] Creating and verifying database tables...")
     Base.metadata.create_all(bind=engine)
-    print("[*] Database tables ready. Checking CSV files...")
-    init_db_and_load_csvs()
+    print("[*] Database tables ready.")
     yield
 
 
@@ -39,6 +37,8 @@ app.include_router(search.router)
 app.include_router(feedback.router)
 app.include_router(export.router)
 app.include_router(scanner.router)
+app.include_router(nlp.router)
+app.include_router(nlp.router)
 
 
 @app.get("/health", tags=["Health"])
