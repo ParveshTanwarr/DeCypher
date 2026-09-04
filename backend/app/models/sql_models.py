@@ -109,7 +109,7 @@ class Observation(Base):
     observation_id = Column(String(128), unique=True, index=True, nullable=False)
     indicator_type = Column(String(64), index=True, nullable=False)
     detected = Column(Boolean, default=True)
-    value = Column(String(512), nullable=False)
+    value = Column(String(512), nullable=True)
     target = Column(String(256), index=True, nullable=False)
     source = Column(String(128), nullable=False)
     timestamp = Column(DateTime(timezone=True), default=utc_now)

@@ -1,8 +1,9 @@
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from app.models.schemas import HandleCompareRequest, HandleCompareResponse
 from app.services.nlp_service import nlp_service
+from app.routers.auth import get_current_user
 
-router = APIRouter(prefix="/nlp", tags=["NLP & Stylometry"])
+router = APIRouter(prefix="/nlp", tags=["NLP & Stylometry"], dependencies=[Depends(get_current_user)])
 
 
 @router.post("/compare", response_model=HandleCompareResponse)

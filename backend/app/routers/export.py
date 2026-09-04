@@ -7,8 +7,14 @@ from sqlalchemy.orm import Session
 
 from app.database.postgres import get_db
 from app.models.sql_models import Actor, DarkWebHandle, Wallet
+from app.routers.auth import require_role
 
-router = APIRouter(prefix="/export", tags=["Export"])
+# Bulk export of every actor's identity/correlation data is the single
+# most sensitive action in this API, so it's restricted to "admin" rather
+# than any authenticated user. This is a judgment call, not a spec
+# requirement -- adjust the allowed role(s) if that doesn't match your
+# actual policy (e.g. add "investigator" back if analysts need exports too).
+router = APIRouter(prefix="/export", tags=["Export"], dependencies=[Depends(require_role("admin"))])
 
 CSV_HEADERS = [
     "actor_id",

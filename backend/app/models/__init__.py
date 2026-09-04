@@ -1,3 +1,19 @@
-from app.models.sql_models import DarkWebHandle, Wallet, Marketplace
+from app.models.sql_models import (
+    Actor,
+    DarkWebHandle,
+    Wallet,
+    Marketplace,
+    InvestigatorFeedback,
+    AuditLog,
+    Observation,
+)
 
-__all__ = ["DarkWebHandle", "Wallet", "Marketplace"]
+__all__ = [
+    "Actor",
+    "DarkWebHandle",
+    "Wallet",
+    "Marketplace",
+    "InvestigatorFeedback",
+    "AuditLog",
+    "Observation",
+]

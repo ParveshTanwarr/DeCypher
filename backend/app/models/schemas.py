@@ -106,7 +106,11 @@ class ObservationCreate(BaseModel):
     observation_id: str = Field(default_factory=lambda: f"obs_{uuid.uuid4().hex[:8]}")
     indicator_type: str
     detected: bool = True
-    value: str
+    # Optional -- a "not detected" scan result legitimately has no value
+    # (e.g. infra/scanner.py sends None when a banner isn't found). This
+    # used to be a required str, which meant every "not detected" result
+    # would fail validation with a 422.
+    value: Optional[str] = None
     target: str
     source: str = "scanner"
     timestamp: Optional[datetime] = Field(default_factory=lambda: datetime.now(timezone.utc))
@@ -129,7 +133,7 @@ class ObservationResponse(BaseModel):
     observation_id: str
     indicator_type: str
     detected: bool
-    value: str
+    value: Optional[str] = None
     target: str
     source: str
     timestamp: Optional[datetime] = None

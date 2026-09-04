@@ -5,9 +5,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from prometheus_fastapi_instrumentator import Instrumentator
 
 from app.database.postgres import Base, engine
+from app.config import settings
 import app.models.sql_models
 from app.routers import actors, search, feedback, export, auth, scanner, nlp
 from app.middleware.audit_log import AuditLogMiddleware
+
+_DEV_DEFAULT_SECRET_KEY = "threat_intel_dev_secret_key_change_in_prod_12345"
 
 
 @asynccontextmanager
@@ -16,9 +19,16 @@ async def lifespan(app: FastAPI):
     print("[*] Creating and verifying database tables...")
     await asyncio.to_thread(Base.metadata.create_all, bind=engine)
     print("[*] Database tables ready.")
-    
+
+    if settings.SECRET_KEY == _DEV_DEFAULT_SECRET_KEY:
+        print(
+            "[!] WARNING: SECRET_KEY is still the checked-in development default. "
+            "Every JWT this instance issues can be forged by anyone who has read "
+            "this repo. Set a real SECRET_KEY via .env before this leaves local dev."
+        )
+
     yield
-    
+
     # Teardown / Cleanup
     print("[*] Shutting down services and database connections...")
     engine.dispose()
@@ -46,7 +56,6 @@ app.add_middleware(AuditLogMiddleware)
 # Attach Prometheus Monitoring
 Instrumentator().instrument(app).expose(app)
 
-# Include Routers
 # Include Routers
 app.include_router(auth.router)
 app.include_router(actors.router)

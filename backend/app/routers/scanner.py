@@ -11,8 +11,9 @@ from app.models.schemas import (
     BatchIngestionResponse,
     ObservationResponse,
 )
+from app.routers.auth import get_current_user
 
-router = APIRouter(prefix="/scanner", tags=["Scanner Ingestion"])
+router = APIRouter(prefix="/scanner", tags=["Scanner Ingestion"], dependencies=[Depends(get_current_user)])
 
 
 @router.get(

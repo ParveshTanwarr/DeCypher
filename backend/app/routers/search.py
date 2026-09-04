@@ -5,8 +5,9 @@ from sqlalchemy.orm import Session
 
 from app.database.postgres import get_db
 from app.models.sql_models import Actor, DarkWebHandle, Wallet
+from app.routers.auth import get_current_user
 
-router = APIRouter(prefix="/search", tags=["Search"])
+router = APIRouter(prefix="/search", tags=["Search"], dependencies=[Depends(get_current_user)])
 
 
 class SearchResultItem(BaseModel):

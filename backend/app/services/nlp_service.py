@@ -21,6 +21,7 @@ class NLPStylometryService:
         self.expert_model = None
         self.threshold = 0.65
         self._posts_df: Optional[pd.DataFrame] = None
+        self._name_to_handle_id: Dict[str, str] = {}
         self._load_models()
         self._load_posts_cache()
 
@@ -45,23 +46,53 @@ class NLPStylometryService:
                 pass
 
     def _load_posts_cache(self):
+        # posts.csv links posts to a handle via `handle_id` (e.g. "H00887"),
+        # not a "handle"/"author" column -- the old detection here never
+        # matched, so _posts_df stayed None and every compare() fell
+        # through to "Insufficient sample text" unless raw text was passed
+        # in directly.
         posts_path = os.path.join(DATA_DIR, "posts.csv")
-        if os.path.exists(posts_path):
-            try:
-                df = pd.read_csv(posts_path)
-                handle_col = "handle" if "handle" in df.columns else ("author" if "author" in df.columns else None)
-                text_col = "content" if "content" in df.columns else ("post" if "post" in df.columns else "text")
-                if handle_col and text_col in df.columns:
-                    self._posts_df = df[[handle_col, text_col]].dropna()
-                    self._posts_df["_search_handle"] = self._posts_df[handle_col].astype(str).str.lower()
-                    self._posts_df["_content"] = self._posts_df[text_col].astype(str)
-            except Exception:
-                self._posts_df = None
+        handles_path = os.path.join(DATA_DIR, "handles.csv")
+        if not os.path.exists(posts_path):
+            return
+        try:
+            df = pd.read_csv(posts_path)
+            handle_col = next((c for c in ("handle_id", "handle", "author") if c in df.columns), None)
+            text_col = next((c for c in ("text", "content", "post") if c in df.columns), None)
+            if not (handle_col and text_col):
+                return
+
+            posts_df = df[[handle_col, text_col]].dropna()
+            posts_df = posts_df.rename(columns={handle_col: "_handle_id", text_col: "_content"})
+            posts_df["_handle_id"] = posts_df["_handle_id"].astype(str)
+            posts_df["_content"] = posts_df["_content"].astype(str)
+            self._posts_df = posts_df
+
+            # posts.csv is keyed by handle_id, but callers naturally think
+            # in terms of the human-readable handle name (that's what the
+            # rest of the API calls "handle" everywhere else) -- so build a
+            # name -> handle_id map from handles.csv and accept either.
+            if os.path.exists(handles_path):
+                handles_df = pd.read_csv(handles_path)
+                name_col = "handle_name" if "handle_name" in handles_df.columns else (
+                    "handle" if "handle" in handles_df.columns else None
+                )
+                if name_col and "handle_id" in handles_df.columns:
+                    self._name_to_handle_id = {
+                        str(name).lower(): str(hid)
+                        for name, hid in zip(handles_df[name_col], handles_df["handle_id"])
+                        if pd.notna(name) and pd.notna(hid)
+                    }
+        except Exception:
+            self._posts_df = None
+            self._name_to_handle_id = {}
 
     def _get_posts_for_handle(self, handle: str) -> str:
-        if self._posts_df is None or handle is None:
+        if self._posts_df is None or not handle:
             return ""
-        matched = self._posts_df[self._posts_df["_search_handle"] == handle.lower()]["_content"]
+        # Accept either a human-readable handle name or a raw handle_id.
+        lookup_id = self._name_to_handle_id.get(handle.lower(), handle)
+        matched = self._posts_df[self._posts_df["_handle_id"] == str(lookup_id)]["_content"]
         return " \n ".join(matched.tolist())
 
     def compare(

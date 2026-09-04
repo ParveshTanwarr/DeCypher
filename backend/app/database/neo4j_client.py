@@ -19,6 +19,13 @@ class Neo4jConnection:
                         max_connection_lifetime=30 * 60,
                         max_connection_pool_size=50,
                         connection_acquisition_timeout=30.0,
+                        # Default is 30s, which meant any caller relying on
+                        # a fallback (see graph_service.get_actor_subgraph)
+                        # would hang for ~30s of retries before the
+                        # exception ever surfaced. Kept short so a caller
+                        # with a Postgres fallback doesn't stall the
+                        # request when Neo4j is simply not up yet.
+                        max_transaction_retry_time=1.0,
                     )
         return self._driver
 
