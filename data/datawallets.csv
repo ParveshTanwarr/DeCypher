@@ -1,0 +1,5 @@
+wallet_address,currency,actor_id,associated_handle,total_received_usd,risk_score
+bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh,BTC,ACT-1001,dark_shadow,154200.50,0.89
+bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh,BTC,ACT-1001,shadow_crypto,154200.50,0.89
+0x71C2a8D6134a66a123,ETH,ACT-1002,byte_bandit,82300.00,0.72
+1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa,BTC,ACT-1003,crypto_phantom,540100.00,0.95

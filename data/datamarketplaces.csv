@@ -1,0 +1,5 @@
+market_id,market_name,url_onion,category,active_vendors,status
+MKT-01,Hydra Legacy,hydraruzxpnew4af.onion,Multi-vendor,1240,seized
+MKT-02,Nemesis Market,nemesis556gkj4k2.onion,Data Leaks & Malware,350,active
+MKT-03,Genesis Store,genesismkt64kddk.onion,Credentials & Bots,820,seized
+MKT-04,Abacus Market,abacusmkt789jkl1.onion,Financial & Drugs,910,active
