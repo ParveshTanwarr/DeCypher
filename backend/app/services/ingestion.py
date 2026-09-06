@@ -100,10 +100,14 @@ def _upsert_darkweb_handles(session: Session, prepared_handles: pd.DataFrame):
 
 def _upsert_wallets(session: Session, wallets_df: pd.DataFrame, prepared_handles: pd.DataFrame):
     """
-    wallets.csv only has handle_id (not actor_id), so without this join
-    every wallet's actor_id/associated_handle would insert as NULL --
-    silently dropping the wallet-reuse correlation signal the whole
-    dataset exists to demonstrate.
+    wallets.csv only has handle_id (not actor_id), so join it through
+    handles.csv before inserting. Wallet addresses are deliberately
+    non-unique because address reuse is itself a correlation signal.
+
+    Unlike actors/handles, Wallet has no natural unique conflict target:
+    the same address may legitimately belong to several handle rows.
+    Therefore this loader replaces the seed wallet snapshot on each
+    ingestion run instead of using ON CONFLICT(address).
     """
     handle_lookup = prepared_handles[["handle_id", "handle", "actor_id"]].dropna(subset=["handle_id"])
     merged = wallets_df.rename(columns={"wallet_address": "address"}).merge(
@@ -112,35 +116,34 @@ def _upsert_wallets(session: Session, wallets_df: pd.DataFrame, prepared_handles
     merged = merged.rename(columns={"handle": "associated_handle"})
     merged["first_seen"] = pd.to_datetime(merged.get("first_seen"), errors="coerce")
 
-    # Full (non-deduplicated) list of every handle<->wallet pairing, for
-    # Neo4j -- see the note on the `address` unique constraint below.
+    unresolved = merged[merged["associated_handle"].isna()]["handle_id"].dropna().unique().tolist()
+    if unresolved:
+        raise ValueError(
+            "Could not resolve wallet handle IDs through handles.csv: "
+            + ", ".join(map(str, unresolved[:20]))
+            + (" ..." if len(unresolved) > 20 else "")
+        )
+
+    # Keep every wallet row. Duplicate addresses are intentional and must
+    # remain separate so reuse across handles is queryable in PostgreSQL.
+    valid_cols = ["address", "currency", "actor_id", "associated_handle", "first_seen"]
+    df_filtered = merged[[c for c in valid_cols if c in merged.columns]].copy()
+    records = df_filtered.where(pd.notnull(df_filtered), None).to_dict(orient="records")
+    if not records:
+        return 0, [], []
+
+    # Re-ingestion is idempotent by replacing the deterministic CSV-backed
+    # wallet snapshot. This is necessary because address itself is not unique.
+    session.query(Wallet).delete(synchronize_session=False)
+    session.flush()
+
+    session.add_all([Wallet(**record) for record in records])
+
+    # Full handle<->wallet pairing list for Neo4j. This intentionally
+    # includes every repeated address/handle pairing from the CSV.
     pair_cols = [c for c in ["address", "associated_handle", "currency"] if c in merged.columns]
     all_pairs = merged[pair_cols].dropna(subset=["address", "associated_handle"]).to_dict(orient="records")
 
-    # Postgres' `wallets.address` is UNIQUE, so if the same address is
-    # legitimately reused by more than one handle (~19% of rows in this
-    # dataset), only one handle can be stored as `associated_handle` here.
-    # That's a real modeling limitation worth a many-to-many join table
-    # if you need it queryable from Postgres -- for now Neo4j (below)
-    # gets the full pair list so the correlation graph doesn't lose it.
-    df_deduped = merged.drop_duplicates(subset=["address"], keep="last")
-
-    valid_cols = ["address", "currency", "actor_id", "associated_handle", "first_seen"]
-    df_filtered = df_deduped[[c for c in valid_cols if c in df_deduped.columns]]
-    records = df_filtered.where(pd.notnull(df_filtered), None).to_dict(orient="records")
-    if not records:
-        return 0, [], all_pairs
-
-    stmt = insert(Wallet).values(records)
-    stmt = stmt.on_conflict_do_update(
-        index_elements=["address"],
-        set_={
-            "currency": stmt.excluded.currency,
-            "actor_id": stmt.excluded.actor_id,
-            "associated_handle": stmt.excluded.associated_handle,
-        },
-    )
-    session.execute(stmt)
     return len(records), records, all_pairs
 
 
@@ -267,6 +270,7 @@ def init_db_and_load_csvs(reset_tables: bool = False, sync_neo4j: bool = True):
             except Exception as e:
                 session.rollback()
                 print(f"[-] Error loading {actors_path} into 'actors': {e}")
+
         else:
             print("[*] Notice: actors.csv and/or handles.csv missing. Skipping actors.")
 
@@ -285,7 +289,7 @@ def init_db_and_load_csvs(reset_tables: bool = False, sync_neo4j: bool = True):
                     session, pd.read_csv(wallets_path), prepared_handles
                 )
                 session.commit()
-                print(f"[+] Upserted {count} records into 'wallets'")
+                print(f"[+] Loaded {count} records into 'wallets'")
             except Exception as e:
                 session.rollback()
                 print(f"[-] Error loading {wallets_path} into 'wallets': {e}")
@@ -307,11 +311,8 @@ def init_db_and_load_csvs(reset_tables: bool = False, sync_neo4j: bool = True):
 
     if sync_neo4j and (actor_records or handle_records or wallet_pairs_for_neo4j):
         try:
-            # Note: wallet_pairs_for_neo4j (not wallet_records) is used here
-            # deliberately -- it's the full, non-deduplicated handle<->wallet
-            # pairing, so a wallet reused by several handles still produces
-            # a USED_WALLET edge for each of them in the graph, even though
-            # Postgres' `wallets.address` UNIQUE constraint only kept one.
+            # wallet_pairs_for_neo4j contains the complete non-deduplicated
+            # handle<->wallet relationships from the CSV.
             graph_service.sync_actor_batch(actor_records, handle_records, wallet_pairs_for_neo4j)
             print(
                 f"[+] Synced {len(actor_records)} actors / {len(handle_records)} handles / "
