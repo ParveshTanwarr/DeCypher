@@ -63,45 +63,48 @@ export default function GraphPage({
     getActorGraph(actorId)
       .then((data) => {
         const safeNodes = (data.nodes || []).map(
-          (node) => ({
-            ...node,
+  (node) => ({
+    ...node,
 
-            id: String(
-              node.id ?? "",
-            ),
+    id: String(
+      node.id ?? "",
+    ),
 
-            label: String(
-              node.label ??
-                node.id ??
-                "Unknown entity",
-            ),
+    label: String(
+      node.label ??
+        node.category ??
+        node.id ??
+        "Unknown entity",
+    ),
 
-            type: String(
-              node.type ??
-                node.label ??
-                "unknown",
-            ),
-          }),
-        );
+    type: String(
+      node.type ??
+        node.category ??
+        node.label ??
+        "unknown",
+    ),
+  }),
+);
 
         const safeLinks = (data.links || []).map(
-          (link) => ({
-            ...link,
+  (link) => ({
+    ...link,
 
-            source: String(
-              link.source,
-            ),
+    source: String(
+      link.source,
+    ),
 
-            target: String(
-              link.target,
-            ),
+    target: String(
+      link.target,
+    ),
 
-            type: String(
-              link.type ??
-                "RELATED_TO",
-            ),
-          }),
-        );
+    type: String(
+      link.type ??
+        link.relation ??
+        "RELATED_TO",
+    ),
+  }),
+);
 
         setGraph({
           nodes: safeNodes,
@@ -234,8 +237,11 @@ export default function GraphPage({
     node: GraphNode,
   ): string {
     const label = String(
-      node.label ?? "",
-    );
+  node.name ??
+    node.label ??
+    node.id ??
+    "",
+);
 
     const labelIsType =
       ENTITY_TYPES.includes(

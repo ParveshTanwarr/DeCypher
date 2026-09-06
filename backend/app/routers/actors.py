@@ -157,47 +157,377 @@ def get_actor_evidence(actor_id: str, db: Session = Depends(get_db)):
 
 @router.get("/{actor_id}/graph", response_model=GraphPayload)
 def get_actor_subgraph(actor_id: str, db: Session = Depends(get_db)):
-    actor = db.query(Actor).filter(func.lower(Actor.actor_id) == actor_id.lower()).first()
+    actor = (
+        db.query(Actor)
+        .filter(func.lower(Actor.actor_id) == actor_id.lower())
+        .first()
+    )
+
     if not actor:
-        raise HTTPException(status_code=404, detail="Actor graph not found")
+        raise HTTPException(
+            status_code=404,
+            detail="Actor graph not found",
+        )
 
-    # Prefer the real Neo4j correlation graph -- it can surface *other*
-    # handles that reused one of this actor's wallets, which the flat
-    # Postgres join below has no way to know about. Falls back to
-    # Postgres if Neo4j hasn't been synced yet (or isn't reachable), so
-    # this endpoint still works before/without the graph pipeline running.
-    neo4j_graph = graph_service.get_actor_subgraph(actor.actor_id)
+    handles = (
+        db.query(DarkWebHandle)
+        .filter(DarkWebHandle.actor_id == actor.actor_id)
+        .all()
+    )
+
+    wallets = (
+        db.query(Wallet)
+        .filter(Wallet.actor_id == actor.actor_id)
+        .all()
+    )
+
+    observations = (
+        db.query(Observation)
+        .filter(
+            func.lower(Observation.target).in_(
+                [
+                    actor.actor_id.lower(),
+                    actor.primary_handle.lower(),
+                    *[h.handle.lower() for h in handles],
+                ]
+            )
+        )
+        .all()
+    )
+
+    # ---------------------------------------------------------
+    # Synchronize the current actor's PostgreSQL evidence into
+    # Neo4j. This makes the graph usable even when the ingestion
+    # pipeline has not explicitly populated Neo4j yet.
+    # ---------------------------------------------------------
+
+    try:
+        graph_service.sync_actor_batch(
+            actors=[
+                {
+                    "actor_id": actor.actor_id,
+                    "primary_handle": actor.primary_handle,
+                    "risk_category": actor.risk_category,
+                    "confidence_score": actor.confidence_score,
+                }
+            ],
+            handles=[
+                {
+                    "actor_id": h.actor_id,
+                    "handle": h.handle,
+                    "platform": h.platform,
+                    "status": h.status,
+                }
+                for h in handles
+            ],
+            wallets=[
+                {
+                    "actor_id": w.actor_id,
+                    "address": w.address,
+                    "currency": w.currency,
+                    "associated_handle": w.associated_handle,
+                }
+                for w in wallets
+            ],
+        )
+
+        graph_service.sync_actor_observations(
+            actor.actor_id,
+            [
+                {
+                    "observation_id": o.observation_id,
+                    "indicator_type": o.indicator_type,
+                    "detected": o.detected,
+                    "value": o.value,
+                    "target": o.target,
+                    "source": o.source,
+                    "confidence": o.confidence,
+                    "description": o.description,
+                    "timestamp": (
+                        o.timestamp.isoformat()
+                        if o.timestamp
+                        else None
+                    ),
+                }
+                for o in observations
+            ],
+        )
+
+    except Exception as exc:
+        # Graph sync is additive. If Neo4j is unavailable,
+        # the existing Postgres fallback still works.
+        print(f"Neo4j sync warning: {exc}")
+
+    # ---------------------------------------------------------
+    # Prefer the rich Neo4j investigation graph.
+    # ---------------------------------------------------------
+
+    neo4j_graph = graph_service.get_actor_subgraph(
+        actor.actor_id
+    )
+
     if neo4j_graph:
-        nodes = [GraphNode(id=actor.actor_id, label="Actor", name=actor.primary_handle, category="Actor")]
+        nodes = [
+            GraphNode(
+                id=actor.actor_id,
+                label="Actor",
+                name=actor.primary_handle,
+                category="Actor",
+            )
+        ]
+
         links = []
+
+        # Handles
         for handle in neo4j_graph.get("handles", []):
-            nodes.append(GraphNode(id=handle, label="Handle", name=handle, category="Handle"))
-            links.append(GraphEdge(source=actor.actor_id, target=handle, relation="USES_HANDLE"))
+            nodes.append(
+                GraphNode(
+                    id=f"handle:{handle}",
+                    label="Handle",
+                    name=handle,
+                    category="Handle",
+                )
+            )
+
+            links.append(
+                GraphEdge(
+                    source=actor.actor_id,
+                    target=f"handle:{handle}",
+                    relation="USES_HANDLE",
+                )
+            )
+
+        # Wallets
         for wallet in neo4j_graph.get("wallets", []):
-            nodes.append(GraphNode(id=wallet, label="Wallet", name=wallet, category="Wallet"))
-            links.append(GraphEdge(source=actor.actor_id, target=wallet, relation="SHARES_WALLET"))
-        for other_handle in neo4j_graph.get("correlated_handles", []):
-            nodes.append(GraphNode(id=other_handle, label="Handle", name=other_handle, category="CorrelatedHandle"))
-            # Linked via whichever wallet they share -- good enough for a
-            # visual "these might be the same actor" cue without needing
-            # a second round trip to work out exactly which wallet.
-            for wallet in neo4j_graph.get("wallets", []):
-                links.append(GraphEdge(source=wallet, target=other_handle, relation="ALSO_USED_BY"))
-        return GraphPayload(nodes=nodes, links=links)
+            nodes.append(
+                GraphNode(
+                    id=f"wallet:{wallet}",
+                    label="Wallet",
+                    name=wallet,
+                    category="Wallet",
+                )
+            )
 
-    # --- Fallback: build the same shape straight from Postgres ---
-    handles = db.query(DarkWebHandle).filter(DarkWebHandle.actor_id == actor.actor_id).all()
-    wallets = db.query(Wallet).filter(Wallet.actor_id == actor.actor_id).all()
+            links.append(
+                GraphEdge(
+                    source=actor.actor_id,
+                    target=f"wallet:{wallet}",
+                    relation="SHARES_WALLET",
+                )
+            )
 
-    nodes = [GraphNode(id=actor.actor_id, label="Actor", name=actor.primary_handle, category="Actor")]
+                # Correlated handles discovered through wallet reuse.
+        # Preserve the exact wallet -> handle relationship returned
+        # by Neo4j instead of connecting every wallet to every handle.
+        for pair in neo4j_graph.get(
+            "wallet_correlations",
+            [],
+        ):
+            wallet = pair.get("wallet")
+            other_handle = pair.get("handle")
+
+            if not wallet or not other_handle:
+                continue
+
+            nodes.append(
+                GraphNode(
+                    id=f"handle:{other_handle}",
+                    label="Handle",
+                    name=other_handle,
+                    category="CorrelatedHandle",
+                )
+            )
+
+            links.append(
+                GraphEdge(
+                    source=f"wallet:{wallet}",
+                    target=f"handle:{other_handle}",
+                    relation="ALSO_USED_BY",
+                )
+            )
+
+                        # Marketplaces
+        # Preserve the actual handle -> marketplace relationship
+        # from the Neo4j graph instead of connecting every handle
+        # to every marketplace.
+        for pair in neo4j_graph.get(
+            "handle_marketplaces",
+            [],
+        ):
+            handle = pair.get("handle")
+            marketplace = pair.get("marketplace")
+
+            if not handle or not marketplace:
+                continue
+
+            nodes.append(
+                GraphNode(
+                    id=f"marketplace:{marketplace}",
+                    label="Marketplace",
+                    name=marketplace,
+                    category="Marketplace",
+                )
+            )
+
+            links.append(
+                GraphEdge(
+                    source=f"handle:{handle}",
+                    target=f"marketplace:{marketplace}",
+                    relation="USES_MARKETPLACE",
+                )
+            )
+        # Observations
+        for observation in neo4j_graph.get(
+            "observations",
+            [],
+        ):
+            observation_id = observation.get(
+                "observation_id"
+            )
+
+            if not observation_id:
+                continue
+
+            name = (
+                observation.get("description")
+                or observation.get("value")
+                or observation.get("indicator_type")
+                or observation_id
+            )
+
+            nodes.append(
+                GraphNode(
+                    id=f"observation:{observation_id}",
+                    label="Observation",
+                    name=str(name),
+                    category="Observation",
+                )
+            )
+
+            links.append(
+                GraphEdge(
+                    source=actor.actor_id,
+                    target=f"observation:{observation_id}",
+                    relation="HAS_OBSERVATION",
+                )
+            )
+
+        # Infrastructure
+        for infrastructure in neo4j_graph.get(
+            "infrastructure",
+            [],
+        ):
+            key = (
+                infrastructure.get("key")
+                or infrastructure.get("value")
+                or infrastructure.get("target")
+            )
+
+            if not key:
+                continue
+
+            nodes.append(
+                GraphNode(
+                    id=f"infrastructure:{key}",
+                    label="Infrastructure",
+                    name=str(key),
+                    category="Infrastructure",
+                )
+            )
+
+            for observation in neo4j_graph.get(
+                "observations",
+                [],
+            ):
+                if (
+                    observation.get("value") == infrastructure.get("value")
+                    or observation.get("target") == infrastructure.get("target")
+                ):
+                    observation_id = observation.get(
+                        "observation_id"
+                    )
+
+                    if observation_id:
+                        links.append(
+                            GraphEdge(
+                                source=f"observation:{observation_id}",
+                                target=f"infrastructure:{key}",
+                                relation="EVIDENCE_OF",
+                            )
+                        )
+
+        # Remove duplicate nodes while preserving order.
+        unique_nodes = {}
+        for node in nodes:
+            unique_nodes[node.id] = node
+
+        # Remove duplicate edges.
+        unique_links = {}
+        for link in links:
+            edge_key = (
+                link.source,
+                link.target,
+                link.relation,
+            )
+            unique_links[edge_key] = link
+
+        return GraphPayload(
+            nodes=list(unique_nodes.values()),
+            links=list(unique_links.values()),
+        )
+
+    # ---------------------------------------------------------
+    # PostgreSQL fallback
+    # ---------------------------------------------------------
+
+    nodes = [
+        GraphNode(
+            id=actor.actor_id,
+            label="Actor",
+            name=actor.primary_handle,
+            category="Actor",
+        )
+    ]
+
     links = []
 
     for h in handles:
-        nodes.append(GraphNode(id=h.handle, label="Handle", name=h.handle, category="Handle"))
-        links.append(GraphEdge(source=actor.actor_id, target=h.handle, relation="USES_HANDLE"))
+        nodes.append(
+            GraphNode(
+                id=f"handle:{h.handle}",
+                label="Handle",
+                name=h.handle,
+                category="Handle",
+            )
+        )
+
+        links.append(
+            GraphEdge(
+                source=actor.actor_id,
+                target=f"handle:{h.handle}",
+                relation="USES_HANDLE",
+            )
+        )
 
     for w in wallets:
-        nodes.append(GraphNode(id=w.address, label="Wallet", name=w.address, category="Wallet"))
-        links.append(GraphEdge(source=actor.actor_id, target=w.address, relation="SHARES_WALLET"))
+        nodes.append(
+            GraphNode(
+                id=f"wallet:{w.address}",
+                label="Wallet",
+                name=w.address,
+                category="Wallet",
+            )
+        )
 
-    return GraphPayload(nodes=nodes, links=links)
+        links.append(
+            GraphEdge(
+                source=actor.actor_id,
+                target=f"wallet:{w.address}",
+                relation="SHARES_WALLET",
+            )
+        )
+
+    return GraphPayload(
+        nodes=nodes,
+        links=links,
+    )

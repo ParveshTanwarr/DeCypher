@@ -28,7 +28,10 @@ export function setAuthToken(token: string) {
   authToken = token;
 }
 
-async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
+async function request<T>(
+  path: string,
+  options: RequestInit = {}
+): Promise<T> {
   const response = await fetch(`${API_BASE}${path}`, {
     ...options,
     headers: {
@@ -41,7 +44,9 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 
   if (!response.ok) {
     const error = await response.text();
-    throw new Error(error || `API error: ${response.status}`);
+    throw new Error(
+      error || `API error: ${response.status}`
+    );
   }
 
   return response.json();
@@ -52,22 +57,30 @@ export async function login(
   password: string
 ): Promise<string> {
   const body = new URLSearchParams();
+
   body.append("username", username);
   body.append("password", password);
 
-  const response = await fetch(`${API_BASE}/auth/token`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/x-www-form-urlencoded",
-    },
-    body,
-  });
+  const response = await fetch(
+    `${API_BASE}/auth/token`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type":
+          "application/x-www-form-urlencoded",
+      },
+      body,
+    }
+  );
 
   if (!response.ok) {
-    throw new Error("Invalid username or password");
+    throw new Error(
+      "Invalid username or password"
+    );
   }
 
   const data = await response.json();
+
   setAuthToken(data.access_token);
 
   return data.access_token;
@@ -82,20 +95,29 @@ export function getActor(actorId: string) {
 }
 
 export function getActorEvidence(actorId: string) {
-  return request(`/actors/${actorId}/evidence`);
+  return request(
+    `/actors/${actorId}/evidence`
+  );
 }
+
+/* =========================================================
+   GRAPH
+   ========================================================= */
 
 export interface GraphNode {
   id: string;
   label: string;
-  type: string;
+  name?: string;
+  category?: string;
+  type?: string;
   properties?: Record<string, unknown>;
 }
 
 export interface GraphLink {
   source: string;
   target: string;
-  type: string;
+  relation?: string;
+  type?: string;
 }
 
 export interface GraphPayload {
@@ -103,11 +125,84 @@ export interface GraphPayload {
   links: GraphLink[];
 }
 
-export function getActorGraph(actorId: string): Promise<GraphPayload> {
-  return request<GraphPayload>(`/actors/${actorId}/graph`);
+export function getActorGraph(
+  actorId: string
+): Promise<GraphPayload> {
+  return request<GraphPayload>(
+    `/actors/${actorId}/graph`
+  );
 }
 
-export function searchActors(query: string): Promise<SearchResponse> {
+/* =========================================================
+   CORRELATION
+   ========================================================= */
+
+export interface CorrelationSignal {
+  type: string;
+  confidence: number;
+  description: string;
+  weight: number;
+
+  details?: {
+    handle_a?: string;
+    handle_b?: string;
+    is_same_author?: boolean;
+    threshold_used?: number;
+    shared_markers?: string[];
+    domain_routing?: Record<string, number>;
+  };
+}
+
+export interface CorrelationResult {
+  candidate_actor: string;
+  primary_handle: string;
+  overall_confidence: number;
+  risk_level: string;
+  signals: CorrelationSignal[];
+  signal_count: number;
+  available_weight: number;
+  interpretation: string;
+}
+
+export function getActorCorrelation(
+  actorId: string,
+  handleA?: string,
+  handleB?: string
+): Promise<CorrelationResult> {
+  const params = new URLSearchParams();
+
+  if (handleA) {
+    params.set("handle_a", handleA);
+  }
+
+  if (handleB) {
+    params.set("handle_b", handleB);
+  }
+
+  const query = params.toString();
+
+  return request<CorrelationResult>(
+    `/correlation/actor/${encodeURIComponent(actorId)}${
+      query ? `?${query}` : ""
+    }`
+  );
+}
+
+export function getAllCorrelations(): Promise<{
+  results: CorrelationResult[];
+}> {
+  return request<{
+    results: CorrelationResult[];
+  }>("/correlation/actors");
+}
+
+/* =========================================================
+   SEARCH
+   ========================================================= */
+
+export function searchActors(
+  query: string
+): Promise<SearchResponse> {
   return request<SearchResponse>(
     `/search?q=${encodeURIComponent(query)}`
   );
