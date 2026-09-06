@@ -7,6 +7,7 @@ actor_id because wallets.csv only has handle_id.
 from sqlalchemy import func
 from app.database.postgres import SessionLocal
 from app.models.sql_models import Actor, DarkWebHandle, Wallet, Marketplace, Observation
+from app.services.correlation_service import CorrelationService
 
 
 def test_actors_loaded_with_primary_handle():
@@ -52,8 +53,46 @@ def test_wallets_linked_to_actors_and_handles():
         db.close()
 
 
+def test_reused_wallet_links_distinct_handles_and_scores_as_reuse():
+    """
+    Find a real reused wallet in the seed dataset rather than hard-coding
+    an actor/address whose fixture data may change. A reused address must
+    link to at least two distinct handles, and each linked actor should
+    receive the strong wallet-reuse signal.
+    """
+    db = SessionLocal()
+    try:
+        reused_address = (
+            db.query(Wallet.address)
+            .filter(Wallet.associated_handle.isnot(None))
+            .group_by(Wallet.address)
+            .having(func.count(func.distinct(Wallet.associated_handle)) >= 2)
+            .first()
+        )
+        assert reused_address is not None, "seed data should contain at least one reused wallet"
+
+        address = reused_address[0]
+        rows = (
+            db.query(Wallet)
+            .filter(Wallet.address == address)
+            .all()
+        )
+        handles = {row.associated_handle for row in rows if row.associated_handle}
+        actor_ids = {row.actor_id for row in rows if row.actor_id}
+
+        assert len(handles) >= 2, "reused wallet should connect distinct handles"
+        assert actor_ids, "reused wallet rows should be linked to actors"
+
+        service = CorrelationService(db)
+        for actor_id in actor_ids:
+            score = service._wallet_reuse_score(actor_id)
+            assert score == 0.95, "cross-handle wallet reuse should receive the strong reuse score"
+    finally:
+        db.close()
+
+
 def test_known_actor_has_multiple_correlated_handles():
-    """Ground-truth spot check: A00001 has two handles that share a wallet."""
+    """Ground-truth spot check: A00001 has two correlated handles."""
     db = SessionLocal()
     try:
         handles = {h.handle for h in db.query(DarkWebHandle).filter(DarkWebHandle.actor_id == "A00001").all()}
