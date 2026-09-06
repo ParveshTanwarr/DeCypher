@@ -127,6 +127,13 @@ class NLPStylometryService:
             if self.expert_model and hasattr(self.expert_model, "predict_proba"):
                 # Use trained classifier if available
                 diff_feat = np.abs(feat_a - feat_b)
+
+                if hasattr(diff_feat, "toarray"):
+                    diff_feat = diff_feat.toarray()
+
+                if diff_feat.shape[1] != self.expert_model.n_features_in_:
+                    diff_feat = diff_feat[:, :self.expert_model.n_features_in_]
+
                 score = float(self.expert_model.predict_proba(diff_feat)[0][1])
             else:
                 sim_matrix = cosine_similarity(feat_a, feat_b)
