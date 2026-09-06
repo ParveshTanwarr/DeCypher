@@ -1,4 +1,5 @@
 import json
+import uuid
 from datetime import datetime, timezone
 from urllib.parse import urlparse
 from infra.evidence import save_observations
@@ -18,33 +19,23 @@ from infra.detectors.descriptor_timing import (
 )
 
 
+def _observation_id() -> str:
+    return f"scanobs_{uuid.uuid4().hex[:12]}"
+
+
 def scan_target(url: str) -> list[dict]:
-    """
-    Scan an authorized target for infrastructure indicators.
-    """
+    """Scan an authorized target for infrastructure indicators."""
 
     observations = []
-
-    scan_date = datetime.now(
-        timezone.utc
-    ).isoformat()
-
-    # -------------------------------------------------
-    # 1. Check for server banner
-    # -------------------------------------------------
+    scan_date = datetime.now(timezone.utc).isoformat()
 
     try:
-        response = requests.get(
-            url,
-            timeout=10,
-            verify=False
-        )
-
+        response = requests.get(url, timeout=10, verify=False)
         banner = detect_banner(response)
 
         if banner:
             observations.append({
-                "observation_id": None,
+                "observation_id": _observation_id(),
                 "indicator_type": "default_banner",
                 "target": url,
                 "detected": True,
@@ -58,7 +49,7 @@ def scan_target(url: str) -> list[dict]:
 
     except requests.RequestException as error:
         observations.append({
-            "observation_id": None,
+            "observation_id": _observation_id(),
             "indicator_type": "scan_error",
             "target": url,
             "detected": False,
@@ -69,23 +60,14 @@ def scan_target(url: str) -> list[dict]:
             "source": "authorized-test-service",
             "evidence": str(error)
         })
-
         return observations
-
-    # -------------------------------------------------
-    # 2. Check for exposed status page
-    # -------------------------------------------------
 
     status_marker = detect_status_page(url)
 
     if status_marker:
-        status_url = (
-            url.rstrip("/")
-            + "/server-status"
-        )
-
+        status_url = url.rstrip("/") + "/server-status"
         observations.append({
-            "observation_id": None,
+            "observation_id": _observation_id(),
             "indicator_type": "exposed_status_page",
             "target": status_url,
             "detected": True,
@@ -97,46 +79,27 @@ def scan_target(url: str) -> list[dict]:
             "evidence": "Authorized test status page detected."
         })
 
-    # -------------------------------------------------
-    # 3. Check SSL certificate
-    # -------------------------------------------------
-
     if url.startswith("https://"):
-
         parsed_url = urlparse(url)
-
         host = parsed_url.hostname
         port = parsed_url.port or 443
-
-        fingerprint = get_certificate_fingerprint(
-            host,
-            port
-        )
+        fingerprint = get_certificate_fingerprint(host, port)
 
         if fingerprint:
-
             try:
-                with open(
-                    "infra/known_certificates.json",
-                    "r",
-                    encoding="utf-8"
-                ) as file:
+                with open("infra/known_certificates.json", "r", encoding="utf-8") as file:
                     known_certificates = json.load(file)
-
             except (FileNotFoundError, json.JSONDecodeError):
                 known_certificates = {}
 
-            clearnet_match = (
-                match_certificate_fingerprint(
-                    fingerprint,
-                    known_certificates
-                )
+            clearnet_match = match_certificate_fingerprint(
+                fingerprint,
+                known_certificates
             )
 
             if clearnet_match:
-
                 observations.append({
-                    "observation_id": None,
+                    "observation_id": _observation_id(),
                     "indicator_type": "ssl_cert_reuse",
                     "target": url,
                     "detected": True,
@@ -145,16 +108,11 @@ def scan_target(url: str) -> list[dict]:
                     "confidence": 0.90,
                     "scan_date": scan_date,
                     "source": "authorized-test-service",
-                    "evidence": (
-                        "TLS certificate fingerprint "
-                        "matched known infrastructure."
-                    )
+                    "evidence": "TLS certificate fingerprint matched known infrastructure."
                 })
-
             else:
-
                 observations.append({
-                    "observation_id": None,
+                    "observation_id": _observation_id(),
                     "indicator_type": "ssl_certificate",
                     "target": url,
                     "detected": True,
@@ -163,27 +121,15 @@ def scan_target(url: str) -> list[dict]:
                     "confidence": 0.80,
                     "scan_date": scan_date,
                     "source": "authorized-test-service",
-                    "evidence": (
-                        "TLS certificate fingerprint "
-                        "successfully collected."
-                    )
+                    "evidence": "TLS certificate fingerprint successfully collected."
                 })
-
-    # -------------------------------------------------
-    # 4. Check descriptor timing
-    # -------------------------------------------------
 
     timing_marker = detect_descriptor_timing(url)
 
     if timing_marker:
-
-        timing_url = (
-            url.rstrip("/")
-            + "/descriptor-timing"
-        )
-
+        timing_url = url.rstrip("/") + "/descriptor-timing"
         observations.append({
-            "observation_id": None,
+            "observation_id": _observation_id(),
             "indicator_type": "descriptor_timing",
             "target": timing_url,
             "detected": True,
@@ -192,45 +138,24 @@ def scan_target(url: str) -> list[dict]:
             "confidence": 0.75,
             "scan_date": scan_date,
             "source": "authorized-test-service",
-            "evidence": (
-                "Authorized descriptor timing "
-                "test signal detected."
-            )
+            "evidence": "Authorized descriptor timing test signal detected."
         })
 
     return observations
 
 
 if __name__ == "__main__":
-
-    results = scan_target(
-        "https://127.0.0.1:8443/"
-    )
+    results = scan_target("https://127.0.0.1:8443/")
 
     for result in results:
         print(result)
 
-    output_path = save_observations(
-        results
-    )
-
+    output_path = save_observations(results)
     print()
-    print(
-        f"Evidence saved to: {output_path}"
-    )
+    print(f"Evidence saved to: {output_path}")
 
-    # -------------------------------------------------
-    # Send observations to backend
-    # -------------------------------------------------
-
-    mapped_observations = map_observations(
-        results,
-        "ACT-8821"
-    )
-
-    backend_result = send_observations(
-        mapped_observations
-    )
+    mapped_observations = map_observations(results, "ACT-8821")
+    backend_result = send_observations(mapped_observations)
 
     print()
     print("Backend response:")
