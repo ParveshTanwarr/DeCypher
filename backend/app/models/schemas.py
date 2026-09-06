@@ -70,23 +70,32 @@ class GraphPayload(BaseModel):
 
 
 # ------------------------------------------------------------------
-# Feedback Schemas (routers/feedback.py)
+# Feedback Schemas (Aligned with routers/feedback.py & sql_models.py)
 # ------------------------------------------------------------------
 
 class FeedbackRequest(BaseModel):
-    actor_id: Optional[str] = None
-    feedback_type: str = "general"
-    comment: str
-    rating: Optional[int] = None
-    user_id: Optional[str] = None
-    metadata: Dict[str, Any] = Field(default_factory=dict)
+    actor_id: str = Field(..., description="Target actor identifier")
+    verdict: str = Field(..., description="Investigator verdict (e.g. Confirmed, False Positive, High Risk)")
+    investigator_id: Optional[str] = Field("analyst", description="Investigator username or badge")
+    notes: Optional[str] = Field(None, description="Investigator analytical justification")
 
 
 class FeedbackResponse(BaseModel):
     status: str = "success"
-    feedback_id: str = Field(default_factory=lambda: f"fb_{uuid.uuid4().hex[:8]}")
-    message: str = "Feedback received successfully"
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    message: str
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+class FeedbackItemResponse(BaseModel):
+    id: int
+    actor_id: str
+    verdict: str
+    investigator_id: Optional[str] = None
+    notes: Optional[str] = None
+    timestamp: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
 
 
 # ------------------------------------------------------------------
@@ -97,10 +106,14 @@ class ObservationCreate(BaseModel):
     observation_id: str = Field(default_factory=lambda: f"obs_{uuid.uuid4().hex[:8]}")
     indicator_type: str
     detected: bool = True
-    value: str
+    # Optional -- a "not detected" scan result legitimately has no value
+    # (e.g. infra/scanner.py sends None when a banner isn't found). This
+    # used to be a required str, which meant every "not detected" result
+    # would fail validation with a 422.
+    value: Optional[str] = None
     target: str
     source: str = "scanner"
-    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    timestamp: Optional[datetime] = Field(default_factory=lambda: datetime.now(timezone.utc))
     confidence: Optional[float] = 1.0
     description: Optional[str] = None
 
@@ -115,6 +128,22 @@ class BatchIngestionResponse(BaseModel):
     message: str = "Successfully ingested scanner observations."
 
 
+class ObservationResponse(BaseModel):
+    id: int
+    observation_id: str
+    indicator_type: str
+    detected: bool
+    value: Optional[str] = None
+    target: str
+    source: str
+    timestamp: Optional[datetime] = None
+    confidence: Optional[float] = 1.0
+    description: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
 class ScanRequest(BaseModel):
     target: str
     scan_type: str = "full"
@@ -127,7 +156,7 @@ class ScanResult(BaseModel):
 
 
 # ------------------------------------------------------------------
-# Search, Auth, Export Schemas
+# Search, Auth, Export & NLP Schemas
 # ------------------------------------------------------------------
 
 class SearchQuery(BaseModel):
@@ -154,3 +183,20 @@ class Token(BaseModel):
 class ExportRequest(BaseModel):
     format: str = "json"
     filters: Dict[str, Any] = Field(default_factory=dict)
+
+
+class HandleCompareRequest(BaseModel):
+    handle_a: str = Field(..., description="First dark web handle identifier")
+    handle_b: str = Field(..., description="Second dark web handle identifier")
+    sample_text_a: Optional[str] = Field(None, description="Optional raw text sample for handle A")
+    sample_text_b: Optional[str] = Field(None, description="Optional raw text sample for handle B")
+
+
+class HandleCompareResponse(BaseModel):
+    handle_a: str
+    handle_b: str
+    similarity_score: float
+    is_same_author: bool
+    confidence: float
+    shared_linguistic_markers: List[str] = Field(default_factory=list)
+    details: Dict[str, Any] = Field(default_factory=dict)
