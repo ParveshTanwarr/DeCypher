@@ -1,37 +1,37 @@
 [
   {
-    "observation_id": null,
+    "observation_id": "scanobs_58e4fa1e15cb",
     "indicator_type": "default_banner",
     "target": "https://127.0.0.1:8443/",
     "detected": true,
     "observed_value": "MOCK-SERVER-V1",
     "clearnet_match_domain": null,
     "confidence": 0.85,
-    "scan_date": "2026-08-29T16:38:26.671146+00:00",
+    "scan_date": "2026-09-06T17:22:52.605831+00:00",
     "source": "authorized-test-service",
     "evidence": "Test server banner detected."
   },
   {
-    "observation_id": null,
-    "indicator_type": "ssl_cert_reuse",
+    "observation_id": "scanobs_b051c0c0e9c3",
+    "indicator_type": "ssl_certificate",
     "target": "https://127.0.0.1:8443/",
     "detected": true,
-    "observed_value": "66:42:4A:13:DA:88:8F:DA:FE:F1:1B:76:5F:49:4C:D3:4F:A8:F4:DC:51:3A:8C:DC:70:28:F1:09:20:70:C0:3D",
-    "clearnet_match_domain": "demo-clearnet.example",
-    "confidence": 0.9,
-    "scan_date": "2026-08-29T16:38:26.671146+00:00",
+    "observed_value": "9E:FC:0E:7E:81:13:04:2A:0A:0F:19:79:50:A2:8E:A4:10:9D:DF:64:AB:F1:38:E9:CA:B7:87:75:77:E6:9C:59",
+    "clearnet_match_domain": null,
+    "confidence": 0.8,
+    "scan_date": "2026-09-06T17:22:52.605831+00:00",
     "source": "authorized-test-service",
-    "evidence": "TLS certificate fingerprint matched known infrastructure."
+    "evidence": "TLS certificate fingerprint successfully collected."
   },
   {
-    "observation_id": null,
+    "observation_id": "scanobs_7a82e92a4426",
     "indicator_type": "descriptor_timing",
     "target": "https://127.0.0.1:8443/descriptor-timing",
     "detected": true,
     "observed_value": "DESCRIPTOR_TIMING_TEST",
     "clearnet_match_domain": null,
     "confidence": 0.75,
-    "scan_date": "2026-08-29T16:38:26.671146+00:00",
+    "scan_date": "2026-09-06T17:22:52.605831+00:00",
     "source": "authorized-test-service",
     "evidence": "Authorized descriptor timing test signal detected."
   }
