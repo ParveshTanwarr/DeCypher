@@ -7,7 +7,7 @@ from prometheus_fastapi_instrumentator import Instrumentator
 from app.database.postgres import Base, engine
 from app.config import settings
 import app.models.sql_models
-from app.routers import actors, search, feedback, export, auth, scanner, nlp
+from app.routers import actors, search, feedback, export, auth, scanner, nlp , correlation
 from app.middleware.audit_log import AuditLogMiddleware
 
 _DEV_DEFAULT_SECRET_KEY = "threat_intel_dev_secret_key_change_in_prod_12345"
@@ -64,6 +64,7 @@ app.include_router(feedback.router)
 app.include_router(export.router)
 app.include_router(scanner.router)
 app.include_router(nlp.router)
+app.include_router(correlation.router)
 
 
 
