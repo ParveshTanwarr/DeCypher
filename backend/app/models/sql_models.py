@@ -1,16 +1,5 @@
 from datetime import datetime, timezone
-from sqlalchemy import (
-    Boolean,
-    Column,
-    DateTime,
-    Float,
-    ForeignKey,
-    Integer,
-    String,
-    Text,
-    UniqueConstraint,
-    func,
-)
+from sqlalchemy import Boolean, Column, DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint, func
 from sqlalchemy.orm import relationship
 from app.database.postgres import Base
 
@@ -21,15 +10,12 @@ def utc_now():
 
 class Actor(Base):
     __tablename__ = "actors"
-
     actor_id = Column(String(64), primary_key=True, index=True)
     primary_handle = Column(String(128), nullable=False)
     risk_category = Column(String(32), default="High")
     confidence_score = Column(Float, default=0.85)
     priority_score = Column(Integer, default=70)
     created_at = Column(DateTime(timezone=True), default=utc_now, server_default=func.now())
-
-    # Relationships
     handles = relationship("DarkWebHandle", back_populates="actor", cascade="all, delete-orphan")
     wallets = relationship("Wallet", back_populates="actor", cascade="all, delete-orphan")
     feedback = relationship("InvestigatorFeedback", back_populates="actor", cascade="all, delete-orphan")
@@ -37,7 +23,6 @@ class Actor(Base):
 
 class DarkWebHandle(Base):
     __tablename__ = "darkweb_handles"
-
     id = Column(Integer, primary_key=True, index=True)
     actor_id = Column(String(64), ForeignKey("actors.actor_id", ondelete="CASCADE"), index=True, nullable=True)
     handle = Column(String(128), index=True, nullable=False)
@@ -48,30 +33,26 @@ class DarkWebHandle(Base):
     last_seen = Column(DateTime(timezone=True), nullable=True)
     stylometry_vector_hash = Column(String(256), nullable=True)
     created_at = Column(DateTime(timezone=True), default=utc_now, server_default=func.now())
-
     actor = relationship("Actor", back_populates="handles")
-
-    __table_args__ = (
-        UniqueConstraint("handle", "platform", name="uq_handle_platform"),
-    )
+    __table_args__ = (UniqueConstraint("handle", "platform", name="uq_handle_platform"),)
 
 
 class Wallet(Base):
     __tablename__ = "wallets"
-
     id = Column(Integer, primary_key=True, index=True)
+    # Wallet addresses intentionally are NOT globally unique: the same
+    # address may be associated with multiple handles/actors, which is the
+    # exact reuse signal the correlation engine needs to detect.
     actor_id = Column(String(64), ForeignKey("actors.actor_id", ondelete="CASCADE"), index=True, nullable=True)
-    address = Column(String(256), unique=True, index=True, nullable=False)
+    address = Column(String(256), index=True, nullable=False)
     currency = Column(String(16), default="BTC")
     associated_handle = Column(String(128), index=True, nullable=True)
     first_seen = Column(DateTime(timezone=True), default=utc_now)
-
     actor = relationship("Actor", back_populates="wallets")
 
 
 class Marketplace(Base):
     __tablename__ = "marketplaces"
-
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(128), unique=True, index=True, nullable=False)
     onion_url = Column(String(256), unique=True, nullable=True)
@@ -80,20 +61,17 @@ class Marketplace(Base):
 
 class InvestigatorFeedback(Base):
     __tablename__ = "investigator_feedback"
-
     id = Column(Integer, primary_key=True, index=True)
     actor_id = Column(String(64), ForeignKey("actors.actor_id", ondelete="CASCADE"), index=True, nullable=False)
-    verdict = Column(String(32), nullable=False)  # Renamed from 'decision' to match API & schemas
+    verdict = Column(String(32), nullable=False)
     notes = Column(Text, nullable=True)
-    investigator_id = Column(String(128), default="analyst")  # Renamed from 'investigator_name'
+    investigator_id = Column(String(128), default="analyst")
     timestamp = Column(DateTime(timezone=True), default=utc_now, server_default=func.now())
-
     actor = relationship("Actor", back_populates="feedback")
 
 
 class AuditLog(Base):
     __tablename__ = "audit_logs"
-
     id = Column(Integer, primary_key=True, index=True)
     username = Column(String(128), index=True, nullable=False)
     method = Column(String(16), nullable=False)
@@ -104,7 +82,6 @@ class AuditLog(Base):
 
 class Observation(Base):
     __tablename__ = "observations"
-
     id = Column(Integer, primary_key=True, index=True)
     observation_id = Column(String(128), unique=True, index=True, nullable=False)
     indicator_type = Column(String(64), index=True, nullable=False)
