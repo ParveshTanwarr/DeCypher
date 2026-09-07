@@ -1,4 +1,13 @@
 import { useEffect, useState } from "react";
+import {
+  Activity,
+  Database,
+  GitBranch,
+  LayoutDashboard,
+  LogOut,
+  Search,
+  ShieldCheck,
+} from "lucide-react";
 import "./App.css";
 
 import { getActors, setAuthToken } from "./api/client";
@@ -22,30 +31,25 @@ function App() {
   const [token, setToken] = useState(
     () => sessionStorage.getItem("decypher_token") || "",
   );
-
   const [page, setPage] = useState<Page>("dashboard");
   const [selectedActor, setSelectedActor] = useState("");
   const [actors, setActors] = useState<ActorSummary[]>([]);
   const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState("");
 
   useEffect(() => {
-    if (!token) {
-      return;
-    }
-
+    if (!token) return;
     setAuthToken(token);
     setLoading(true);
+    setLoadError("");
 
     getActors()
-      .then((data) => {
-        setActors(data);
-      })
+      .then(setActors)
       .catch((error) => {
         console.error("Failed to load actors:", error);
+        setLoadError("Unable to load intelligence data.");
       })
-      .finally(() => {
-        setLoading(false);
-      });
+      .finally(() => setLoading(false));
   }, [token]);
 
   function handleLogin(newToken: string) {
@@ -57,6 +61,7 @@ function App() {
 
   function handleLogout() {
     sessionStorage.removeItem("decypher_token");
+    setAuthToken("");
     setToken("");
     setActors([]);
     setSelectedActor("");
@@ -69,13 +74,30 @@ function App() {
   }
 
   function openGraph() {
-    if (selectedActor) {
-      setPage("graph");
-    }
+    if (selectedActor) setPage("graph");
   }
 
-  if (!token) {
-    return <LoginPage onLogin={handleLogin} />;
+  if (!token) return <LoginPage onLogin={handleLogin} />;
+
+  const highRiskCount = actors.filter((actor) => {
+    const risk = String(actor.risk_category || "").toLowerCase();
+    return risk === "high" || risk === "critical";
+  }).length;
+
+  const averageConfidence = actors.length
+    ? (actors.reduce((sum, actor) => sum + Number(actor.confidence_score || 0), 0) / actors.length) * 100
+    : 0;
+
+  const navItems = [
+    { id: "dashboard" as const, label: "Dashboard", icon: LayoutDashboard },
+    { id: "search" as const, label: "Investigation Search", icon: Search },
+  ];
+
+  if (selectedActor) {
+    navItems.push(
+      { id: "actor", label: "Actor Investigation", icon: ShieldCheck },
+      { id: "graph", label: "Graph Explorer", icon: GitBranch },
+    );
   }
 
   return (
@@ -83,240 +105,126 @@ function App() {
       <aside className="sidebar">
         <div className="brand">
           <div className="brand-mark">D</div>
-
-          <div>
+          <div className="brand-copy">
             <h1>DeCypher</h1>
             <span>Threat Intelligence</span>
           </div>
         </div>
 
-        <nav>
-          <button
-            className={
-              page === "dashboard"
-                ? "nav-item active"
-                : "nav-item"
-            }
-            onClick={() => setPage("dashboard")}
-          >
-            Dashboard
-          </button>
-
-          <button
-            className={
-              page === "search"
-                ? "nav-item active"
-                : "nav-item"
-            }
-            onClick={() => setPage("search")}
-          >
-            Investigation Search
-          </button>
-
-          {selectedActor && (
+        <div className="sidebar-label">Workspace</div>
+        <nav aria-label="Primary navigation">
+          {navItems.map(({ id, label, icon: Icon }) => (
             <button
-              className={
-                page === "actor"
-                  ? "nav-item active"
-                  : "nav-item"
-              }
-              onClick={() => setPage("actor")}
+              key={id}
+              className={`nav-item${page === id ? " active" : ""}`}
+              onClick={() => setPage(id)}
             >
-              Actor Investigation
+              <span className="nav-icon"><Icon size={16} strokeWidth={1.8} /></span>
+              <span className="nav-label">{label}</span>
             </button>
-          )}
-
-          {selectedActor && (
-            <button
-              className={
-                page === "graph"
-                  ? "nav-item active"
-                  : "nav-item"
-              }
-              onClick={() => setPage("graph")}
-            >
-              Graph Explorer
-            </button>
-          )}
+          ))}
         </nav>
 
+        <div className="sidebar-status">
+          <span className="status-dot" />
+          <div>
+            <strong>System online</strong>
+            <small>Local investigation environment</small>
+          </div>
+        </div>
+
         <div className="sidebar-bottom">
-          <button
-            className="logout-button"
-            onClick={handleLogout}
-          >
-            Sign out
+          <button className="logout-button" onClick={handleLogout}>
+            <LogOut size={15} />
+            <span>Sign out</span>
           </button>
         </div>
       </aside>
 
       <main className="main-content">
-        {page === "dashboard" && (
-          <>
-            <header className="page-header">
-              <div>
-                <p className="eyebrow">
-                  THREAT INTELLIGENCE PLATFORM
-                </p>
+        <div className="content-frame">
+          {page === "dashboard" && (
+            <>
+              <header className="page-header">
+                <div>
+                  <div className="eyebrow">THREAT INTELLIGENCE PLATFORM</div>
+                  <h2>Investigation Dashboard</h2>
+                  <p>One workspace for actors, evidence, infrastructure and correlation.</p>
+                </div>
+                <button className="primary-button" onClick={() => setPage("search")}>
+                  <Search size={15} />
+                  Start Investigation
+                </button>
+              </header>
 
-                <h2>Investigation Dashboard</h2>
+              {loadError && <div className="error">{loadError}</div>}
 
-                <p>
-                  Correlate actors, infrastructure, wallets,
-                  handles and evidence.
-                </p>
-              </div>
-
-              <button
-                className="primary-button"
-                onClick={() => setPage("search")}
-              >
-                Start Investigation
-              </button>
-            </header>
-
-            {loading ? (
-              <div className="loading">
-                Loading intelligence data...
-              </div>
-            ) : (
-              <>
-                <section className="stats-grid">
-                  <div className="stat-card">
-                    <span>Total Actors</span>
-                    <strong>{actors.length}</strong>
-                  </div>
-
-                  <div className="stat-card">
-                    <span>High Risk</span>
-
-                    <strong>
-                      {
-                        actors.filter(
-                          (actor) =>
-                            actor.risk_category === "high" ||
-                            actor.risk_category === "critical",
-                        ).length
-                      }
-                    </strong>
-                  </div>
-
-                  <div className="stat-card">
-                    <span>Average Confidence</span>
-
-                    <strong>
-                      {actors.length > 0
-                        ? `${(
-                            (actors.reduce(
-                              (sum, actor) =>
-                                sum +
-                                Number(
-                                  actor.confidence_score || 0,
-                                ),
-                              0,
-                            ) /
-                              actors.length) *
-                            100
-                          ).toFixed(1)}%`
-                        : "0%"}
-                    </strong>
-                  </div>
-                </section>
-
-                <section className="panel">
-                  <div className="panel-header">
-                    <div>
-                      <p className="eyebrow">
-                        CORRELATED ACTORS
-                      </p>
-
-                      <h3>Recent Intelligence</h3>
+              {loading ? (
+                <div className="loading">Loading intelligence data…</div>
+              ) : (
+                <>
+                  <section className="stats-grid">
+                    <div className="stat-card">
+                      <span>Total Actors</span>
+                      <strong>{actors.length}</strong>
+                      <small>Indexed identities</small>
                     </div>
+                    <div className="stat-card">
+                      <span>High Risk</span>
+                      <strong>{highRiskCount}</strong>
+                      <small>High or critical category</small>
+                    </div>
+                    <div className="stat-card">
+                      <span>Average Confidence</span>
+                      <strong>{averageConfidence.toFixed(1)}%</strong>
+                      <small>Across indexed actors</small>
+                    </div>
+                  </section>
 
-                    <button
-                      className="secondary-button"
-                      onClick={() => setPage("search")}
-                    >
-                      View all
-                    </button>
-                  </div>
-
-                  <div className="table-container">
-                    <table>
-                      <thead>
-                        <tr>
-                          <th>Actor ID</th>
-                          <th>Primary Handle</th>
-                          <th>Risk Category</th>
-                          <th>Confidence</th>
-                          <th>Last Active</th>
-                        </tr>
-                      </thead>
-
-                      <tbody>
-                        {actors.slice(0, 10).map((actor) => (
-                          <tr
-                            key={actor.actor_id}
-                            className="clickable-row"
-                            onClick={() =>
-                              openActor(actor.actor_id)
-                            }
-                          >
-                            <td>{actor.actor_id}</td>
-
-                            <td>
-                              {actor.primary_handle}
-                            </td>
-
-                            <td>
-                              <span className="risk-badge">
-                                {actor.risk_category}
-                              </span>
-                            </td>
-
-                            <td>
-                              {(
-                                Number(
-                                  actor.confidence_score,
-                                ) * 100
-                              ).toFixed(1)}
-                              %
-                            </td>
-
-                            <td>
-                              {actor.last_active}
-                            </td>
+                  <section className="panel">
+                    <div className="panel-header">
+                      <div>
+                        <div className="eyebrow">CORRELATED ACTORS</div>
+                        <h3>Recent Intelligence</h3>
+                      </div>
+                      <button className="secondary-button" onClick={() => setPage("search")}>
+                        View all <span aria-hidden="true">→</span>
+                      </button>
+                    </div>
+                    <div className="table-container">
+                      <table>
+                        <thead>
+                          <tr>
+                            <th>Actor</th>
+                            <th>Primary handle</th>
+                            <th>Risk</th>
+                            <th>Confidence</th>
+                            <th>Last active</th>
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </section>
-              </>
-            )}
-          </>
-        )}
+                        </thead>
+                        <tbody>
+                          {actors.slice(0, 10).map((actor) => (
+                            <tr key={actor.actor_id} className="clickable-row" onClick={() => openActor(actor.actor_id)}>
+                              <td>{actor.actor_id}</td>
+                              <td>{actor.primary_handle}</td>
+                              <td><span className={`risk-badge ${String(actor.risk_category || "").toLowerCase()}`}>{actor.risk_category}</span></td>
+                              <td>{(Number(actor.confidence_score || 0) * 100).toFixed(1)}%</td>
+                              <td>{actor.last_active || "—"}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </section>
+                </>
+              )}
+            </>
+          )}
 
-        {page === "search" && (
-          <SearchPage
-            onSelectActor={openActor}
-          />
-        )}
-
-        {page === "actor" && selectedActor && (
-          <ActorPage
-            actorId={selectedActor}
-            onBack={() => setPage("search")}
-            onGraph={openGraph}
-          />
-        )}
-
-        {page === "graph" && selectedActor && (
-          <GraphPage
-            actorId={selectedActor}
-            onBack={() => setPage("actor")}
-          />
-        )}
+          {page === "search" && <SearchPage onSelectActor={openActor} />}
+          {page === "actor" && selectedActor && <ActorPage actorId={selectedActor} onBack={() => setPage("search")} onGraph={openGraph} />}
+          {page === "graph" && selectedActor && <GraphPage actorId={selectedActor} onBack={() => setPage("actor")} />}
+        </div>
       </main>
     </div>
   );
