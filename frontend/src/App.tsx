@@ -1,7 +1,5 @@
 import { useEffect, useState } from "react";
 import {
-  Activity,
-  Database,
   GitBranch,
   LayoutDashboard,
   LogOut,
@@ -17,6 +15,12 @@ import ActorPage from "./pages/ActorPage";
 import GraphPage from "./pages/GraphPage";
 
 type Page = "dashboard" | "search" | "actor" | "graph";
+
+type NavItem = {
+  id: Page;
+  label: string;
+  icon: typeof LayoutDashboard;
+};
 
 interface ActorSummary {
   actor_id: string;
@@ -88,9 +92,9 @@ function App() {
     ? (actors.reduce((sum, actor) => sum + Number(actor.confidence_score || 0), 0) / actors.length) * 100
     : 0;
 
-  const navItems = [
-    { id: "dashboard" as const, label: "Dashboard", icon: LayoutDashboard },
-    { id: "search" as const, label: "Investigation Search", icon: Search },
+  const navItems: NavItem[] = [
+    { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
+    { id: "search", label: "Investigation Search", icon: Search },
   ];
 
   if (selectedActor) {
