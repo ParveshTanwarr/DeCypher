@@ -1,0 +1,2 @@
+# Backend dependencies are currently maintained in backend/requirements.txt.
+# This root file is reserved for the SIH repository-level dependency manifest.
