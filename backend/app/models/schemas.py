@@ -27,6 +27,7 @@ class ActorSummary(BaseModel):
     primary_handle: str
     risk_category: str
     confidence_score: float
+    priority_score: Optional[int] = 0
     associated_handles: List[str] = Field(default_factory=list)
     last_active: Optional[str] = None
 
@@ -70,7 +71,7 @@ class GraphPayload(BaseModel):
 
 
 # ------------------------------------------------------------------
-# Feedback Schemas (Aligned with routers/feedback.py & sql_models.py)
+# Feedback Schemas
 # ------------------------------------------------------------------
 
 class FeedbackRequest(BaseModel):
@@ -99,17 +100,13 @@ class FeedbackItemResponse(BaseModel):
 
 
 # ------------------------------------------------------------------
-# Scanner & Observation Schemas (routers/scanner.py)
+# Scanner & Observation Schemas
 # ------------------------------------------------------------------
 
 class ObservationCreate(BaseModel):
     observation_id: str = Field(default_factory=lambda: f"obs_{uuid.uuid4().hex[:8]}")
     indicator_type: str
     detected: bool = True
-    # Optional -- a "not detected" scan result legitimately has no value
-    # (e.g. infra/scanner.py sends None when a banner isn't found). This
-    # used to be a required str, which meant every "not detected" result
-    # would fail validation with a 422.
     value: Optional[str] = None
     target: str
     source: str = "scanner"
