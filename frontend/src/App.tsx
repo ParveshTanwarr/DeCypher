@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Activity, AlertTriangle, BarChart3, GitBranch, LayoutDashboard, LogOut, Search, ShieldCheck, Target } from "lucide-react";
 import "./App.css";
 import "./dashboard.css";
-import { getActors, setAuthToken } from "./api/client";
+import { getActors, getAllCorrelations, setAuthToken } from "./api/client";
 import LoginPage from "./pages/LoginPage";
 import SearchPage from "./pages/SearchPage";
 import ActorPage from "./pages/ActorPage";
@@ -24,7 +24,13 @@ function App() {
   useEffect(() => {
     if (!token) return;
     setAuthToken(token); setLoading(true); setLoadError("");
-    getActors().then(setActors).catch((error) => { console.error("Failed to load actors:", error); setLoadError("Unable to load intelligence data."); }).finally(() => setLoading(false));
+    Promise.all([getActors(), getAllCorrelations()])
+      .then(([actorRows, correlationRows]) => {
+        const priorities = new Map(correlationRows.results.map((item) => [item.candidate_actor, item.priority?.score ?? 0]));
+        setActors(actorRows.map((actor) => ({ ...actor, priority_score: priorities.get(actor.actor_id) ?? actor.priority_score ?? 0 })));
+      })
+      .catch((error) => { console.error("Failed to load intelligence data:", error); setLoadError("Unable to load intelligence data."); })
+      .finally(() => setLoading(false));
   }, [token]);
 
   function handleLogin(newToken: string) { sessionStorage.setItem("decypher_token", newToken); setAuthToken(newToken); setToken(newToken); setPage("dashboard"); }
@@ -51,7 +57,7 @@ function App() {
       {page === "dashboard" && <>
         <header className="page-header dashboard-header"><div><div className="eyebrow">THREAT INTELLIGENCE PLATFORM</div><h2>Investigation Dashboard</h2><p>Prioritize actors by risk, evidence strength, recency and cross-source correlation.</p></div><button className="primary-button" onClick={() => setPage("search")}><Search size={15} /> Start Investigation</button></header>
         {loadError && <div className="error">{loadError}</div>}
-        {loading ? <div className="loading">Loading intelligence data…</div> : <>
+        {loading ? <div className="loading">Calculating evidence priorities…</div> : <>
           <section className="stats-grid">
             <div className="stat-card stat-blue"><span>Total Actors</span><strong>{actors.length}</strong><small>Indexed identities</small><LayoutDashboard size={18} /></div>
             <div className="stat-card stat-red"><span>Priority ≥ High</span><strong>{priorityStats.urgent}</strong><small>Actors needing attention</small><AlertTriangle size={18} /></div>
