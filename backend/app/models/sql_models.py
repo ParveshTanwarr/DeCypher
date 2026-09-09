@@ -14,6 +14,8 @@ class Actor(Base):
     primary_handle = Column(String(128), nullable=False)
     risk_category = Column(String(32), default="High")
     confidence_score = Column(Float, default=0.85)
+    # Priority is a derived 0-100 triage score. Keep the column for
+    # persistence/backward compatibility; the service recalculates it.
     priority_score = Column(Integer, default=70)
     created_at = Column(DateTime(timezone=True), default=utc_now, server_default=func.now())
     handles = relationship("DarkWebHandle", back_populates="actor", cascade="all, delete-orphan")
