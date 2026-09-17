@@ -587,12 +587,12 @@ Designed for, not yet deployed in this prototype:
 
 Smart India Hackathon 2026 — Problem Statement 26151
 
-- **[Your Name]** — Team Lead
-- **[Member 2]** — Backend (FastAPI, Neo4j, PostgreSQL)
-- **[Member 3]** — AI/NLP (stylometric attribution engine)
-- **[Member 4]** — Infrastructure Attribution (Level 2 detectors)
-- **[Member 5]** — Frontend (React, graph visualization)
-- **[Member 6]** — Frontend / Integration
+- Rythm Vats — Team Lead
+- Aditya Kumar — Backend (FastAPI, Neo4j, PostgreSQL)
+- Himanshi — AI/NLP (stylometric attribution engine)
+- Parvesh — Infrastructure Attribution (Level 2 detectors)
+- Harshit — Frontend (React, graph visualization)
+- Lokesh — Frontend / Integration
 
 ---
 
