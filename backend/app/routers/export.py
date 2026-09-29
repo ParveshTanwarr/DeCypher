@@ -367,7 +367,7 @@ def _build_report_pdf(records: List[Dict[str, Any]]) -> bytes:
 
     # --- Actor detail table ---
     story.append(Paragraph("Actor Records", section_style))
-    table_header = ["Actor ID", "Primary Handle", "Risk", "Conf.", "Priority", "Last Scan", "PGP", "Infra", "Sources"]
+    table_header = ["Actor ID", "Primary Handle", "Risk", "Conf.", "Graph Priority", "Last Scan", "PGP", "Infra", "Sources"]
     table_rows = [table_header]
     row_risk_colors = []
     for r in records:
@@ -376,7 +376,7 @@ def _build_report_pdf(records: List[Dict[str, Any]]) -> bytes:
             r.get("primary_handle", ""),
             r.get("risk_category", ""),
             f"{r.get('confidence_score', 0):.2f}" if r.get("confidence_score") is not None else "N/A",
-            str(r.get("priority_score", "N/A")),
+            str(r.get("graph_priority_score", r.get("priority_score", "N/A"))),
             r.get("last_scan_date", "N/A"),
             str(len(r.get("pgp_keys", []))),
             str(len(r.get("infrastructure_indicators", []))),
