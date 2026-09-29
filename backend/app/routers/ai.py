@@ -7,9 +7,10 @@ from sqlalchemy.orm import Session
 from app.database.postgres import get_db
 from app.models.sql_models import Actor, DarkWebHandle, Wallet, Observation, ScanTarget
 from app.routers.auth import get_current_user
+from app.config import settings
 
 router = APIRouter(prefix="/ai", tags=["AI"], dependencies=[Depends(get_current_user)])
-GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.6-flash")
+GEMINI_MODEL = settings.GEMINI_MODEL
 
 class ChatMessage(BaseModel):
     role: str
@@ -62,7 +63,7 @@ def _actor_context(actor_id: Optional[str], db: Session) -> Dict[str, Any]:
     }
 
 def _call_gemini(prompt: str, history: List[ChatMessage]) -> str:
-    api_key = os.getenv("GEMINI_API_KEY")
+    api_key = settings.GEMINI_API_KEY
     if not api_key:
         raise HTTPException(status_code=503, detail="Gemini is not configured. Set GEMINI_API_KEY on the backend.")
     contents = []
