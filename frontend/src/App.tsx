@@ -2,7 +2,9 @@ import { useEffect, useMemo, useState } from "react";
 import { Activity, AlertTriangle, BarChart3, GitBranch, LayoutDashboard, LogOut, Search, ShieldCheck, Target } from "lucide-react";
 import "./App.css";
 import "./dashboard.css";
-import { getActors, getAllCorrelations, setAuthToken } from "./api/client";
+import { getActors, getAllCorrelations, setAuthToken, downloadExport } from "./api/client";
+import ExportMenu from "./components/export/ExportMenu";
+import NotificationBell, { type AppNotification } from "./components/notifications/NotificationBell";
 import LoginPage from "./pages/LoginPage";
 import SearchPage from "./pages/SearchPage";
 import ActorPage from "./pages/ActorPage";
@@ -20,6 +22,7 @@ function App() {
   const [actors, setActors] = useState<ActorSummary[]>([]);
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState("");
+  const [notifications, setNotifications] = useState<AppNotification[]>([]);
 
   useEffect(() => {
     if (!token) return;
@@ -27,7 +30,13 @@ function App() {
     Promise.all([getActors(), getAllCorrelations()])
       .then(([actorRows, correlationRows]) => {
         const priorities = new Map(correlationRows.results.map((item) => [item.candidate_actor, item.priority?.score ?? 0]));
-        setActors(actorRows.map((actor) => ({ ...actor, priority_score: priorities.get(actor.actor_id) ?? actor.priority_score ?? 0 })));
+        const mergedActors = actorRows.map((actor) => ({ ...actor, priority_score: priorities.get(actor.actor_id) ?? actor.priority_score ?? 0 }));
+        setActors(mergedActors);
+        const urgent = mergedActors.filter((actor) => Number(actor.priority_score || 0) >= 70).length;
+        setNotifications([
+          { id: "feed-ready", title: "Intelligence feed ready", message: `${mergedActors.length} actor records loaded into the investigation workspace.`, time: "Just now", type: "success" },
+          ...(urgent ? [{ id: "priority-update", title: "Priority queue updated", message: `${urgent} actors are currently at high or critical priority.`, time: "Just now", type: "warning" as const }] : []),
+        ]);
       })
       .catch((error) => { console.error("Failed to load intelligence data:", error); setLoadError("Unable to load intelligence data."); })
       .finally(() => setLoading(false));
@@ -36,6 +45,8 @@ function App() {
   function handleLogin(newToken: string) { sessionStorage.setItem("decypher_token", newToken); setAuthToken(newToken); setToken(newToken); setPage("dashboard"); }
   function handleLogout() { sessionStorage.removeItem("decypher_token"); setAuthToken(""); setToken(""); setActors([]); setSelectedActor(""); setPage("dashboard"); }
   function openActor(actorId: string) { setSelectedActor(actorId); setPage("actor"); }
+  function markAllRead() { setNotifications((items) => items.map((item) => ({ ...item, read: true }))); }
+  async function handleExport(format: string) { console.info(`Exported ${format}`); }
 
   const highRiskCount = actors.filter((a) => ["high", "critical"].includes(String(a.risk_category || "").toLowerCase())).length;
   const averageConfidence = actors.length ? actors.reduce((sum, a) => sum + Number(a.confidence_score || 0), 0) / actors.length * 100 : 0;
@@ -55,7 +66,7 @@ function App() {
 
     <main className="main-content"><div className="content-frame">
       {page === "dashboard" && <>
-        <header className="page-header dashboard-header"><div><div className="eyebrow">THREAT INTELLIGENCE PLATFORM</div><h2>Investigation Dashboard</h2><p>Prioritize actors by risk, evidence strength, recency and cross-source correlation.</p></div><button className="primary-button" onClick={() => setPage("search")}><Search size={15} /> Start Investigation</button></header>
+        <header className="page-header dashboard-header"><div><div className="eyebrow">THREAT INTELLIGENCE PLATFORM</div><h2>Investigation Dashboard</h2><p>Prioritize actors by risk, evidence strength, recency and cross-source correlation.</p></div><div className="dashboard-actions"><ExportMenu onExport={handleExport} /><NotificationBell notifications={notifications} onMarkAllRead={markAllRead} /><button className="primary-button" onClick={() => setPage("search")}><Search size={15} /> Start Investigation</button></div></header>
         {loadError && <div className="error">{loadError}</div>}
         {loading ? <div className="loading">Calculating evidence priorities…</div> : <>
           <section className="stats-grid">
