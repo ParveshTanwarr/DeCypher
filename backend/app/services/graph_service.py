@@ -485,13 +485,14 @@ collect(
 
     row["handle_nodes"] = [h for h in row.get("handle_nodes", []) if h and h.get("handle_id") and h.get("handle")]
     row["handles"] = [h["handle"] for h in row["handle_nodes"]]
+    actor_handle_ids = {h["handle_id"] for h in row["handle_nodes"]}
 
     row["wallets"] = [
         w for w in row.get("wallets", [])
         if w
     ]
 
-    row["correlated_handle_nodes"] = [h for h in row.get("correlated_handle_nodes", []) if h and h.get("handle_id") and h.get("handle") and h.get("handle") not in row["handles"]]
+    row["correlated_handle_nodes"] = [h for h in row.get("correlated_handle_nodes", []) if h and h.get("handle_id") and h.get("handle") and h.get("handle_id") not in actor_handle_ids]
     row["correlated_handles"] = [h["handle"] for h in row["correlated_handle_nodes"]]
     row["wallet_correlations"] = [
         pair
@@ -501,7 +502,7 @@ collect(
             and pair.get("wallet")
             and pair.get("handle_id")
             and pair.get("handle")
-            and pair.get("handle") not in row["handles"]
+            and pair.get("handle_id") not in actor_handle_ids
         )
     ]
 
