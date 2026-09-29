@@ -1,0 +1,13 @@
+source_handle_id,target_handle_id,relationship_type,confidence,source,first_seen,last_seen
+H00001,H00003,trust,0.86,synthetic_trust_dataset,2024-01-12,2024-03-20
+H00002,H00004,key_signature,0.91,synthetic_trust_dataset,2024-06-10,2024-12-20
+H00003,H00005,endorsement,0.78,synthetic_trust_dataset,2024-02-01,2024-04-15
+H00005,H00006,trust,0.84,synthetic_trust_dataset,2024-03-01,2025-01-08
+H00007,H00008,key_signature,0.89,synthetic_trust_dataset,2025-01-10,2025-11-20
+H00008,H00010,endorsement,0.73,synthetic_trust_dataset,2025-02-14,2025-10-03
+H00011,H00012,trust,0.81,synthetic_trust_dataset,2025-01-02,2025-04-10
+H00012,H00013,key_signature,0.88,synthetic_trust_dataset,2025-01-15,2025-07-02
+H00014,H00015,endorsement,0.76,synthetic_trust_dataset,2024-01-20,2025-06-18
+H00017,H00018,trust,0.83,synthetic_trust_dataset,2024-09-01,2025-04-01
+H00019,H00020,key_signature,0.87,synthetic_trust_dataset,2024-12-01,2025-02-20
+H00021,H00022,trust,0.79,synthetic_trust_dataset,2024-05-01,2025-08-12
