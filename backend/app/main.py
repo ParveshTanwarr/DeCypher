@@ -64,7 +64,8 @@ app.include_router(feedback.router)
 app.include_router(export.router)
 app.include_router(scanner.router)
 app.include_router(nlp.router)
-app.include_router(correlation.router)\napp.include_router(ai.router)
+app.include_router(correlation.router)
+app.include_router(ai.router)
 
 
 
