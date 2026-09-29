@@ -521,9 +521,31 @@ npm run lint
 
 ## Repository audit — 29 September 2026
 
-A repository-wide static review of the tracked source tree identified the following issues. These are **repository-level findings**, not machine-specific setup problems.
+A repository-wide static review of the tracked source tree identified the following repository-level issues. Local-machine setup problems are intentionally excluded.
 
-### Functional issues
+### Fixed in the current remediation pass
+
+- Scanner evidence is now resolved consistently from actor ID, primary/associated handles, and linked scan-target URL/name across actor detail, evidence, graph, correlation and bulk export paths.
+- Correlation observation queries are scoped to actor evidence instead of repeatedly scanning the entire observation table; wallet-reuse lookups are batched; `correlate_all()` commits once after processing.
+- Bulk export now fetches only detected observations matching the actors and their known evidence targets.
+- Native Neo4j graph query map literals no longer contain duplicate keys.
+- Neo4j actor-graph synchronization now supplies stable `handle_id` values, so live graph sync can populate handle and wallet relationships correctly.
+- The PostgreSQL graph fallback batches wallet-reuse lookup instead of querying once per wallet.
+- Credentialed CORS is now restricted to an explicit environment-configured frontend-origin allowlist.
+- The duplicate `backend/app/routers/.env.example` template has been removed; `backend/.env.example` is the canonical configuration template.
+
+### Intentionally deferred for the AI/NLP pass
+
+- Actor-scoped Gemini context still contains the known `ScanTarget.url` vs `ScanTarget.target_url` mismatch.
+- The NLP service's fallback heuristic and persisted scikit-learn artifact/runtime compatibility remain unchanged.
+- AI/NLP-specific evidence-scope unification is not part of this remediation pass.
+
+### Deployment-only concerns retained
+
+- Demo bcrypt credentials and development database/Neo4j defaults remain intentionally present for the hackathon/demo environment. They must not be reused as production secrets; the application already warns when the checked-in JWT secret is still active.
+- The synthetic dataset, controlled scanner, optional Neo4j fallback and optional Redis/Celery autoscan infrastructure remain deliberate prototype choices rather than correctness failures.
+
+## Functional issues
 
 #### 1. Actor-scoped Gemini context references a non-existent field
 'backend/app/routers/ai.py' builds scan-target context with 't.url', but the SQLAlchemy model defines the field as 'ScanTarget.target_url'.
