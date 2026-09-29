@@ -94,6 +94,7 @@ function App() {
       {page === "actor" && selectedActor && <ActorPage actorId={selectedActor} onBack={() => setPage("search")} onGraph={() => setPage("graph")} />}
       {page === "graph" && selectedActor && <GraphPage actorId={selectedActor} onBack={() => setPage("actor")} />}
     </div></main>
+    <ChatAssistant actorId={selectedActor || undefined} />
   </div>;
 }
 export default App;
