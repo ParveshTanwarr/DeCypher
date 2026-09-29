@@ -70,8 +70,9 @@ def sync_actor_batch(
                 """
                 UNWIND $rows AS row
 
-                MERGE (h:Handle {handle: row.handle})
-                SET h.platform = row.platform,
+                MERGE (h:Handle {handle_id: row.handle_id})
+                SET h.handle = row.handle,
+                    h.platform = row.platform,
                     h.status = row.status
 
                 WITH h, row
@@ -107,7 +108,8 @@ def sync_actor_batch(
                 MERGE (w:Wallet {address: row.address})
                 SET w.currency = row.currency
 
-                MERGE (h:Handle {handle: row.associated_handle})
+                MERGE (h:Handle {handle_id: row.handle_id})
+                SET h.handle = row.associated_handle
 
                 MERGE (h)-[:USED_WALLET]->(w)
                 """,
@@ -130,7 +132,7 @@ def sync_pgp_and_trust_graph(
         neo4j_conn.write(
             """
             UNWIND $rows AS row
-            MATCH (h:Handle {handle: row.handle})
+            MATCH (h:Handle {handle_id: row.handle_id})
             SET h.pgp_fingerprint = row.pgp_fingerprint
 
             FOREACH (
@@ -167,7 +169,9 @@ def sync_pgp_and_trust_graph(
             continue
 
         rows.append({
+            "source_handle_id": str(source["handle_id"]),
             "source_handle": source["handle"],
+            "target_handle_id": str(target["handle_id"]),
             "target_handle": target["handle"],
             "source_pgp_fingerprint": (
                 str(source.get("pgp_fingerprint") or "").strip().upper()
@@ -187,8 +191,8 @@ def sync_pgp_and_trust_graph(
         """
         UNWIND $rows AS row
 
-        MATCH (source:Handle {handle: row.source_handle})
-        MATCH (target:Handle {handle: row.target_handle})
+        MATCH (source:Handle {handle_id: row.source_handle_id})
+        MATCH (target:Handle {handle_id: row.target_handle_id})
 
         MERGE (source)-[t:TRUSTS]->(target)
         SET t.relationship_type = row.relationship_type,
@@ -376,15 +380,16 @@ def get_actor_subgraph(
                 a.actor_id AS actor_id,
                 a.primary_handle AS primary_handle,
 
-                collect(DISTINCT h.handle) AS handles,
+                collect(DISTINCT {handle_id: h.handle_id, handle: h.handle, platform: h.platform}) AS handle_nodes,
 
                 collect(DISTINCT w.address) AS wallets,
 
-                collect(DISTINCT h2.handle) AS correlated_handles,
+                collect(DISTINCT {handle_id: h2.handle_id, handle: h2.handle, platform: h2.platform}) AS correlated_handle_nodes,
 
                 collect(
                     DISTINCT {
                         wallet: w.address,
+                        handle_id: h2.handle_id,
                         handle: h2.handle
                     }
                 ) AS wallet_correlations,
@@ -398,12 +403,15 @@ def get_actor_subgraph(
                 }) AS pgp_keys,
 
                 collect(DISTINCT {
+                    handle_id: h.handle_id,
                     handle: h.handle,
                     fingerprint: p.fingerprint
                 }) AS handle_pgp_keys,
 
                 collect(DISTINCT {
+                    source_handle_id: h.handle_id,
                     source: h.handle,
+                    target_handle_id: trusted.handle_id,
                     target: trusted.handle,
                     relationship_type: t.relationship_type,
                     confidence: t.confidence,
@@ -413,7 +421,9 @@ def get_actor_subgraph(
                 }) AS trust_links_out,
 
                 collect(DISTINCT {
+                    source_handle_id: trusting.handle_id,
                     source: trusting.handle,
+                    target_handle_id: h.handle_id,
                     target: h.handle,
                     relationship_type: ti.relationship_type,
                     confidence: ti.confidence,
@@ -424,6 +434,7 @@ def get_actor_subgraph(
 
 collect(
     DISTINCT {
+        handle_id: h.handle_id,
         handle: h.handle,
         marketplace: m.name
     }
@@ -460,27 +471,30 @@ collect(
 
     row = rows[0]
 
-    row["handles"] = [
-        h for h in row.get("handles", [])
-        if h
+    row["handle_nodes"] = [
+        h for h in row.get("handle_nodes", [])
+        if h and h.get("handle_id") and h.get("handle")
     ]
+    row["handles"] = [h["handle"] for h in row["handle_nodes"]]
 
     row["wallets"] = [
         w for w in row.get("wallets", [])
         if w
     ]
 
-    row["correlated_handles"] = [
-        h
-        for h in row.get("correlated_handles", [])
-        if h and h not in row["handles"]
+    row["correlated_handle_nodes"] = [
+        h for h in row.get("correlated_handle_nodes", [])
+        if h and h.get("handle_id") and h.get("handle")
+        and h.get("handle") not in row["handles"]
     ]
+    row["correlated_handles"] = [h["handle"] for h in row["correlated_handle_nodes"]]
     row["wallet_correlations"] = [
         pair
         for pair in row.get("wallet_correlations", [])
         if (
             pair
             and pair.get("wallet")
+            and pair.get("handle_id")
             and pair.get("handle")
             and pair.get("handle") not in row["handles"]
         )
