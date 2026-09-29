@@ -107,7 +107,9 @@ def sync_actor_batch(
         wallet_rows = [
             w
             for w in wallets
-            if w.get("address") and w.get("associated_handle") and w.get("handle_id") and w.get("handle_id")
+            if w.get("address")
+            and w.get("associated_handle")
+            and w.get("handle_id")
         ]
 
         if wallet_rows:
@@ -414,7 +416,6 @@ def get_actor_subgraph(
 
                 collect(DISTINCT {
                     handle_id: h.handle_id,
-                    handle_id: h.handle_id,
                     handle: h.handle,
                     fingerprint: p.fingerprint
                 }) AS handle_pgp_keys,
@@ -443,14 +444,11 @@ def get_actor_subgraph(
                     last_seen: ti.last_seen
                 }) AS trust_links_in,
 
-collect(
-    DISTINCT {
-        handle_id: h.handle_id,
-        handle_id: h.handle_id,
-        handle: h.handle,
-        marketplace: m.name
-    }
-) AS handle_marketplaces,
+                collect(DISTINCT {
+                    handle_id: h.handle_id,
+                    handle: h.handle,
+                    marketplace: m.name
+                }) AS handle_marketplaces,
 
                 collect(DISTINCT {
                     observation_id: o.observation_id,
