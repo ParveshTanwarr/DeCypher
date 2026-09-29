@@ -531,6 +531,7 @@ A repository-wide static review of the tracked source tree identified the follow
 - Native Neo4j graph query map literals no longer contain duplicate keys.
 - Neo4j actor-graph synchronization now supplies stable `handle_id` values, so live graph sync can populate handle and wallet relationships correctly.
 - The PostgreSQL graph fallback batches wallet-reuse lookup instead of querying once per wallet.
+- Backend and frontend graph contracts now share explicit node `type` and relationship `relation` fields.
 - Credentialed CORS is now restricted to an explicit environment-configured frontend-origin allowlist.
 - The duplicate `backend/app/routers/.env.example` template has been removed; `backend/.env.example` is the canonical configuration template.
 
