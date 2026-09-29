@@ -3,7 +3,7 @@
 Fully synthetic dark-web-style dataset built for prototype development. No real dark-web
 content, no real people, no real infrastructure — safe to use, share, and demo publicly.
 
-**Total size:** 1,054,559 cells across 6 tables (well over the requested 1,000,000).
+**Total size:** 1,054,559 cells across 7 source tables (well over the requested 1,000,000).
 
 ## Files
 
@@ -15,13 +15,14 @@ content, no real people, no real infrastructure — safe to use, share, and demo
 | `wallets.csv` | 1,043 | 5 | Wallet addresses per handle. ~40% of the time, an actor's wallet is deliberately reused across their own multiple handles — this is your Level 1 correlation signal. |
 | `infrastructure_indicators.csv` | 250 | 8 | Level 2 data — simulated Tor misconfiguration leaks (SSL cert reuse, exposed status pages, banners) linking an actor to a clearnet domain. |
 | `marketplaces.csv` | 20 | 4 | Reference table of marketplace names. |
+| `trust_links.csv` | 12 | 7 | Synthetic PGP-backed trust/signature relationships between handles for graph correlation. |
 
 ## How to use this for each part of your system
 
-- **Neo4j graph (Level 1):** Load `handles.csv` + `wallets.csv` — build edges between handles that share a `wallet_address`. This alone proves your correlation graph.
+- **Neo4j graph (Level 1):** Load `handles.csv` + `wallets.csv` + `trust_links.csv`. PGP fingerprints are normalized into first-class PGP key nodes, while trust/signature relationships create cross-marketplace handle links. Wallet reuse remains an independent correlation signal.
 - **Stylometry AI (Level 1):** Use `posts.csv`, grouped by `handle_id`. Train/test your similarity model on pairs of handles — pairs sharing the same `actor_id_ground_truth` should score high; pairs that don't should score low. `actor_id_ground_truth` is your answer key for measuring accuracy — don't feed it to the model itself.
 - **Infrastructure attribution (Level 2):** Use `infrastructure_indicators.csv` as your demo data for the cert/banner leak-matching module.
-- **Dashboard:** Join `handles.csv` + `posts.csv` + `wallets.csv` + `infrastructure_indicators.csv` on `handle_id` / `actor_id_ground_truth` for a full actor profile view.
+- **Dashboard:** Join `handles.csv` + `posts.csv` + `wallets.csv` + `infrastructure_indicators.csv` + `trust_links.csv` on `handle_id` / `actor_id_ground_truth` for a full actor profile and relationship view.
 
 ## Important
 Every value here — names, wallet addresses, PGP fingerprints, onion addresses, post text — is
