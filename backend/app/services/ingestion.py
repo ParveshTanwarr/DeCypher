@@ -3,6 +3,7 @@ import logging
 import pandas as pd
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
+from typing import Optional
 
 from app.database.postgres import engine, Base, SessionLocal
 from app.models.sql_models import (
@@ -118,7 +119,7 @@ def _upsert_darkweb_handles(session: Session, prepared_handles: pd.DataFrame):
 def _upsert_pgp_keys_and_trust_links(
     session: Session,
     prepared_handles: pd.DataFrame,
-    trust_links_df: pd.DataFrame | None = None,
+    trust_links_df: Optional[pd.DataFrame] = None,
 ):
     """
     Normalize PGP fingerprints into first-class PGPKey records, connect them
