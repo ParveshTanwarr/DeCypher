@@ -16,7 +16,7 @@ from reportlab.platypus import (
 )
 
 from app.database.postgres import get_db
-from app.models.sql_models import Actor, DarkWebHandle, Wallet, Observation
+from app.models.sql_models import Actor, DarkWebHandle, Wallet, Observation, ScanTarget
 from app.routers.auth import require_role
 
 # Bulk export is limited to authenticated investigative roles because it
@@ -53,6 +53,7 @@ def _get_live_actor_records(db: Session) -> List[Dict[str, Any]]:
     all_handles = db.query(DarkWebHandle).filter(DarkWebHandle.actor_id.in_(actor_ids)).all()
     all_wallets = db.query(Wallet).filter(Wallet.actor_id.in_(actor_ids)).all()
     all_observations = db.query(Observation).filter(Observation.detected.is_(True)).all()
+    all_scan_targets = db.query(ScanTarget).filter(ScanTarget.actor_id.in_(actor_ids)).all()
 
     handles_by_actor: Dict[str, list] = {}
     for h in all_handles:
@@ -65,6 +66,11 @@ def _get_live_actor_records(db: Session) -> List[Dict[str, Any]]:
     observations_by_actor: Dict[str, list] = {}
     for obs in all_observations:
         observations_by_actor.setdefault(obs.target.lower(), []).append(obs)
+
+    scan_targets_by_actor: Dict[str, list] = {}
+    for target in all_scan_targets:
+        if target.actor_id:
+            scan_targets_by_actor.setdefault(target.actor_id, []).append(target)
 
     records = []
     for a in actors:
@@ -89,7 +95,9 @@ def _get_live_actor_records(db: Session) -> List[Dict[str, Any]]:
         # De-duplicate observations that matched more than one target key.
         actor_observations = list({obs.observation_id: obs for obs in actor_observations}.values())
         scan_dates = [obs.timestamp for obs in actor_observations if obs.timestamp]
-        last_scan_str = max(scan_dates).strftime("%Y-%m-%d") if scan_dates else "N/A"
+        target_scan_dates = [target.last_scan_at for target in scan_targets_by_actor.get(a.actor_id, []) if target.last_scan_at]
+        latest_scan = max(target_scan_dates or scan_dates, default=None)
+        last_scan_str = latest_scan.strftime("%Y-%m-%d") if latest_scan else "N/A"
         pgp_list = sorted({
             key.fingerprint
             for handle in actor_handles
