@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 # ------------------------------------------------------------------
@@ -60,7 +60,15 @@ class GraphNode(BaseModel):
     label: str
     name: str
     category: str
+    type: str
     properties: Optional[Dict[str, Any]] = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def populate_type(cls, data):
+        if isinstance(data, dict) and not data.get("type"):
+            data["type"] = data.get("category", "unknown")
+        return data
 
 
 class GraphEdge(BaseModel):
