@@ -3,9 +3,11 @@ import {
   getActor,
   getActorEvidence,
   getActorCorrelation,
+  getActorGraph,
   downloadActorExport,
+  downloadActorReport,
 } from "../api/client";
-import type { CorrelationResult } from "../api/client";
+import type { CorrelationResult, GraphNode, GraphLink } from "../api/client";
 
 interface ActorDetail {
   actor_id: string;
@@ -86,6 +88,241 @@ function signalLabel(type: string) {
     default:
       return type.replace(/_/g, " ");
   }
+}
+
+function graphNodeType(node: GraphNode): string {
+  return String(
+    node.type ??
+      node.category ??
+      node.label ??
+      "unknown",
+  ).trim().toLowerCase();
+}
+
+function shortenGraphLabel(value: string, max = 24): string {
+  if (value.length <= max) return value;
+  return `${value.slice(0, max - 7)}...${value.slice(-4)}`;
+}
+
+async function createGraphSnapshot(actorId: string): Promise<string | undefined> {
+  const graph = await getActorGraph(actorId);
+  const nodes = graph.nodes || [];
+  const links = graph.links || [];
+
+  if (!nodes.length) return undefined;
+
+  const canvas = document.createElement("canvas");
+  canvas.width = 1600;
+  canvas.height = 900;
+
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return undefined;
+
+  const width = canvas.width;
+  const height = canvas.height;
+
+  ctx.fillStyle = "#0b0f17";
+  ctx.fillRect(0, 0, width, height);
+
+  ctx.fillStyle = "#f1f3f5";
+  ctx.font = "700 30px Inter, Arial, sans-serif";
+  ctx.fillText("DeCypher — Investigation Graph", 55, 58);
+
+  ctx.fillStyle = "#8d99ae";
+  ctx.font = "400 16px Inter, Arial, sans-serif";
+  ctx.fillText(
+    `Actor: ${actorId}  •  ${nodes.length} nodes  •  ${links.length} relationships`,
+    55,
+    88,
+  );
+
+  const positions = new Map<string, { x: number; y: number }>();
+  const actorNode =
+    nodes.find((node) => graphNodeType(node) === "actor") ||
+    nodes[0];
+
+  positions.set(actorNode.id, {
+    x: width / 2,
+    y: height / 2,
+  });
+
+  const groups = new Map<string, GraphNode[]>();
+  for (const node of nodes) {
+    if (node.id === actorNode.id) continue;
+    const type = graphNodeType(node);
+    if (!groups.has(type)) groups.set(type, []);
+    groups.get(type)!.push(node);
+  }
+
+  const preferredOrder = [
+    "handle",
+    "wallet",
+    "marketplace",
+    "pgpkey",
+    "trustedhandle",
+    "observation",
+    "infrastructure",
+  ];
+
+  const orderedTypes = [
+    ...preferredOrder.filter((type) => groups.has(type)),
+    ...Array.from(groups.keys()).filter(
+      (type) => !preferredOrder.includes(type),
+    ),
+  ];
+
+  const ringRadii = [170, 290, 390, 455];
+  let ringIndex = 0;
+
+  orderedTypes.forEach((type) => {
+    const group = groups.get(type) || [];
+    const radius = ringRadii[Math.min(ringIndex, ringRadii.length - 1)];
+    const centerX = width / 2;
+    const centerY = height / 2;
+
+    group.forEach((node, index) => {
+      const angle =
+        (index / Math.max(group.length, 1)) * Math.PI * 2 -
+        Math.PI / 2;
+
+      positions.set(node.id, {
+        x: centerX + Math.cos(angle) * radius,
+        y: centerY + Math.sin(angle) * radius,
+      });
+    });
+
+    ringIndex += 1;
+  });
+
+  const colors: Record<string, string> = {
+    actor: "#ff4d6d",
+    handle: "#4dabf7",
+    wallet: "#ffd43b",
+    marketplace: "#69db7c",
+    infrastructure: "#da77f2",
+    observation: "#ffa94d",
+    pgpkey: "#f783ac",
+    trustedhandle: "#74c0fc",
+  };
+
+  const nodeById = new Map(nodes.map((node) => [node.id, node]));
+
+  // Relationships first.
+  for (const link of links as GraphLink[]) {
+    const source = positions.get(String(link.source));
+    const target = positions.get(String(link.target));
+
+    if (!source || !target) continue;
+
+    ctx.beginPath();
+    ctx.moveTo(source.x, source.y);
+    ctx.lineTo(target.x, target.y);
+    ctx.strokeStyle = "rgba(150,160,180,0.45)";
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    const angle = Math.atan2(
+      target.y - source.y,
+      target.x - source.x,
+    );
+    const arrowSize = 8;
+
+    ctx.beginPath();
+    ctx.moveTo(target.x, target.y);
+    ctx.lineTo(
+      target.x - Math.cos(angle - Math.PI / 6) * arrowSize,
+      target.y - Math.sin(angle - Math.PI / 6) * arrowSize,
+    );
+    ctx.lineTo(
+      target.x - Math.cos(angle + Math.PI / 6) * arrowSize,
+      target.y - Math.sin(angle + Math.PI / 6) * arrowSize,
+    );
+    ctx.closePath();
+    ctx.fillStyle = "rgba(180,190,205,0.65)";
+    ctx.fill();
+
+    const midX = (source.x + target.x) / 2;
+    const midY = (source.y + target.y) / 2;
+    const relation = String(
+      link.relation ?? link.type ?? "RELATED_TO",
+    ).replace(/_/g, " ");
+
+    ctx.font = "500 11px Inter, Arial, sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillStyle = "rgba(205,213,221,0.72)";
+    ctx.fillText(relation, midX, midY - 5);
+  }
+
+  // Nodes and labels.
+  for (const node of nodes) {
+    const position = positions.get(node.id);
+    if (!position) continue;
+
+    const type = graphNodeType(node);
+    const radius = type === "actor" ? 25 : 16;
+
+    ctx.beginPath();
+    ctx.arc(position.x, position.y, radius, 0, Math.PI * 2);
+    ctx.fillStyle = colors[type] || "#adb5bd";
+    ctx.fill();
+
+    ctx.strokeStyle = "#ffffff";
+    ctx.lineWidth = type === "actor" ? 3 : 1.5;
+    ctx.stroke();
+
+    const rawLabel = String(
+      node.name ?? node.label ?? node.id,
+    );
+    const label = shortenGraphLabel(rawLabel);
+
+    ctx.textAlign = "center";
+    ctx.font =
+      type === "actor"
+        ? "700 14px Inter, Arial, sans-serif"
+        : "600 12px Inter, Arial, sans-serif";
+
+    const textWidth = ctx.measureText(label).width;
+    ctx.fillStyle = "rgba(11,15,23,0.92)";
+    ctx.fillRect(
+      position.x - textWidth / 2 - 6,
+      position.y + radius + 7,
+      textWidth + 12,
+      21,
+    );
+
+    ctx.fillStyle = "#f1f3f5";
+    ctx.fillText(label, position.x, position.y + radius + 22);
+  }
+
+  // Legend.
+  const legend = [
+    ["Actor", "actor"],
+    ["Handle", "handle"],
+    ["Wallet", "wallet"],
+    ["Marketplace", "marketplace"],
+    ["PGP Key", "pgpkey"],
+    ["Trusted Handle", "trustedhandle"],
+    ["Observation", "observation"],
+    ["Infrastructure", "infrastructure"],
+  ];
+
+  let legendX = 55;
+  const legendY = height - 45;
+  ctx.font = "600 12px Inter, Arial, sans-serif";
+  ctx.textAlign = "left";
+
+  for (const [label, type] of legend) {
+    ctx.beginPath();
+    ctx.arc(legendX + 7, legendY, 7, 0, Math.PI * 2);
+    ctx.fillStyle = colors[type] || "#adb5bd";
+    ctx.fill();
+
+    ctx.fillStyle = "#cdd5df";
+    ctx.fillText(label, legendX + 19, legendY + 4);
+    legendX += 105 + label.length * 2;
+  }
+
+  return canvas.toDataURL("image/png");
 }
 
 export default function ActorPage({
@@ -210,7 +447,12 @@ export default function ActorPage({
               setExportError("");
               setExporting(true);
               try {
-                await downloadActorExport(actorId, format);
+                if (format === "pdf") {
+                  const graphImage = await createGraphSnapshot(actorId);
+                  await downloadActorReport(actorId, graphImage);
+                } else {
+                  await downloadActorExport(actorId, format);
+                }
               } catch (error) {
                 console.error("Actor export failed:", error);
                 setExportError("Export failed. Please try again.");
