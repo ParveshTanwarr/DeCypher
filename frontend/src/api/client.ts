@@ -133,3 +133,14 @@ export interface CorrelationResult { candidate_actor: string; primary_handle: st
 export function getActorCorrelation(actorId: string, handleA?: string, handleB?: string): Promise<CorrelationResult> { const params = new URLSearchParams(); if (handleA) params.set("handle_a", handleA); if (handleB) params.set("handle_b", handleB); const query = params.toString(); return request<CorrelationResult>(`/correlation/actor/${encodeURIComponent(actorId)}${query ? `?${query}` : ""}`); }
 export function getAllCorrelations(): Promise<{ results: CorrelationResult[] }> { return request<{ results: CorrelationResult[] }>("/correlation/actors"); }
 export function searchActors(query: string): Promise<SearchResponse> { return request<SearchResponse>(`/search?q=${encodeURIComponent(query)}`); }
+
+
+export interface ChatMessage { role: "user" | "assistant"; content: string; }
+export interface ChatResponse { answer: string; provider: string; model: string; scope: string; actor_id?: string; }
+export function chatWithAI(message: string, actorId?: string, history: ChatMessage[] = []): Promise<ChatResponse> {
+  return request<ChatResponse>("/ai/chat", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ message, actor_id: actorId || null, history }),
+  });
+}
