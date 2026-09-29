@@ -1,5 +1,6 @@
 import json
 import uuid
+from pathlib import Path
 from datetime import datetime, timezone
 from urllib.parse import urlparse
 from infra.evidence import save_observations
@@ -87,7 +88,8 @@ def scan_target(url: str) -> list[dict]:
 
         if fingerprint:
             try:
-                with open("infra/known_certificates.json", "r", encoding="utf-8") as file:
+                known_certificates_path = Path(__file__).resolve().parent / "known_certificates.json"
+                with open(known_certificates_path, "r", encoding="utf-8") as file:
                     known_certificates = json.load(file)
             except (FileNotFoundError, json.JSONDecodeError):
                 known_certificates = {}

@@ -6,8 +6,8 @@ import requests
 BACKEND_BASE_URL = os.getenv("DECYPHER_BACKEND_URL", "http://localhost:8000")
 # Demo defaults match the existing local investigator account. For a real
 # deployment, set these environment variables to the dedicated service user.
-SCANNER_USERNAME = os.getenv("DECYPHER_SCANNER_USERNAME", "analyst")
-SCANNER_PASSWORD = os.getenv("DECYPHER_SCANNER_PASSWORD", "analystpassword")
+SCANNER_USERNAME = os.getenv("DECYPHER_SCANNER_USERNAME", "scanner_service")
+SCANNER_PASSWORD = os.getenv("DECYPHER_SCANNER_PASSWORD", "scanner_service_devkey_change_me")
 
 
 def _get_access_token() -> str:
