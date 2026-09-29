@@ -3,6 +3,7 @@ import {
   getActor,
   getActorEvidence,
   getActorCorrelation,
+  downloadActorExport,
 } from "../api/client";
 import type { CorrelationResult } from "../api/client";
 
@@ -99,6 +100,8 @@ export default function ActorPage({
 
   const [loading, setLoading] = useState(true);
   const [correlationLoading, setCorrelationLoading] = useState(true);
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState("");
 
   useEffect(() => {
     setLoading(true);
@@ -196,13 +199,49 @@ export default function ActorPage({
           ← Back
         </button>
 
-        <button
-          className="primary-button"
-          onClick={onGraph}
-        >
-          Explore Graph
-        </button>
+        <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+          <select
+            className="secondary-button"
+            disabled={exporting}
+            defaultValue=""
+            onChange={async (event) => {
+              const format = event.target.value as "pdf" | "csv" | "json";
+              if (!format) return;
+              setExportError("");
+              setExporting(true);
+              try {
+                await downloadActorExport(actorId, format);
+              } catch (error) {
+                console.error("Actor export failed:", error);
+                setExportError("Export failed. Please try again.");
+              } finally {
+                setExporting(false);
+                event.target.value = "";
+              }
+            }}
+          >
+            <option value="" disabled>
+              {exporting ? "Exporting..." : "Export Actor"}
+            </option>
+            <option value="pdf">PDF Report</option>
+            <option value="csv">CSV</option>
+            <option value="json">JSON</option>
+          </select>
+
+          <button
+            className="primary-button"
+            onClick={onGraph}
+          >
+            Explore Graph
+          </button>
+        </div>
       </div>
+
+      {exportError && (
+        <div style={{ marginBottom: "16px", color: "#ff8787", fontSize: "13px" }}>
+          {exportError}
+        </div>
+      )}
 
       {/* Actor overview */}
       <div className="card">
