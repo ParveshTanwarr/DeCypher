@@ -249,6 +249,12 @@ def _build_report_pdf(records: List[Dict[str, Any]]) -> bytes:
     summary_data = [["Metric", "Value"]]
     summary_data.append(["Total actors in this export", str(len(records))])
     summary_data.append(["Average attribution confidence", f"{avg_confidence:.2f}"])
+    unique_sources = sorted({source for record in records for source in record.get("sources", [])})
+    actors_with_pgp = sum(1 for record in records if record.get("pgp_keys"))
+    actors_with_infrastructure = sum(1 for record in records if record.get("infrastructure_indicators"))
+    summary_data.append(["Actors with PGP identifiers", str(actors_with_pgp)])
+    summary_data.append(["Actors with infrastructure evidence", str(actors_with_infrastructure)])
+    summary_data.append(["Evidence sources", ", ".join(unique_sources) if unique_sources else "N/A"])
     for cat, count in sorted(category_counts.items(), key=lambda kv: -kv[1]):
         summary_data.append([f"  Risk category: {cat}", str(count)])
 
