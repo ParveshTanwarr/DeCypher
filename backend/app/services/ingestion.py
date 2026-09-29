@@ -297,8 +297,8 @@ def _upsert_wallets(session: Session, wallets_df: pd.DataFrame, prepared_handles
 
     # Full handle<->wallet pairing list for Neo4j. This intentionally
     # includes every repeated address/handle pairing from the CSV.
-    pair_cols = [c for c in ["address", "associated_handle", "currency"] if c in merged.columns]
-    all_pairs = merged[pair_cols].dropna(subset=["address", "associated_handle"]).to_dict(orient="records")
+    pair_cols = [c for c in ["address", "associated_handle", "handle_id", "currency"] if c in merged.columns]
+    all_pairs = merged[pair_cols].dropna(subset=["address", "associated_handle", "handle_id"]).to_dict(orient="records")
 
     return len(records), records, all_pairs
 

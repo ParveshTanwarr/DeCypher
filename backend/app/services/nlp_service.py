@@ -32,7 +32,7 @@ class NLPStylometryService:
         self.engine = None
         self.threshold = 0.65  # fallback default, only used if the real engine fails to load
         self._posts_df: Optional[pd.DataFrame] = None
-        self._name_to_handle_id: Dict[str, str] = {}
+        self._name_to_handle_ids: Dict[str, list] = {}
 
         self._load_engine()
         self._load_posts_cache()
@@ -77,19 +77,30 @@ class NLPStylometryService:
                     "handle" if "handle" in handles_df.columns else None
                 )
                 if name_col and "handle_id" in handles_df.columns:
-                    self._name_to_handle_id = {
-                        str(name).lower(): str(hid)
-                        for name, hid in zip(handles_df[name_col], handles_df["handle_id"])
-                        if pd.notna(name) and pd.notna(hid)
-                    }
+                    name_to_ids: Dict[str, list] = {}
+                    for name, hid in zip(handles_df[name_col], handles_df["handle_id"]):
+                        if pd.notna(name) and pd.notna(hid):
+                            name_to_ids.setdefault(str(name).strip().lower(), []).append(str(hid))
+                    self._name_to_handle_ids = name_to_ids
         except Exception:
             self._posts_df = None
-            self._name_to_handle_id = {}
+            self._name_to_handle_ids = {}
+
+    def _resolve_handle_id(self, handle: str) -> Optional[str]:
+        if not handle:
+            return None
+        raw = str(handle).strip()
+        if self._posts_df is not None and raw in set(self._posts_df["_handle_id"].astype(str)):
+            return raw
+        ids = self._name_to_handle_ids.get(raw.lower(), [])
+        return ids[0] if len(ids) == 1 else None
 
     def _get_posts_for_handle(self, handle: str) -> str:
         if self._posts_df is None or not handle:
             return ""
-        lookup_id = self._name_to_handle_id.get(handle.lower(), handle)
+        lookup_id = self._resolve_handle_id(handle)
+        if not lookup_id:
+            return ""
         matched = self._posts_df[self._posts_df["_handle_id"] == str(lookup_id)]["_content"]
         return " \n ".join(matched.tolist())
 
