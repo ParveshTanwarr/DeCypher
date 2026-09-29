@@ -3,7 +3,7 @@ import io
 from collections import Counter
 from datetime import datetime, timezone
 from typing import Any, Dict, List
-from fastapi import APIRouter, Depends, Response
+from fastapi import APIRouter, Depends, Response, HTTPException
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 
@@ -39,7 +39,20 @@ CSV_HEADERS = [
     "infrastructure_indicators",
     "sources",
     "last_scan_date",
+    "graph_priority_score",
+    "graph_priority_level",
 ]
+
+
+def _priority_level(score: Any) -> str:
+    value = int(score or 0)
+    if value >= 85:
+        return "critical"
+    if value >= 70:
+        return "high"
+    if value >= 50:
+        return "medium"
+    return "low"
 
 
 def _get_live_actor_records(db: Session) -> List[Dict[str, Any]]:
@@ -126,6 +139,8 @@ def _get_live_actor_records(db: Session) -> List[Dict[str, Any]]:
             "first_seen": first_seen_str,
             "last_seen": last_seen_str,
             "last_scan_date": last_scan_str,
+            "graph_priority_score": a.priority_score,
+            "graph_priority_level": _priority_level(a.priority_score),
             "handles": handle_list,
             "handles_count": len(handle_list),
             "wallets": wallet_list,
@@ -148,6 +163,67 @@ def _get_live_actor_records(db: Session) -> List[Dict[str, Any]]:
         })
 
     return records
+
+
+def _get_actor_record(db: Session, actor_id: str) -> Dict[str, Any]:
+    records = _get_live_actor_records(db)
+    for record in records:
+        if str(record.get("actor_id", "")).lower() == actor_id.lower():
+            return record
+    raise HTTPException(status_code=404, detail=f"Actor '{actor_id}' not found")
+
+
+def _actor_csv_response(record: Dict[str, Any]) -> Response:
+    output = io.StringIO()
+    writer = csv.DictWriter(output, fieldnames=CSV_HEADERS)
+    writer.writeheader()
+    writer.writerow({
+        "actor_id": record["actor_id"],
+        "primary_handle": record["primary_handle"],
+        "risk_category": record["risk_category"],
+        "confidence_score": record["confidence_score"],
+        "priority_score": record["priority_score"],
+        "first_seen": record["first_seen"],
+        "last_seen": record["last_seen"],
+        "handles_count": record["handles_count"],
+        "associated_handles": "; ".join(record["handles"]),
+        "wallets_count": record["wallets_count"],
+        "wallet_addresses": "; ".join(record["wallets"]),
+        "pgp_keys": "; ".join(record["pgp_keys"]),
+        "infrastructure_indicators": "; ".join(record["infrastructure_indicators"]),
+        "sources": "; ".join(record["sources"]),
+        "last_scan_date": record["last_scan_date"],
+        "graph_priority_score": record["graph_priority_score"],
+        "graph_priority_level": record["graph_priority_level"],
+    })
+    safe_id = "".join(ch if ch.isalnum() or ch in "-_" else "_" for ch in record["actor_id"])
+    return Response(
+        content=output.getvalue(),
+        media_type="text/csv",
+        headers={"Content-Disposition": f"attachment; filename=actor_{safe_id}.csv"},
+    )
+
+
+@router.get("/actor/{actor_id}/json")
+def export_actor_json(actor_id: str, db: Session = Depends(get_db)):
+    return JSONResponse(content=_get_actor_record(db, actor_id))
+
+
+@router.get("/actor/{actor_id}/csv")
+def export_actor_csv(actor_id: str, db: Session = Depends(get_db)):
+    return _actor_csv_response(_get_actor_record(db, actor_id))
+
+
+@router.get("/actor/{actor_id}/report")
+def export_actor_report(actor_id: str, db: Session = Depends(get_db)):
+    record = _get_actor_record(db, actor_id)
+    pdf_bytes = _build_report_pdf([record])
+    safe_id = "".join(ch if ch.isalnum() or ch in "-_" else "_" for ch in actor_id)
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f"attachment; filename=actor_{safe_id}_report.pdf"},
+    )
 
 
 @router.get("/json")
@@ -181,6 +257,8 @@ def export_csv(db: Session = Depends(get_db)):
             "infrastructure_indicators": "; ".join(r["infrastructure_indicators"]),
             "sources": "; ".join(r["sources"]),
             "last_scan_date": r["last_scan_date"],
+            "graph_priority_score": r["graph_priority_score"],
+            "graph_priority_level": r["graph_priority_level"],
         })
 
 
