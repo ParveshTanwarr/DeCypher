@@ -125,7 +125,7 @@ def sync_pgp_and_trust_graph(
 
     handle_rows = [
         row for row in handles
-        if row.get("handle") and row.get("actor_id")
+        if row.get("handle_id") and row.get("handle") and row.get("actor_id")
     ]
 
     if handle_rows:
@@ -169,7 +169,9 @@ def sync_pgp_and_trust_graph(
             continue
 
         rows.append({
+            "source_handle_id": str(source["handle_id"]),
             "source_handle": source["handle"],
+            "target_handle_id": str(target["handle_id"]),
             "target_handle": target["handle"],
             "source_pgp_fingerprint": (
                 str(source.get("pgp_fingerprint") or "").strip().upper()
@@ -189,8 +191,8 @@ def sync_pgp_and_trust_graph(
         """
         UNWIND $rows AS row
 
-        MATCH (source:Handle {handle: row.source_handle})
-        MATCH (target:Handle {handle: row.target_handle})
+        MATCH (source:Handle {handle_id: row.source_handle_id})
+        MATCH (target:Handle {handle_id: row.target_handle_id})
 
         MERGE (source)-[t:TRUSTS]->(target)
         SET t.relationship_type = row.relationship_type,
@@ -485,6 +487,7 @@ collect(
         if (
             pair
             and pair.get("wallet")
+            and pair.get("handle_id")
             and pair.get("handle")
             and pair.get("handle") not in row["handles"]
         )
@@ -510,6 +513,7 @@ collect(
     pair
     for pair in row.get("handle_marketplaces", [])
     if pair
+    and pair.get("handle_id")
     and pair.get("handle")
     and pair.get("marketplace")
 ]
