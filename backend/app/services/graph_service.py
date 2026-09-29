@@ -35,6 +35,16 @@ from typing import Any, Dict, List, Optional
 from app.database.neo4j_client import neo4j_conn
 
 
+def reset_graph() -> None:
+    """Clear the controlled demo graph before a full deterministic re-ingestion.
+
+    This is intentionally separate from normal incremental sync. It prevents
+    legacy Handle nodes keyed by human-readable names from surviving after the
+    graph schema switches to stable handle_id identity.
+    """
+    neo4j_conn.write("MATCH (n) DETACH DELETE n")
+
+
 def sync_actor_batch(
     actors: List[Dict[str, Any]],
     handles: List[Dict[str, Any]],
@@ -97,7 +107,7 @@ def sync_actor_batch(
         wallet_rows = [
             w
             for w in wallets
-            if w.get("address") and w.get("associated_handle") and w.get("handle_id")
+            if w.get("address") and w.get("associated_handle") and w.get("handle_id") and w.get("handle_id")
         ]
 
         if wallet_rows:
@@ -404,6 +414,7 @@ def get_actor_subgraph(
 
                 collect(DISTINCT {
                     handle_id: h.handle_id,
+                    handle_id: h.handle_id,
                     handle: h.handle,
                     fingerprint: p.fingerprint
                 }) AS handle_pgp_keys,
@@ -434,6 +445,7 @@ def get_actor_subgraph(
 
 collect(
     DISTINCT {
+        handle_id: h.handle_id,
         handle_id: h.handle_id,
         handle: h.handle,
         marketplace: m.name
@@ -473,13 +485,14 @@ collect(
 
     row["handle_nodes"] = [h for h in row.get("handle_nodes", []) if h and h.get("handle_id") and h.get("handle")]
     row["handles"] = [h["handle"] for h in row["handle_nodes"]]
+    actor_handle_ids = {h["handle_id"] for h in row["handle_nodes"]}
 
     row["wallets"] = [
         w for w in row.get("wallets", [])
         if w
     ]
 
-    row["correlated_handle_nodes"] = [h for h in row.get("correlated_handle_nodes", []) if h and h.get("handle_id") and h.get("handle") and h.get("handle") not in row["handles"]]
+    row["correlated_handle_nodes"] = [h for h in row.get("correlated_handle_nodes", []) if h and h.get("handle_id") and h.get("handle") and h.get("handle_id") not in actor_handle_ids]
     row["correlated_handles"] = [h["handle"] for h in row["correlated_handle_nodes"]]
     row["wallet_correlations"] = [
         pair
@@ -489,7 +502,7 @@ collect(
             and pair.get("wallet")
             and pair.get("handle_id")
             and pair.get("handle")
-            and pair.get("handle") not in row["handles"]
+            and pair.get("handle_id") not in actor_handle_ids
         )
     ]
 

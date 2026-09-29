@@ -41,6 +41,7 @@ def test_get_actor_subgraph_returns_correlation_data():
         "handle_nodes": [{"handle_id": "H00001", "handle": "nyxinhex99", "platform": "X"}, {"handle_id": "H00002", "handle": "vexatrace", "platform": "Y"}],
         "handles": ["nyxinhex99", "vexatrace"],
         "wallets": ["w1"],
+        "correlated_handle_nodes": [{"handle_id": "H00009", "handle": "some_other_handle", "platform": "Z"}],
         "correlated_handles": ["some_other_handle"],
     }
     with patch.object(graph_service.neo4j_conn, "query", return_value=[fake_row]):
