@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.models.sql_models import Actor, DarkWebHandle, Wallet, Observation, ScanTarget
@@ -42,6 +43,7 @@ class CorrelationService:
 
     def __init__(self, db: Session):
         self.db = db
+        self._actor_target_cache: Dict[str, set[str]] = {}
 
     def correlate_actor(
         self,
@@ -161,18 +163,45 @@ class CorrelationService:
         return results
 
     def _actor_observation_target_keys(self, actor: Actor) -> set[str]:
-        handles = self.db.query(DarkWebHandle).filter(DarkWebHandle.actor_id == actor.actor_id).all()
+        cached = self._actor_target_cache.get(actor.actor_id)
+        if cached is not None:
+            return cached
+
+        handles = self.db.query(DarkWebHandle).filter(
+            DarkWebHandle.actor_id == actor.actor_id
+        ).all()
         scan_targets = (
             self.db.query(ScanTarget)
             .filter(ScanTarget.actor_id == actor.actor_id)
             .all()
         )
-        return build_observation_target_keys(
+        targets = build_observation_target_keys(
             actor.actor_id,
             actor.primary_handle,
             handles,
             scan_targets,
         )
+        self._actor_target_cache[actor.actor_id] = targets
+        return targets
+
+    def _actor_observations(
+        self,
+        actor: Actor,
+        indicator_types: Optional[List[str]] = None,
+    ) -> List[Observation]:
+        targets = self._actor_observation_target_keys(actor)
+        if not targets:
+            return []
+
+        query = self.db.query(Observation).filter(
+            func.lower(Observation.target).in_(targets),
+            Observation.detected.is_(True),
+        )
+        if indicator_types:
+            query = query.filter(
+                Observation.indicator_type.in_(indicator_types)
+            )
+        return query.all()
 
     def _wallet_reuse_score(self, actor_id: str) -> Optional[float]:
         wallets = self.db.query(Wallet).filter(Wallet.actor_id == actor_id).all()
@@ -208,23 +237,7 @@ class CorrelationService:
         if not actor:
             return None
 
-        targets = self._actor_observation_target_keys(actor)
-        if not targets:
-            return None
-
-        observations = (
-            self.db.query(Observation)
-            .filter(
-                Observation.indicator_type.in_(indicator_types),
-                Observation.detected.is_(True),
-            )
-            .all()
-        )
-        matching = [
-            observation
-            for observation in observations
-            if (observation.target or "").strip().lower() in targets
-        ]
+        matching = self._actor_observations(actor, indicator_types)
         if not matching:
             return None
         return max(
@@ -241,24 +254,12 @@ class CorrelationService:
             actor = self.db.query(Actor).filter(Actor.actor_id == actor_id).first()
             if not actor:
                 return 0.0
-            targets = self._actor_observation_target_keys(actor)
-            if not targets:
-                return 0.0
-            observations = (
-                self.db.query(Observation)
-                .filter(Observation.detected.is_(True))
-                .all()
-            )
-            matching = [
-                observation
-                for observation in observations
-                if (observation.target or "").strip().lower() in targets
-            ]
+            observations = self._actor_observations(actor)
             return round(
                 max(
                     (
                         self._clamp(observation.confidence or 1.0)
-                        for observation in matching
+                        for observation in observations
                     ),
                     default=0.0,
                 )
@@ -275,21 +276,10 @@ class CorrelationService:
         dates.extend(h.last_seen for h in handles if h.last_seen)
         actor = self.db.query(Actor).filter(Actor.actor_id == actor_id).first()
         if actor:
-            targets = build_observation_target_keys(
-                actor.actor_id,
-                actor.primary_handle,
-                handles,
-                self.db.query(ScanTarget).filter(ScanTarget.actor_id == actor.actor_id).all(),
-            )
-            observations = (
-                self.db.query(Observation)
-                .filter(Observation.detected.is_(True))
-                .all()
-            )
             dates.extend(
                 o.timestamp
-                for o in observations
-                if (o.target or "").strip().lower() in targets and o.timestamp
+                for o in self._actor_observations(actor)
+                if o.timestamp
             )
         latest = max(dates)
         if latest.tzinfo is None:
