@@ -1,10 +1,17 @@
 from datetime import datetime, timezone
-from sqlalchemy import Boolean, Column, DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint, func
+from sqlalchemy import Boolean, Column, DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint, Table, func
 from sqlalchemy.orm import relationship
 from app.database.postgres import Base
 
 def utc_now():
     return datetime.now(timezone.utc)
+
+handle_pgp_keys = Table(
+    "handle_pgp_keys",
+    Base.metadata,
+    Column("handle_id", Integer, ForeignKey("darkweb_handles.id", ondelete="CASCADE"), primary_key=True),
+    Column("pgp_key_id", Integer, ForeignKey("pgp_keys.id", ondelete="CASCADE"), primary_key=True),
+)
 
 class Actor(Base):
     __tablename__ = "actors"
@@ -32,7 +39,54 @@ class DarkWebHandle(Base):
     stylometry_vector_hash = Column(String(256), nullable=True)
     created_at = Column(DateTime(timezone=True), default=utc_now, server_default=func.now())
     actor = relationship("Actor", back_populates="handles")
+    pgp_keys = relationship("PGPKey", secondary=handle_pgp_keys, back_populates="handles")
+    trust_links_out = relationship(
+        "TrustLink",
+        foreign_keys="TrustLink.source_handle_id",
+        back_populates="source_handle",
+        cascade="all, delete-orphan",
+    )
+    trust_links_in = relationship(
+        "TrustLink",
+        foreign_keys="TrustLink.target_handle_id",
+        back_populates="target_handle",
+        cascade="all, delete-orphan",
+    )
     __table_args__ = (UniqueConstraint("handle", "platform", name="uq_handle_platform"),)
+
+class PGPKey(Base):
+    __tablename__ = "pgp_keys"
+    id = Column(Integer, primary_key=True, index=True)
+    fingerprint = Column(String(128), unique=True, index=True, nullable=False)
+    key_type = Column(String(32), default="OpenPGP", nullable=False)
+    source = Column(String(128), default="synthetic_dataset", nullable=False)
+    first_seen = Column(DateTime(timezone=True), nullable=True)
+    last_seen = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), default=utc_now, server_default=func.now())
+    handles = relationship("DarkWebHandle", secondary=handle_pgp_keys, back_populates="pgp_keys")
+    trust_links = relationship(
+        "TrustLink",
+        foreign_keys="TrustLink.source_pgp_key_id",
+        back_populates="source_pgp_key",
+    )
+
+
+class TrustLink(Base):
+    __tablename__ = "trust_links"
+    id = Column(Integer, primary_key=True, index=True)
+    source_handle_id = Column(Integer, ForeignKey("darkweb_handles.id", ondelete="CASCADE"), index=True, nullable=False)
+    target_handle_id = Column(Integer, ForeignKey("darkweb_handles.id", ondelete="CASCADE"), index=True, nullable=False)
+    source_pgp_key_id = Column(Integer, ForeignKey("pgp_keys.id", ondelete="SET NULL"), index=True, nullable=True)
+    relationship_type = Column(String(64), default="trust", nullable=False)
+    source = Column(String(128), default="synthetic_dataset", nullable=False)
+    confidence = Column(Float, default=0.75, nullable=False)
+    first_seen = Column(DateTime(timezone=True), nullable=True)
+    last_seen = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), default=utc_now, server_default=func.now())
+    source_handle = relationship("DarkWebHandle", foreign_keys=[source_handle_id], back_populates="trust_links_out")
+    target_handle = relationship("DarkWebHandle", foreign_keys=[target_handle_id], back_populates="trust_links_in")
+    source_pgp_key = relationship("PGPKey", foreign_keys=[source_pgp_key_id], back_populates="trust_links")
+
 
 class Wallet(Base):
     __tablename__ = "wallets"
