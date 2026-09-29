@@ -7,6 +7,7 @@ from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, Depends, Response, HTTPException
 from pydantic import BaseModel
 from fastapi.responses import JSONResponse
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from reportlab.lib import colors
@@ -20,6 +21,7 @@ from reportlab.platypus import (
 from app.database.postgres import get_db
 from app.models.sql_models import Actor, DarkWebHandle, Wallet, Observation, ScanTarget
 from app.routers.auth import require_role
+from app.services.observation_scope import build_observation_target_keys
 
 # Bulk export is limited to authenticated investigative roles because it
 # exposes the consolidated actor intelligence result set.
@@ -71,7 +73,6 @@ def _get_live_actor_records(db: Session) -> List[Dict[str, Any]]:
     # Pre-fetch handles and wallets in two batch queries (avoids 2N+1 query bottleneck)
     all_handles = db.query(DarkWebHandle).filter(DarkWebHandle.actor_id.in_(actor_ids)).all()
     all_wallets = db.query(Wallet).filter(Wallet.actor_id.in_(actor_ids)).all()
-    all_observations = db.query(Observation).filter(Observation.detected.is_(True)).all()
     all_scan_targets = db.query(ScanTarget).filter(ScanTarget.actor_id.in_(actor_ids)).all()
 
     handles_by_actor: Dict[str, list] = {}
@@ -82,14 +83,35 @@ def _get_live_actor_records(db: Session) -> List[Dict[str, Any]]:
     for w in all_wallets:
         wallets_by_actor.setdefault(w.actor_id, []).append(w)
 
-    observations_by_actor: Dict[str, list] = {}
-    for obs in all_observations:
-        observations_by_actor.setdefault(obs.target.lower(), []).append(obs)
-
     scan_targets_by_actor: Dict[str, list] = {}
     for target in all_scan_targets:
         if target.actor_id:
             scan_targets_by_actor.setdefault(target.actor_id, []).append(target)
+
+    all_target_keys = set()
+    for actor in actors:
+        all_target_keys.update(
+            build_observation_target_keys(
+                actor.actor_id,
+                actor.primary_handle,
+                handles_by_actor.get(actor.actor_id, []),
+                scan_targets_by_actor.get(actor.actor_id, []),
+            )
+        )
+
+    all_observations = (
+        db.query(Observation)
+        .filter(
+            Observation.detected.is_(True),
+            func.lower(Observation.target).in_(all_target_keys),
+        )
+        .all()
+        if all_target_keys
+        else []
+    )
+    observations_by_target: Dict[str, list] = {}
+    for obs in all_observations:
+        observations_by_target.setdefault((obs.target or "").strip().lower(), []).append(obs)
 
     records = []
     for a in actors:
@@ -105,25 +127,16 @@ def _get_live_actor_records(db: Session) -> List[Dict[str, Any]]:
         first_seen_str = min(first_dates).strftime("%Y-%m-%d") if first_dates else "N/A"
         last_seen_str = max(last_dates).strftime("%Y-%m-%d") if last_dates else "N/A"
 
-        target_keys = {
-            a.actor_id.lower(),
-            a.primary_handle.lower(),
-            *[h.handle.lower() for h in actor_handles],
-            *[
-                target.target_url.lower()
-                for target in scan_targets_by_actor.get(a.actor_id, [])
-                if target.target_url
-            ],
-            *[
-                target.name.lower()
-                for target in scan_targets_by_actor.get(a.actor_id, [])
-                if target.name
-            ],
-        }
+        target_keys = build_observation_target_keys(
+            a.actor_id,
+            a.primary_handle,
+            actor_handles,
+            scan_targets_by_actor.get(a.actor_id, []),
+        )
         actor_observations = [
             obs
             for key in target_keys
-            for obs in observations_by_actor.get(key, [])
+            for obs in observations_by_target.get(key, [])
         ]
         # De-duplicate observations that matched more than one target key.
         actor_observations = list({obs.observation_id: obs for obs in actor_observations}.values())
