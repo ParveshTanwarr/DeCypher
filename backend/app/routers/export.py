@@ -460,7 +460,7 @@ def _build_report_pdf(records: List[Dict[str, Any]], graph_image: Optional[str] 
                     str(link.get("source", "")),
                     str(link.get("target", "")),
                     str(link.get("relationship_type", "")),
-                    f"{float(link.get("confidence") or 0):.0%}",
+                    f"{float(link.get('confidence') or 0):.0%}",
                 ])
             trust_table = Table(trust_rows, colWidths=[1.55*inch, 1.55*inch, 1.65*inch, 1.25*inch], repeatRows=1)
             trust_table.setStyle(TableStyle([
@@ -484,7 +484,7 @@ def _build_report_pdf(records: List[Dict[str, Any]], graph_image: Optional[str] 
                     str(obs.get("indicator_type", "unknown")),
                     str(obs.get("value") or obs.get("description") or obs.get("target") or "N/A")[:90],
                     str(obs.get("source") or "N/A"),
-                    f"{float(obs.get("confidence") or 0):.0%}",
+                    f"{float(obs.get('confidence') or 0):.0%}",
                     str(obs.get("timestamp") or "N/A")[:19],
                 ])
             evidence_table = Table(
