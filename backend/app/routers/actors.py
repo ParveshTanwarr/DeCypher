@@ -419,21 +419,27 @@ def get_actor_subgraph(actor_id: str, db: Session = Depends(get_db)):
 
         links = []
 
-        # Handles
-        for handle in neo4j_graph.get("handles", []):
+        # Handles. Use the stable source handle_id as the graph node key;
+        # handle names are display labels and may legitimately repeat across platforms.
+        for handle_node in neo4j_graph.get("handle_nodes", []):
+            handle_id = handle_node.get("handle_id")
+            handle = handle_node.get("handle")
+            if not handle_id or not handle:
+                continue
             nodes.append(
                 GraphNode(
-                    id=f"handle:{handle}",
+                    id=f"handle:{handle_id}",
                     label="Handle",
                     name=handle,
                     category="Handle",
+                    properties={"platform": handle_node.get("platform")},
                 )
             )
 
             links.append(
                 GraphEdge(
                     source=actor.actor_id,
-                    target=f"handle:{handle}",
+                    target=f"handle:{handle_id}",
                     relation="USES_HANDLE",
                 )
             )
@@ -454,9 +460,10 @@ def get_actor_subgraph(actor_id: str, db: Session = Depends(get_db)):
             )
 
         for pair in neo4j_graph.get("handle_pgp_keys", []):
+            handle_id = pair.get("handle_id")
             handle = pair.get("handle")
             fingerprint = pair.get("fingerprint")
-            if not handle or not fingerprint:
+            if not handle_id or not handle or not fingerprint:
                 continue
 
             nodes.append(
@@ -469,7 +476,7 @@ def get_actor_subgraph(actor_id: str, db: Session = Depends(get_db)):
             )
             links.append(
                 GraphEdge(
-                    source=f"handle:{handle}",
+                    source=f"handle:{handle_id}",
                     target=f"pgp:{fingerprint}",
                     relation="HAS_PGP_KEY",
                 )
@@ -477,14 +484,16 @@ def get_actor_subgraph(actor_id: str, db: Session = Depends(get_db)):
 
         # Trust links
         for trust in neo4j_graph.get("trust_links", []):
+            source_id = trust.get("source_handle_id")
             source = trust.get("source")
+            target_id = trust.get("target_handle_id")
             target = trust.get("target")
-            if not source or not target:
+            if not source_id or not source or not target_id or not target:
                 continue
 
             nodes.append(
                 GraphNode(
-                    id=f"handle:{source}",
+                    id=f"handle:{source_id}",
                     label="Handle",
                     name=source,
                     category="Handle",
@@ -492,7 +501,7 @@ def get_actor_subgraph(actor_id: str, db: Session = Depends(get_db)):
             )
             nodes.append(
                 GraphNode(
-                    id=f"handle:{target}",
+                    id=f"handle:{target_id}",
                     label="Handle",
                     name=target,
                     category="TrustedHandle",
@@ -500,8 +509,8 @@ def get_actor_subgraph(actor_id: str, db: Session = Depends(get_db)):
             )
             links.append(
                 GraphEdge(
-                    source=f"handle:{source}",
-                    target=f"handle:{target}",
+                    source=f"handle:{source_id}",
+                    target=f"handle:{target_id}",
                     relation="TRUSTS",
                 )
             )
@@ -533,14 +542,15 @@ def get_actor_subgraph(actor_id: str, db: Session = Depends(get_db)):
             [],
         ):
             wallet = pair.get("wallet")
+            other_handle_id = pair.get("handle_id")
             other_handle = pair.get("handle")
 
-            if not wallet or not other_handle:
+            if not wallet or not other_handle_id or not other_handle:
                 continue
 
             nodes.append(
                 GraphNode(
-                    id=f"handle:{other_handle}",
+                    id=f"handle:{other_handle_id}",
                     label="Handle",
                     name=other_handle,
                     category="CorrelatedHandle",
@@ -550,7 +560,7 @@ def get_actor_subgraph(actor_id: str, db: Session = Depends(get_db)):
             links.append(
                 GraphEdge(
                     source=f"wallet:{wallet}",
-                    target=f"handle:{other_handle}",
+                    target=f"handle:{other_handle_id}",
                     relation="ALSO_USED_BY",
                 )
             )
@@ -563,10 +573,11 @@ def get_actor_subgraph(actor_id: str, db: Session = Depends(get_db)):
             "handle_marketplaces",
             [],
         ):
+            handle_id = pair.get("handle_id")
             handle = pair.get("handle")
             marketplace = pair.get("marketplace")
 
-            if not handle or not marketplace:
+            if not handle_id or not handle or not marketplace:
                 continue
 
             nodes.append(
@@ -580,7 +591,7 @@ def get_actor_subgraph(actor_id: str, db: Session = Depends(get_db)):
 
             links.append(
                 GraphEdge(
-                    source=f"handle:{handle}",
+                    source=f"handle:{handle_id}",
                     target=f"marketplace:{marketplace}",
                     relation="USES_MARKETPLACE",
                 )
