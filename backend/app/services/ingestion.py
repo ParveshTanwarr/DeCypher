@@ -83,7 +83,17 @@ def _upsert_actors(session: Session, df: pd.DataFrame, primary_handles: pd.DataF
 
 
 def _upsert_darkweb_handles(session: Session, prepared_handles: pd.DataFrame):
-    valid_cols = ["handle", "platform", "actor_id", "first_seen", "last_seen", "registration_date", "status"]
+    valid_cols = [
+        "handle",
+        "platform",
+        "actor_id",
+        "first_seen",
+        "last_seen",
+        "registration_date",
+        "status",
+        "pgp_fingerprint",
+        "handle_id",
+    ]
     df_filtered = prepared_handles[[c for c in valid_cols if c in prepared_handles.columns]].copy()
     df_filtered = df_filtered.dropna(subset=["handle"])
 
@@ -396,6 +406,7 @@ def init_db_and_load_csvs(reset_tables: bool = False, sync_neo4j: bool = True):
     pgp_records_count = 0
     trust_records_count = 0
     trust_links_for_neo4j = []
+    trust_df_for_neo4j = None
 
     session = SessionLocal()
     try:
@@ -437,6 +448,7 @@ def init_db_and_load_csvs(reset_tables: bool = False, sync_neo4j: bool = True):
         if prepared_handles is not None:
             try:
                 trust_df = pd.read_csv(trust_links_path) if os.path.exists(trust_links_path) else None
+                trust_df_for_neo4j = trust_df
                 pgp_records_count, trust_records_count = _upsert_pgp_keys_and_trust_links(
                     session,
                     prepared_handles,
@@ -485,7 +497,7 @@ def init_db_and_load_csvs(reset_tables: bool = False, sync_neo4j: bool = True):
             if prepared_handles is not None:
                 graph_service.sync_pgp_and_trust_graph(
                     prepared_handles,
-                    trust_links_path if os.path.exists(trust_links_path) else None,
+                    trust_df_for_neo4j.to_dict("records") if trust_df_for_neo4j is not None else [],
                 )
             print(
                 f"[+] Synced {len(actor_records)} actors / {len(handle_records)} handles / "
