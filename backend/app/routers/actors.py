@@ -365,26 +365,27 @@ def get_actor_subgraph(actor_id: str, db: Session = Depends(get_db)):
                 )
             )
 
-        for handle in neo4j_graph.get("handles", []):
-            for pgp_key in neo4j_graph.get("pgp_keys", []):
-                fingerprint = pgp_key.get("fingerprint")
-                if not fingerprint:
-                    continue
-                nodes.append(
-                    GraphNode(
-                        id=f"pgp:{fingerprint}",
-                        label="PGP Key",
-                        name=fingerprint,
-                        category="PGPKey",
-                    )
+        for pair in neo4j_graph.get("handle_pgp_keys", []):
+            handle = pair.get("handle")
+            fingerprint = pair.get("fingerprint")
+            if not handle or not fingerprint:
+                continue
+
+            nodes.append(
+                GraphNode(
+                    id=f"pgp:{fingerprint}",
+                    label="PGP Key",
+                    name=fingerprint,
+                    category="PGPKey",
                 )
-                links.append(
-                    GraphEdge(
-                        source=f"handle:{handle}",
-                        target=f"pgp:{fingerprint}",
-                        relation="HAS_PGP_KEY",
-                    )
+            )
+            links.append(
+                GraphEdge(
+                    source=f"handle:{handle}",
+                    target=f"pgp:{fingerprint}",
+                    relation="HAS_PGP_KEY",
                 )
+            )
 
         # Trust links
         for trust in neo4j_graph.get("trust_links", []):
