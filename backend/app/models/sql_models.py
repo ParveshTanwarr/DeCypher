@@ -44,13 +44,11 @@ class DarkWebHandle(Base):
         "TrustLink",
         foreign_keys="TrustLink.source_handle_id",
         back_populates="source_handle",
-        cascade="all, delete-orphan",
     )
     trust_links_in = relationship(
         "TrustLink",
         foreign_keys="TrustLink.target_handle_id",
         back_populates="target_handle",
-        cascade="all, delete-orphan",
     )
     __table_args__ = (UniqueConstraint("handle", "platform", name="uq_handle_platform"),)
 
