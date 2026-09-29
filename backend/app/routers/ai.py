@@ -58,7 +58,7 @@ def _actor_context(actor_id: Optional[str], db: Session) -> Dict[str, Any]:
                 "confidence": o.confidence,
                 "timestamp": o.timestamp.isoformat() if o.timestamp else None,
                 "description": o.description,
-            } for o in observations[:60]],
+            } for o in observations[:30]],
         },
     }
 
@@ -67,19 +67,20 @@ def _call_gemini(prompt: str, history: List[ChatMessage]) -> str:
     if not api_key:
         raise HTTPException(status_code=503, detail="Gemini is not configured. Set GEMINI_API_KEY on the backend.")
     contents = []
-    for item in history[-10:]:
+    for item in history[-6:]:
         role = "model" if item.role == "assistant" else "user"
         contents.append({"role": role, "parts": [{"text": item.content[:4000]}]})
     contents.append({"role": "user", "parts": [{"text": prompt}]})
     response = requests.post(
         f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent",
-        headers={"x-goog-api-key": api_key, "Content-Type": "application/json"},
+        params={"key": api_key},
+        headers={"Content-Type": "application/json"},
         json={
             "contents": contents,
             "systemInstruction": {"parts": [{"text": "You are DeCypher Copilot, an investigation assistant inside a dark-web threat-intelligence platform. Use ONLY the supplied DeCypher context. Never invent actors, identifiers, evidence, relationships, sources, or attribution conclusions. Clearly separate documented evidence from inference and unknowns. Treat confidence and priority as platform-derived scores, not proof of identity. Prefer concise investigator-friendly answers with bullets. If the context does not support an answer, say so."}]},
             "generationConfig": {"temperature": 0.15, "maxOutputTokens": 900},
         },
-        timeout=35,
+        timeout=60,
     )
     if not response.ok:
         raise HTTPException(status_code=502, detail=f"Gemini request failed: {response.text[:500]}")
