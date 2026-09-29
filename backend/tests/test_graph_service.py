@@ -86,3 +86,15 @@ def test_sync_pgp_and_trust_graph_issues_expected_writes():
     assert calls[0]["rows"][0]["pgp_fingerprint"] == "AA11"
     assert calls[1]["rows"][0]["source_handle"] == "nyxinhex99"
     assert calls[1]["rows"][0]["target_handle"] == "zerylghost"
+
+
+def test_actor_graph_uses_postgres_fallback(client, admin_headers):
+    with patch.object(graph_service, "get_actor_subgraph", return_value=None):
+        response = client.get("/actors/A00001/graph", headers=admin_headers)
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["nodes"]
+    assert payload["links"]
+    actor_node = next(node for node in payload["nodes"] if node["id"] == "A00001")
+    assert actor_node["properties"]["priority_score"] is not None
