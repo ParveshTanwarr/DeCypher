@@ -573,8 +573,8 @@ DeCypher/
 
 Designed for, not yet deployed in this prototype:
 
-- [ ] Kafka/RabbitMQ event bus for scan-complete notifications
-- [ ] Celery + Redis for fully autonomous, self-prioritizing rescanning
+- [ ] Kafka/RabbitMQ event bus for scan-complete notifications (Celery/Redis currently provides the prototype queue)
+- [x] Celery + Redis for authorized autonomous, priority-aware rescanning
 - [ ] Kubernetes deployment for horizontal scaling
 - [ ] Grafana dashboards on top of the existing Prometheus metrics endpoint
 - [ ] Formatted PDF report export (CSV/JSON export already implemented)
