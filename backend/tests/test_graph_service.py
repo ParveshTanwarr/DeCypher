@@ -47,3 +47,42 @@ def test_get_actor_subgraph_returns_correlation_data():
     assert result["actor_id"] == "A00001"
     assert "vexatrace" in result["handles"]
     assert "some_other_handle" in result["correlated_handles"]
+
+
+def test_sync_pgp_and_trust_graph_issues_expected_writes():
+    calls = []
+
+    def fake_write(query, params):
+        calls.append(params)
+
+    handles = [
+        {
+            "handle_id": "H00001",
+            "actor_id": "A00001",
+            "handle": "nyxinhex99",
+            "pgp_fingerprint": "AA11",
+        },
+        {
+            "handle_id": "H00003",
+            "actor_id": "A00002",
+            "handle": "zerylghost",
+            "pgp_fingerprint": "BB22",
+        },
+    ]
+    trust_links = [
+        {
+            "source_handle_id": "H00001",
+            "target_handle_id": "H00003",
+            "relationship_type": "trust",
+            "confidence": 0.86,
+            "source": "synthetic_dataset",
+        }
+    ]
+
+    with patch.object(graph_service.neo4j_conn, "write", side_effect=fake_write):
+        graph_service.sync_pgp_and_trust_graph(handles, trust_links)
+
+    assert len(calls) == 2
+    assert calls[0]["rows"][0]["pgp_fingerprint"] == "AA11"
+    assert calls[1]["rows"][0]["source_handle"] == "nyxinhex99"
+    assert calls[1]["rows"][0]["target_handle"] == "zerylghost"
