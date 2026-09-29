@@ -630,6 +630,49 @@ def get_actor_subgraph(actor_id: str, db: Session = Depends(get_db)):
             )
         )
 
+    for key in sorted({
+        key.fingerprint
+        for h in handles
+        for key in h.pgp_keys
+        if key.fingerprint
+    }):
+        nodes.append(
+            GraphNode(
+                id=f"pgp:{key}",
+                label="PGP Key",
+                name=key,
+                category="PGPKey",
+            )
+        )
+
+    for h in handles:
+        for key in h.pgp_keys:
+            links.append(
+                GraphEdge(
+                    source=f"handle:{h.handle}",
+                    target=f"pgp:{key.fingerprint}",
+                    relation="HAS_PGP_KEY",
+                )
+            )
+
+    for h in handles:
+        for link in h.trust_links_out:
+            nodes.append(
+                GraphNode(
+                    id=f"handle:{link.target_handle.handle}",
+                    label="Handle",
+                    name=link.target_handle.handle,
+                    category="TrustedHandle",
+                )
+            )
+            links.append(
+                GraphEdge(
+                    source=f"handle:{h.handle}",
+                    target=f"handle:{link.target_handle.handle}",
+                    relation="TRUSTS",
+                )
+            )
+
     for w in wallets:
         nodes.append(
             GraphNode(
