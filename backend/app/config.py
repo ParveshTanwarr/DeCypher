@@ -13,6 +13,7 @@ class Settings(BaseSettings):
     AUTOSCAN_ENABLED: bool = False
     AUTOSCAN_DEFAULT_INTERVAL_MINUTES: int = 180
     AUTOSCAN_ALLOWED_HOSTS: str = "127.0.0.1,localhost"
+    CORS_ALLOWED_ORIGINS: str = "http://localhost:5173,http://127.0.0.1:5173"
     GEMINI_API_KEY: str = ""
     GEMINI_MODEL: str = "gemini-3.6-flash"
     class Config:
