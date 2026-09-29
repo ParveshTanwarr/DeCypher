@@ -5,7 +5,8 @@ from typing import Any, Dict, List, Optional
 
 from sqlalchemy.orm import Session
 
-from app.models.sql_models import Actor, DarkWebHandle, Wallet, Observation
+from app.models.sql_models import Actor, DarkWebHandle, Wallet, Observation, ScanTarget
+from app.services.observation_scope import build_observation_target_keys
 from app.services.nlp_service import nlp_service
 
 
@@ -48,6 +49,7 @@ class CorrelationService:
         stylometry_score: Optional[float] = None,
         handle_a: Optional[str] = None,
         handle_b: Optional[str] = None,
+        persist: bool = True,
     ) -> Dict[str, Any]:
         actor = self.db.query(Actor).filter(Actor.actor_id == actor_id).first()
         if not actor:
@@ -103,7 +105,8 @@ class CorrelationService:
         # Persist the current triage value so dashboard ordering and actor
         # pages remain consistent. This is a derived score, not ground truth.
         actor.priority_score = priority["score"]
-        self.db.commit()
+        if persist:
+            self.db.commit()
 
         return {
             "candidate_actor": actor.actor_id,
@@ -143,42 +146,125 @@ class CorrelationService:
         actors = self.db.query(Actor).all()
         results = []
         for actor in actors:
-            results.append(self.correlate_actor(actor.actor_id, stylometry_score=stylometry_score))
-        results.sort(key=lambda item: (item["priority"]["score"], item["overall_confidence"]), reverse=True)
+            results.append(
+                self.correlate_actor(
+                    actor.actor_id,
+                    stylometry_score=stylometry_score,
+                    persist=False,
+                )
+            )
+        self.db.commit()
+        results.sort(
+            key=lambda item: (item["priority"]["score"], item["overall_confidence"]),
+            reverse=True,
+        )
         return results
+
+    def _actor_observation_target_keys(self, actor: Actor) -> set[str]:
+        handles = self.db.query(DarkWebHandle).filter(DarkWebHandle.actor_id == actor.actor_id).all()
+        scan_targets = (
+            self.db.query(ScanTarget)
+            .filter(ScanTarget.actor_id == actor.actor_id)
+            .all()
+        )
+        return build_observation_target_keys(
+            actor.actor_id,
+            actor.primary_handle,
+            handles,
+            scan_targets,
+        )
 
     def _wallet_reuse_score(self, actor_id: str) -> Optional[float]:
         wallets = self.db.query(Wallet).filter(Wallet.actor_id == actor_id).all()
         if not wallets:
             return None
+
+        addresses = {wallet.address for wallet in wallets if wallet.address}
+        if not addresses:
+            return None
+
+        related_wallets = (
+            self.db.query(Wallet)
+            .filter(Wallet.address.in_(addresses))
+            .all()
+        )
+        handles_by_address: Dict[str, set[str]] = {}
+        for wallet in related_wallets:
+            if wallet.address and wallet.associated_handle:
+                handles_by_address.setdefault(wallet.address, set()).add(wallet.associated_handle)
+
         reuse_scores = []
         for wallet in wallets:
-            related_wallets = self.db.query(Wallet).filter(Wallet.address == wallet.address).all()
-            handles = {item.associated_handle for item in related_wallets if item.associated_handle}
-            if len(handles) >= 2:
+            handle_count = len(handles_by_address.get(wallet.address, set()))
+            if handle_count >= 2:
                 reuse_scores.append(0.95)
-            elif len(handles) == 1:
+            elif handle_count == 1:
                 reuse_scores.append(0.60)
+
         return self._clamp(max(reuse_scores)) if reuse_scores else None
 
     def _observation_score(self, actor_id: str, indicator_types: List[str]) -> Optional[float]:
-        observations = self.db.query(Observation).filter(Observation.indicator_type.in_(indicator_types), Observation.detected.is_(True)).all()
-        if not observations:
-            return None
         actor = self.db.query(Actor).filter(Actor.actor_id == actor_id).first()
         if not actor:
             return None
-        handles = {h.handle for h in self.db.query(DarkWebHandle).filter(DarkWebHandle.actor_id == actor_id).all()}
-        targets = {actor_id, actor.primary_handle, *handles}
-        matching = [o for o in observations if o.target in targets]
+
+        targets = self._actor_observation_target_keys(actor)
+        if not targets:
+            return None
+
+        observations = (
+            self.db.query(Observation)
+            .filter(
+                Observation.indicator_type.in_(indicator_types),
+                Observation.detected.is_(True),
+            )
+            .all()
+        )
+        matching = [
+            observation
+            for observation in observations
+            if (observation.target or "").strip().lower() in targets
+        ]
         if not matching:
             return None
-        return max(self._clamp(o.confidence if o.confidence is not None else 1.0) for o in matching)
+        return max(
+            self._clamp(
+                observation.confidence
+                if observation.confidence is not None
+                else 1.0
+            )
+            for observation in matching
+        )
 
     def _evidence_confidence(self, actor_id: str, signals: List[Dict[str, Any]]) -> float:
         if not signals:
-            observations = self.db.query(Observation).filter(Observation.target == actor_id, Observation.detected.is_(True)).all()
-            return round(max((self._clamp(o.confidence or 1.0) for o in observations), default=0.0) * 100, 2)
+            actor = self.db.query(Actor).filter(Actor.actor_id == actor_id).first()
+            if not actor:
+                return 0.0
+            targets = self._actor_observation_target_keys(actor)
+            if not targets:
+                return 0.0
+            observations = (
+                self.db.query(Observation)
+                .filter(Observation.detected.is_(True))
+                .all()
+            )
+            matching = [
+                observation
+                for observation in observations
+                if (observation.target or "").strip().lower() in targets
+            ]
+            return round(
+                max(
+                    (
+                        self._clamp(observation.confidence or 1.0)
+                        for observation in matching
+                    ),
+                    default=0.0,
+                )
+                * 100,
+                2,
+            )
         weighted = sum(s["confidence"] * SIGNAL_WEIGHTS[s["type"]] for s in signals)
         weight = sum(SIGNAL_WEIGHTS[s["type"]] for s in signals)
         return round((weighted / weight) * 100 if weight else 0.0, 2)
@@ -187,13 +273,24 @@ class CorrelationService:
         dates = []
         handles = self.db.query(DarkWebHandle).filter(DarkWebHandle.actor_id == actor_id).all()
         dates.extend(h.last_seen for h in handles if h.last_seen)
-        observations = self.db.query(Observation).filter(Observation.detected.is_(True)).all()
         actor = self.db.query(Actor).filter(Actor.actor_id == actor_id).first()
-        targets = {actor_id, actor.primary_handle} if actor else {actor_id}
-        targets.update(h.handle for h in handles)
-        dates.extend(o.timestamp for o in observations if o.target in targets and o.timestamp)
-        if not dates:
-            return 20.0
+        if actor:
+            targets = build_observation_target_keys(
+                actor.actor_id,
+                actor.primary_handle,
+                handles,
+                self.db.query(ScanTarget).filter(ScanTarget.actor_id == actor.actor_id).all(),
+            )
+            observations = (
+                self.db.query(Observation)
+                .filter(Observation.detected.is_(True))
+                .all()
+            )
+            dates.extend(
+                o.timestamp
+                for o in observations
+                if (o.target or "").strip().lower() in targets and o.timestamp
+            )
         latest = max(dates)
         if latest.tzinfo is None:
             latest = latest.replace(tzinfo=timezone.utc)
