@@ -5,7 +5,16 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
 from app.database.postgres import engine, Base, SessionLocal
-from app.models.sql_models import DarkWebHandle, Wallet, Marketplace, Actor, Observation
+from app.models.sql_models import (
+    DarkWebHandle,
+    Wallet,
+    Marketplace,
+    Actor,
+    Observation,
+    PGPKey,
+    TrustLink,
+    handle_pgp_keys,
+)
 from app.services import graph_service
 
 logger = logging.getLogger(__name__)
@@ -96,6 +105,144 @@ def _upsert_darkweb_handles(session: Session, prepared_handles: pd.DataFrame):
     )
     session.execute(stmt)
     return len(records), records
+
+
+def _upsert_pgp_keys_and_trust_links(
+    session: Session,
+    prepared_handles: pd.DataFrame,
+    trust_links_df: pd.DataFrame | None = None,
+):
+    """
+    Normalize PGP fingerprints into first-class PGPKey records, connect them
+    to handles, and load synthetic trust/signature relationships.
+
+    handles.csv remains the source of truth for observed fingerprints. The
+    optional trust_links.csv uses stable handle_id values from handles.csv so
+    the demo relationships remain deterministic and auditable.
+    """
+    if "pgp_fingerprint" not in prepared_handles.columns:
+        return 0, 0
+
+    pgp_df = prepared_handles.copy()
+    pgp_df["pgp_fingerprint"] = (
+        pgp_df["pgp_fingerprint"]
+        .fillna("")
+        .astype(str)
+        .str.strip()
+        .str.upper()
+    )
+    pgp_df = pgp_df[pgp_df["pgp_fingerprint"] != ""].copy()
+    if pgp_df.empty:
+        return 0, 0
+
+    pgp_df["first_seen"] = pd.to_datetime(pgp_df["first_seen"], errors="coerce")
+    pgp_df["last_seen"] = pd.to_datetime(pgp_df["last_seen"], errors="coerce")
+
+    pgp_records = []
+    for fingerprint, group in pgp_df.groupby("pgp_fingerprint", sort=False):
+        first_seen = group["first_seen"].min()
+        last_seen = group["last_seen"].max()
+        pgp_records.append({
+            "fingerprint": fingerprint,
+            "key_type": "OpenPGP",
+            "source": "synthetic_dataset",
+            "first_seen": None if pd.isna(first_seen) else first_seen.to_pydatetime(),
+            "last_seen": None if pd.isna(last_seen) else last_seen.to_pydatetime(),
+        })
+
+    stmt = insert(PGPKey).values(pgp_records)
+    stmt = stmt.on_conflict_do_update(
+        index_elements=["fingerprint"],
+        set_={
+            "last_seen": stmt.excluded.last_seen,
+            "source": stmt.excluded.source,
+        },
+    )
+    session.execute(stmt)
+    session.flush()
+
+    key_rows = session.query(PGPKey).filter(
+        PGPKey.fingerprint.in_([row["fingerprint"] for row in pgp_records])
+    ).all()
+    key_by_fingerprint = {key.fingerprint: key for key in key_rows}
+
+    # Attach every observed fingerprint to its handle. A handle may have
+    # multiple observed keys over time, so this is intentionally many-to-many.
+    handle_rows = session.query(DarkWebHandle).all()
+    handle_by_identity = {
+        (handle.handle, handle.platform): handle
+        for handle in handle_rows
+    }
+
+    association_records = []
+    for row in pgp_df[["handle", "platform", "pgp_fingerprint"]].drop_duplicates().to_dict("records"):
+        handle = handle_by_identity.get((row["handle"], row["platform"]))
+        key = key_by_fingerprint.get(row["pgp_fingerprint"])
+        if handle and key:
+            association_records.append({
+                "handle_id": handle.id,
+                "pgp_key_id": key.id,
+            })
+
+    if association_records:
+        association_stmt = insert(handle_pgp_keys).values(association_records)
+        association_stmt = association_stmt.on_conflict_do_nothing()
+        session.execute(association_stmt)
+
+    trust_count = 0
+    if trust_links_df is not None and not trust_links_df.empty:
+        source_map = (
+            prepared_handles[["handle_id", "handle", "platform", "pgp_fingerprint"]]
+            .dropna(subset=["handle_id", "handle"])
+            .drop_duplicates(subset=["handle_id"])
+        )
+        source_map = source_map.set_index("handle_id").to_dict("index")
+
+        trust_records = []
+        for raw in trust_links_df.to_dict("records"):
+            source = source_map.get(str(raw.get("source_handle_id")))
+            target = source_map.get(str(raw.get("target_handle_id")))
+            if not source or not target:
+                continue
+
+            source_handle = handle_by_identity.get((source["handle"], source["platform"]))
+            target_handle = handle_by_identity.get((target["handle"], target["platform"]))
+            if not source_handle or not target_handle:
+                continue
+
+            fingerprint = str(source.get("pgp_fingerprint") or "").strip().upper()
+            source_key = key_by_fingerprint.get(fingerprint)
+
+            first_seen = pd.to_datetime(raw.get("first_seen"), errors="coerce")
+            last_seen = pd.to_datetime(raw.get("last_seen"), errors="coerce")
+            confidence = pd.to_numeric(raw.get("confidence"), errors="coerce")
+
+            trust_records.append({
+                "source_handle_id": source_handle.id,
+                "target_handle_id": target_handle.id,
+                "source_pgp_key_id": source_key.id if source_key else None,
+                "relationship_type": str(raw.get("relationship_type") or "trust"),
+                "source": str(raw.get("source") or "synthetic_dataset"),
+                "confidence": float(confidence) if pd.notna(confidence) else 0.75,
+                "first_seen": None if pd.isna(first_seen) else first_seen.to_pydatetime(),
+                "last_seen": None if pd.isna(last_seen) else last_seen.to_pydatetime(),
+            })
+
+        if trust_records:
+            trust_stmt = insert(TrustLink).values(trust_records)
+            trust_stmt = trust_stmt.on_conflict_do_update(
+                constraint="uq_trust_link_pair_type",
+                set_={
+                    "source_pgp_key_id": trust_stmt.excluded.source_pgp_key_id,
+                    "source": trust_stmt.excluded.source,
+                    "confidence": trust_stmt.excluded.confidence,
+                    "last_seen": trust_stmt.excluded.last_seen,
+                },
+            )
+            session.execute(trust_stmt)
+            trust_count = len(trust_records)
+
+    return len(pgp_records), trust_count
 
 
 def _upsert_wallets(session: Session, wallets_df: pd.DataFrame, prepared_handles: pd.DataFrame):
@@ -233,6 +380,7 @@ def init_db_and_load_csvs(reset_tables: bool = False, sync_neo4j: bool = True):
     wallets_path = os.path.join(DATA_DIR, "wallets.csv")
     marketplaces_path = os.path.join(DATA_DIR, "marketplaces.csv")
     infra_indicators_path = os.path.join(DATA_DIR, "infrastructure_indicators.csv")
+    trust_links_path = os.path.join(DATA_DIR, "trust_links.csv")
 
     # handles.csv is loaded once up front (in memory only, nothing written
     # yet) because both actors (primary_handle) and wallets (actor_id
@@ -245,6 +393,9 @@ def init_db_and_load_csvs(reset_tables: bool = False, sync_neo4j: bool = True):
 
     actor_records, handle_records, wallet_records = [], [], []
     wallet_pairs_for_neo4j = []
+    pgp_records_count = 0
+    trust_records_count = 0
+    trust_links_for_neo4j = []
 
     session = SessionLocal()
     try:
@@ -283,6 +434,23 @@ def init_db_and_load_csvs(reset_tables: bool = False, sync_neo4j: bool = True):
                 session.rollback()
                 print(f"[-] Error loading {handles_path} into 'darkweb_handles': {e}")
 
+        if prepared_handles is not None:
+            try:
+                trust_df = pd.read_csv(trust_links_path) if os.path.exists(trust_links_path) else None
+                pgp_records_count, trust_records_count = _upsert_pgp_keys_and_trust_links(
+                    session,
+                    prepared_handles,
+                    trust_df,
+                )
+                session.commit()
+                print(
+                    f"[+] Upserted {pgp_records_count} PGP keys and "
+                    f"{trust_records_count} trust links"
+                )
+            except Exception as e:
+                session.rollback()
+                print(f"[-] Error loading PGP/trust data: {e}")
+
         if os.path.exists(wallets_path) and prepared_handles is not None:
             try:
                 count, wallet_records, wallet_pairs_for_neo4j = _upsert_wallets(
@@ -314,9 +482,15 @@ def init_db_and_load_csvs(reset_tables: bool = False, sync_neo4j: bool = True):
             # wallet_pairs_for_neo4j contains the complete non-deduplicated
             # handle<->wallet relationships from the CSV.
             graph_service.sync_actor_batch(actor_records, handle_records, wallet_pairs_for_neo4j)
+            if prepared_handles is not None:
+                graph_service.sync_pgp_and_trust_graph(
+                    prepared_handles,
+                    trust_links_path if os.path.exists(trust_links_path) else None,
+                )
             print(
                 f"[+] Synced {len(actor_records)} actors / {len(handle_records)} handles / "
-                f"{len(wallet_pairs_for_neo4j)} handle-wallet links into Neo4j"
+                f"{len(wallet_pairs_for_neo4j)} handle-wallet links / "
+                f"{pgp_records_count} PGP keys / {trust_records_count} trust links into Neo4j"
             )
         except Exception as e:
             print(f"[-] Neo4j sync skipped (is Neo4j running?): {e}")
