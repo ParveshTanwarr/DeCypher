@@ -27,3 +27,11 @@ def test_compare_unknown_handle_reports_insufficient_text(client, admin_headers)
     # the reason in `detail` -- it doesn't return 200 with an error field.
     assert r.status_code == 400
     assert "insufficient" in r.json()["detail"].lower()
+
+
+def test_nlp_does_not_guess_when_handle_name_is_ambiguous(monkeypatch):
+    from app.services.nlp_service import nlp_service
+
+    monkeypatch.setattr(nlp_service, "_name_to_handle_ids", {"shared": ["H00001", "H00002"]})
+    assert nlp_service._resolve_handle_id("shared") is None
+    assert nlp_service._resolve_handle_id("H00001") == "H00001"
