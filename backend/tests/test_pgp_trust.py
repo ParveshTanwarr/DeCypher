@@ -48,3 +48,19 @@ def test_actor_graph_exposes_pgp_and_trust_relationships(client, admin_headers):
     assert any(node["category"] == "PGPKey" for node in payload["nodes"])
     assert any(link["relation"] == "HAS_PGP_KEY" for link in payload["links"])
     assert any(link["relation"] == "TRUSTS" for link in payload["links"])
+
+
+def test_global_search_finds_pgp_fingerprint(client, admin_headers):
+    fingerprint = "0A998F3749EA8D26E6DFB1529C40566171E1B68B"
+    response = client.get(
+        "/search",
+        params={"q": fingerprint[:12]},
+        headers=admin_headers,
+    )
+
+    assert response.status_code == 200
+    assert any(
+        result["type"] == "pgp_key"
+        and result["matched_value"] == fingerprint
+        for result in response.json()["results"]
+    )
