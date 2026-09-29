@@ -1,4 +1,5 @@
-import { FormEvent, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
+import type { FormEvent } from "react";
 import { Bot, ChevronDown, Loader2, MessageCircle, Send, Shield, Sparkles, X } from "lucide-react";
 import { chatWithAI, type ChatMessage } from "../../api/client";
 
