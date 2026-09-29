@@ -58,3 +58,18 @@ def test_graph_endpoint_falls_back_gracefully_without_neo4j(client, admin_header
     r = client.get("/actors/A00001/graph", headers=admin_headers)
     assert r.status_code == 200
     assert len(r.json()["nodes"]) > 0
+
+
+def test_actor_detail_includes_typed_evidence_trail(client, admin_headers):
+    """Actor detail must remain valid when seeded infrastructure evidence exists."""
+    r = client.get("/actors/A00001", headers=admin_headers)
+    assert r.status_code == 200
+    payload = r.json()
+    assert len(payload["evidence_trail"]) >= 4
+    assert all(item["signal_type"] for item in payload["evidence_trail"])
+    assert {item["indicator_type"] for item in payload["evidence_trail"]} >= {
+        "default_banner",
+        "ssl_cert_reuse",
+        "descriptor_timing",
+        "exposed_status_page",
+    }
