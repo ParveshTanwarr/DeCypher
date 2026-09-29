@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
+from typing import Optional
 from sqlalchemy.orm import Session
 
 from app.database.postgres import get_db
@@ -15,8 +16,8 @@ router = APIRouter(
 @router.get("/actor/{actor_id}")
 def correlate_actor(
     actor_id: str,
-    handle_a: str | None = Query(default=None),
-    handle_b: str | None = Query(default=None),
+    handle_a: Optional[str] = Query(default=None),
+    handle_b: Optional[str] = Query(default=None),
     db: Session = Depends(get_db),
 ):
     service = CorrelationService(db)
