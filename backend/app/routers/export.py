@@ -105,7 +105,21 @@ def _get_live_actor_records(db: Session) -> List[Dict[str, Any]]:
         first_seen_str = min(first_dates).strftime("%Y-%m-%d") if first_dates else "N/A"
         last_seen_str = max(last_dates).strftime("%Y-%m-%d") if last_dates else "N/A"
 
-        target_keys = {a.actor_id.lower(), a.primary_handle.lower(), *[h.handle.lower() for h in actor_handles]}
+        target_keys = {
+            a.actor_id.lower(),
+            a.primary_handle.lower(),
+            *[h.handle.lower() for h in actor_handles],
+            *[
+                target.target_url.lower()
+                for target in scan_targets_by_actor.get(a.actor_id, [])
+                if target.target_url
+            ],
+            *[
+                target.name.lower()
+                for target in scan_targets_by_actor.get(a.actor_id, [])
+                if target.name
+            ],
+        }
         actor_observations = [
             obs
             for key in target_keys
