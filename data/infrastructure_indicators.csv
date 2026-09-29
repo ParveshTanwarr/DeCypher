@@ -249,3 +249,7 @@ I00247,A00594,3bumccaxrfp2w2u2.onion,default_banner,,host-247.example-clearnet.n
 I00248,A00476,6maglnexzykz6vwn.onion,descriptor_timing,,host-248.example-clearnet.net,0.75,2025-07-13
 I00249,A00475,yaczuhg3aogqfp5x.onion,exposed_status_page,,,0.94,2025-11-05
 I00250,A00260,4gmtcm5w5fnsxwjj.onion,default_banner,,host-250.example-clearnet.net,0.68,2025-03-19
+I00251,A00001,nyxinhex99-demo.onion,default_banner,,,0.88,2026-08-18
+I00252,A00001,nyxinhex99-demo.onion,ssl_cert_reuse,0A:99:8F:37:49:EA:8D:26:E6:DF:B1:52:9C:40:56:61:71:E1:B6:8B,,0.91,2026-08-22
+I00253,A00001,nyxinhex99-demo.onion,descriptor_timing,,,0.84,2026-08-27
+I00254,A00001,nyxinhex99-demo.onion,exposed_status_page,,demo-clearnet.example.net,0.89,2026-08-30
