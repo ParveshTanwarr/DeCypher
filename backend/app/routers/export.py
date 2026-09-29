@@ -3,7 +3,7 @@ import csv
 import io
 from collections import Counter
 from datetime import datetime, timezone
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, Depends, Response, HTTPException
 from pydantic import BaseModel
 from fastapi.responses import JSONResponse
@@ -26,7 +26,7 @@ from app.routers.auth import require_role
 router = APIRouter(prefix="/export", tags=["Export"], dependencies=[Depends(require_role("admin", "investigator"))])
 
 class ActorReportExportRequest(BaseModel):
-    graph_image: str | None = None
+    graph_image: Optional[str] = None
 
 
 CSV_HEADERS = [
@@ -135,6 +135,20 @@ def _get_live_actor_records(db: Session) -> List[Dict[str, Any]]:
             )
         })
         sources = sorted({str(obs.source) for obs in actor_observations if obs.source})
+        trust_links = []
+        for handle in actor_handles:
+            for link in (handle.trust_links_out + handle.trust_links_in):
+                if link.source_handle and link.target_handle:
+                    trust_links.append({
+                        "source": link.source_handle.handle,
+                        "target": link.target_handle.handle,
+                        "relationship_type": link.relationship_type,
+                        "confidence": link.confidence,
+                    })
+        trust_links = list({
+            (item["source"], item["target"], item["relationship_type"]): item
+            for item in trust_links
+        }.values())
 
         records.append({
             "actor_id": a.actor_id,
@@ -154,6 +168,7 @@ def _get_live_actor_records(db: Session) -> List[Dict[str, Any]]:
             "pgp_keys": pgp_list,
             "infrastructure_indicators": infrastructure,
             "sources": sources,
+            "trust_links": trust_links,
             "observations": [
                 {
                     "observation_id": obs.observation_id,
