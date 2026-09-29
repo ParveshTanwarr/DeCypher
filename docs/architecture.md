@@ -48,3 +48,29 @@ The separate operational priority model uses risk severity, correlation strength
 ## Safety boundary
 
 The demonstration environment uses synthetic data and controlled test infrastructure. The platform is intended for authorized investigative and defensive use and does not treat a correlation score as proof of real-world identity.
+
+
+## Autonomous scanning
+
+For authorized controlled infrastructure, the collection path now supports an asynchronous
+worker architecture:
+
+```
+ScanTarget schedule
+       |
+       v
+Celery Beat -> Redis -> Celery Worker
+                         |
+                         v
+                  Level-2 scanner
+                    /    |    \
+                   v     v     v
+             PostgreSQL  Neo4j  Correlation
+                              |
+                              v
+                        Priority update
+```
+
+Autonomous scanning is disabled by default and accepts only hosts explicitly listed in
+`AUTOSCAN_ALLOWED_HOSTS`. The repository default is loopback-only for the controlled SIH
+demo environment.
