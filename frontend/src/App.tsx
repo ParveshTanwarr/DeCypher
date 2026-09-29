@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Activity, AlertTriangle, BarChart3, GitBranch, LayoutDashboard, LogOut, Search, ShieldCheck, Target } from "lucide-react";
 import "./App.css";
 import "./dashboard.css";
-import { getActors, getAllCorrelations, setAuthToken, downloadExport } from "./api/client";
+import { getActors, getAllCorrelations, setAuthToken } from "./api/client";
 import ExportMenu from "./components/export/ExportMenu";
 import NotificationBell, { type AppNotification } from "./components/notifications/NotificationBell";
 import LoginPage from "./pages/LoginPage";
