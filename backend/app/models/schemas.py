@@ -41,6 +41,7 @@ class ActorDetail(BaseModel):
     first_seen: Optional[str] = None
     last_seen: Optional[str] = None
     last_active: Optional[str] = None
+    last_scan_date: Optional[str] = None
     associated_handles: List[str] = Field(default_factory=list)
     handles: List[str] = Field(default_factory=list)
     wallets: List[str] = Field(default_factory=list)
