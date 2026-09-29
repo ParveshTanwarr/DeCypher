@@ -99,7 +99,9 @@ def test_actor_graph_uses_postgres_fallback(client, admin_headers):
     assert payload["links"]
     actor_node = next(node for node in payload["nodes"] if node["id"] == "A00001")
     assert actor_node["properties"]["priority_score"] is not None
-\n\ndef test_graph_sync_uses_handle_id_when_names_collide():
+
+
+def test_graph_sync_uses_handle_id_when_names_collide():
     calls = []
 
     def fake_write(query, params):
