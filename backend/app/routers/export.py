@@ -24,7 +24,7 @@ from app.routers.auth import require_role
 # than any authenticated user. This is a judgment call, not a spec
 # requirement -- adjust the allowed role(s) if that doesn't match your
 # actual policy (e.g. add "investigator" back if analysts need exports too).
-router = APIRouter(prefix="/export", tags=["Export"], dependencies=[Depends(require_role("admin"))])
+router = APIRouter(prefix="/export", tags=["Export"], dependencies=[Depends(require_role("admin", "investigator"))])
 
 CSV_HEADERS = [
     "actor_id",
