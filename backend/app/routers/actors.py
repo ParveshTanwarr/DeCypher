@@ -93,6 +93,7 @@ def _build_actor_detail(actor: Actor, db: Session) -> ActorDetail:
         evidence_trail=[
             {
                 "observation_id": o.observation_id,
+                "signal_type": o.indicator_type or "infrastructure",
                 "indicator_type": o.indicator_type,
                 "detected": o.detected,
                 "value": o.value,
