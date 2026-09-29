@@ -448,7 +448,7 @@ export default function GraphPage({
     return (
       <section className="page-section">
         <div className="empty-state">
-          Loading Neo4j graph...
+          Loading correlation graph...
         </div>
       </section>
     );
@@ -491,7 +491,7 @@ export default function GraphPage({
           </h1>
 
           <p>
-            Neo4j relationship network
+            Relationship network
             for actor{" "}
             <strong>
               {actorId}
@@ -546,7 +546,7 @@ export default function GraphPage({
           <div className="panel-header">
             <div>
               <div className="eyebrow">
-                NEO4J NETWORK
+                RELATIONSHIP NETWORK
               </div>
 
               <h2>
