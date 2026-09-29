@@ -92,7 +92,6 @@ def _upsert_darkweb_handles(session: Session, prepared_handles: pd.DataFrame):
         "registration_date",
         "status",
         "pgp_fingerprint",
-        "handle_id",
     ]
     df_filtered = prepared_handles[[c for c in valid_cols if c in prepared_handles.columns]].copy()
     df_filtered = df_filtered.dropna(subset=["handle"])
