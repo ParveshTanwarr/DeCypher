@@ -16,7 +16,7 @@ from reportlab.platypus import (
 )
 
 from app.database.postgres import get_db
-from app.models.sql_models import Actor, DarkWebHandle, Wallet
+from app.models.sql_models import Actor, DarkWebHandle, Wallet, Observation
 from app.routers.auth import require_role
 
 # Bulk export of every actor's identity/correlation data is the single
@@ -38,6 +38,10 @@ CSV_HEADERS = [
     "associated_handles",
     "wallets_count",
     "wallet_addresses",
+    "pgp_keys",
+    "infrastructure_indicators",
+    "sources",
+    "last_scan_date",
 ]
 
 
@@ -51,6 +55,7 @@ def _get_live_actor_records(db: Session) -> List[Dict[str, Any]]:
     # Pre-fetch handles and wallets in two batch queries (avoids 2N+1 query bottleneck)
     all_handles = db.query(DarkWebHandle).filter(DarkWebHandle.actor_id.in_(actor_ids)).all()
     all_wallets = db.query(Wallet).filter(Wallet.actor_id.in_(actor_ids)).all()
+    all_observations = db.query(Observation).filter(Observation.detected.is_(True)).all()
 
     handles_by_actor: Dict[str, list] = {}
     for h in all_handles:
@@ -59,6 +64,10 @@ def _get_live_actor_records(db: Session) -> List[Dict[str, Any]]:
     wallets_by_actor: Dict[str, list] = {}
     for w in all_wallets:
         wallets_by_actor.setdefault(w.actor_id, []).append(w)
+
+    observations_by_actor: Dict[str, list] = {}
+    for obs in all_observations:
+        observations_by_actor.setdefault(obs.target.lower(), []).append(obs)
 
     records = []
     for a in actors:
@@ -74,6 +83,35 @@ def _get_live_actor_records(db: Session) -> List[Dict[str, Any]]:
         first_seen_str = min(first_dates).strftime("%Y-%m-%d") if first_dates else "N/A"
         last_seen_str = max(last_dates).strftime("%Y-%m-%d") if last_dates else "N/A"
 
+        target_keys = {a.actor_id.lower(), a.primary_handle.lower(), *[h.handle.lower() for h in actor_handles]}
+        actor_observations = [
+            obs
+            for key in target_keys
+            for obs in observations_by_actor.get(key, [])
+        ]
+        # De-duplicate observations that matched more than one target key.
+        actor_observations = list({obs.observation_id: obs for obs in actor_observations}.values())
+        scan_dates = [obs.timestamp for obs in actor_observations if obs.timestamp]
+        last_scan_str = max(scan_dates).strftime("%Y-%m-%d") if scan_dates else "N/A"
+        pgp_list = sorted({
+            key.fingerprint
+            for handle in actor_handles
+            for key in getattr(handle, "pgp_keys", [])
+            if key.fingerprint
+        })
+        infrastructure = sorted({
+            str(obs.value)
+            for obs in actor_observations
+            if obs.value and (
+                "infra" in (obs.indicator_type or "").lower()
+                or "certificate" in (obs.indicator_type or "").lower()
+                or "tls" in (obs.indicator_type or "").lower()
+                or "banner" in (obs.indicator_type or "").lower()
+                or "descriptor" in (obs.indicator_type or "").lower()
+            )
+        })
+        sources = sorted({str(obs.source) for obs in actor_observations if obs.source})
+
         records.append({
             "actor_id": a.actor_id,
             "primary_handle": a.primary_handle,
@@ -82,10 +120,26 @@ def _get_live_actor_records(db: Session) -> List[Dict[str, Any]]:
             "priority_score": a.priority_score,
             "first_seen": first_seen_str,
             "last_seen": last_seen_str,
+            "last_scan_date": last_scan_str,
             "handles": handle_list,
             "handles_count": len(handle_list),
             "wallets": wallet_list,
             "wallets_count": len(wallet_list),
+            "pgp_keys": pgp_list,
+            "infrastructure_indicators": infrastructure,
+            "sources": sources,
+            "observations": [
+                {
+                    "observation_id": obs.observation_id,
+                    "indicator_type": obs.indicator_type,
+                    "value": obs.value,
+                    "source": obs.source,
+                    "confidence": obs.confidence,
+                    "timestamp": obs.timestamp.isoformat() if obs.timestamp else None,
+                    "description": obs.description,
+                }
+                for obs in actor_observations
+            ],
         })
 
     return records
@@ -118,6 +172,10 @@ def export_csv(db: Session = Depends(get_db)):
             "associated_handles": "; ".join(r["handles"]),
             "wallets_count": r["wallets_count"],
             "wallet_addresses": "; ".join(r["wallets"]),
+            "pgp_keys": "; ".join(r["pgp_keys"]),
+            "infrastructure_indicators": "; ".join(r["infrastructure_indicators"]),
+            "sources": "; ".join(r["sources"]),
+            "last_scan_date": r["last_scan_date"],
         })
 
 
@@ -220,7 +278,7 @@ def _build_report_pdf(records: List[Dict[str, Any]]) -> bytes:
 
     # --- Actor detail table ---
     story.append(Paragraph("Actor Records", section_style))
-    table_header = ["Actor ID", "Primary Handle", "Risk", "Conf.", "Priority", "Last Seen", "Handles", "Wallets"]
+    table_header = ["Actor ID", "Primary Handle", "Risk", "Conf.", "Priority", "Last Scan", "PGP", "Infra", "Sources"]
     table_rows = [table_header]
     row_risk_colors = []
     for r in records:
@@ -230,15 +288,16 @@ def _build_report_pdf(records: List[Dict[str, Any]]) -> bytes:
             r.get("risk_category", ""),
             f"{r.get('confidence_score', 0):.2f}" if r.get("confidence_score") is not None else "N/A",
             str(r.get("priority_score", "N/A")),
-            r.get("last_seen", "N/A"),
-            str(r.get("handles_count", 0)),
-            str(r.get("wallets_count", 0)),
+            r.get("last_scan_date", "N/A"),
+            str(len(r.get("pgp_keys", []))),
+            str(len(r.get("infrastructure_indicators", []))),
+            str(len(r.get("sources", []))),
         ])
         row_risk_colors.append(_risk_color(r.get("risk_category", "")))
 
     actor_table = Table(
         table_rows,
-        colWidths=[0.75 * inch, 1.1 * inch, 0.7 * inch, 0.55 * inch, 0.6 * inch, 0.85 * inch, 0.6 * inch, 0.6 * inch],
+        colWidths=[0.7 * inch, 1.05 * inch, 0.72 * inch, 0.5 * inch, 0.55 * inch, 0.72 * inch, 0.45 * inch, 0.48 * inch, 0.48 * inch],
         repeatRows=1,
     )
     table_style_cmds = [
