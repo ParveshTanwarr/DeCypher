@@ -92,10 +92,7 @@ function signalLabel(type: string) {
 
 function graphNodeType(node: GraphNode): string {
   return String(
-    node.type ??
-      node.category ??
-      node.label ??
-      "unknown",
+    node.type || node.category || node.label || "unknown",
   ).trim().toLowerCase();
 }
 
@@ -242,7 +239,7 @@ async function createGraphSnapshot(actorId: string): Promise<string | undefined>
     const midX = (source.x + target.x) / 2;
     const midY = (source.y + target.y) / 2;
     const relation = String(
-      link.relation ?? link.type ?? "RELATED_TO",
+      link.relation || "RELATED_TO",
     ).replace(/_/g, " ");
 
     ctx.font = "500 11px Inter, Arial, sans-serif";
