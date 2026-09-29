@@ -48,7 +48,7 @@ function App() {
   function markAllRead() { setNotifications((items) => items.map((item) => ({ ...item, read: true }))); }
   async function handleExport(format: string) { console.info(`Exported ${format}`); }
 
-  const highRiskCount = actors.filter((a) => ["high", "critical"].includes(String(a.risk_category || "").toLowerCase())).length;
+  const highPriorityCount = actors.filter((a) => Number(a.priority_score || 0) >= 70).length;
   const averageConfidence = actors.length ? actors.reduce((sum, a) => sum + Number(a.confidence_score || 0), 0) / actors.length * 100 : 0;
   const priorityStats = useMemo(() => { const scores = actors.map((a) => Number(a.priority_score || 0)); const average = scores.length ? scores.reduce((a, b) => a + b, 0) / scores.length : 0; return { average, urgent: scores.filter((s) => s >= 70).length }; }, [actors]);
   const navItems: NavItem[] = [{ id: "dashboard", label: "Dashboard", icon: LayoutDashboard }, { id: "search", label: "Investigation Search", icon: Search }];
@@ -73,13 +73,13 @@ function App() {
             <div className="stat-card stat-blue"><span>Total Actors</span><strong>{actors.length}</strong><small>Indexed identities</small><LayoutDashboard size={18} /></div>
             <div className="stat-card stat-red"><span>Priority ≥ High</span><strong>{priorityStats.urgent}</strong><small>Actors needing attention</small><AlertTriangle size={18} /></div>
             <div className="stat-card stat-green"><span>Average Priority</span><strong>{priorityStats.average.toFixed(0)}</strong><small>Derived triage score / 100</small><Target size={18} /></div>
-            <div className="stat-card stat-purple"><span>Average Confidence</span><strong>{averageConfidence.toFixed(1)}%</strong><small>{highRiskCount} high/critical risk actors</small><ShieldCheck size={18} /></div>
+            <div className="stat-card stat-purple"><span>Average Confidence</span><strong>{averageConfidence.toFixed(1)}%</strong><small>{highPriorityCount} high/critical priority actors</small><ShieldCheck size={18} /></div>
           </section>
           <section className="dashboard-grid">
             <div className="panel actors-panel"><div className="panel-header"><div><div className="eyebrow">PRIORITY QUEUE</div><h3>Actors requiring attention</h3></div><button className="secondary-button" onClick={() => setPage("search")}>View all <span aria-hidden="true">→</span></button></div>
               <div className="table-container"><table><thead><tr><th>Actor</th><th>Primary handle</th><th>Risk</th><th>Priority</th><th>Confidence</th><th>Last active</th></tr></thead><tbody>{actors.slice(0, 10).map((actor) => { const score = Number(actor.priority_score || 0); return <tr key={actor.actor_id} className="clickable-row" onClick={() => openActor(actor.actor_id)}><td className="actor-id">{actor.actor_id}</td><td>{actor.primary_handle}</td><td><span className={`risk-badge ${String(actor.risk_category || "").toLowerCase()}`}>{actor.risk_category}</span></td><td><span className={`priority-pill ${priorityClass(score)}`}><span>{score}</span> / 100</span></td><td>{(Number(actor.confidence_score || 0) * 100).toFixed(1)}%</td><td>{actor.last_active || "—"}</td></tr>; })}</tbody></table></div>
             </div>
-            <aside className="priority-panel"><div className="priority-panel-top"><div><div className="eyebrow">TRIAGE MODEL</div><h3>Priority score</h3></div><BarChart3 size={18} /></div><div className="priority-score-big">{priorityStats.average.toFixed(0)}<span>/100</span></div><p>Transparent operational ranking. {highRiskCount} actors are currently classified as high or critical risk. This is a triage score, not a probability of identity.</p><div className="priority-legend"><div><span className="legend-swatch critical" />Critical <b>85–100</b></div><div><span className="legend-swatch high" />High <b>70–84</b></div><div><span className="legend-swatch medium" />Medium <b>50–69</b></div><div><span className="legend-swatch low" />Low <b>0–49</b></div></div></aside>
+            <aside className="priority-panel"><div className="priority-panel-top"><div><div className="eyebrow">TRIAGE MODEL</div><h3>Priority score</h3></div><BarChart3 size={18} /></div><div className="priority-score-big">{priorityStats.average.toFixed(0)}<span>/100</span></div><p>Transparent operational ranking. {highPriorityCount} actors are currently at high or critical priority. This is a triage score, not a probability of identity.</p><div className="priority-legend"><div><span className="legend-swatch critical" />Critical <b>85–100</b></div><div><span className="legend-swatch high" />High <b>70–84</b></div><div><span className="legend-swatch medium" />Medium <b>50–69</b></div><div><span className="legend-swatch low" />Low <b>0–49</b></div></div></aside>
           </section>
         </>}
       </>}
