@@ -113,6 +113,7 @@ def get_actors(
                 primary_handle=actor.primary_handle,
                 risk_category=actor.risk_category,
                 confidence_score=actor.confidence_score,
+                priority_score=actor.priority_score,
                 associated_handles=[h.handle for h in actor_handles],
                 last_active=last_active_str,
             )
