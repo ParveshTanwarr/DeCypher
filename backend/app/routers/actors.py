@@ -372,6 +372,11 @@ def get_actor_subgraph(actor_id: str, db: Session = Depends(get_db)):
                 label="Actor",
                 name=actor.primary_handle,
                 category="Actor",
+                properties={
+                    "priority_score": actor.priority_score,
+                    "confidence_score": actor.confidence_score,
+                    "risk_category": actor.risk_category,
+                },
             )
         ]
 
@@ -825,6 +830,6 @@ def get_actor_subgraph(actor_id: str, db: Session = Depends(get_db)):
         unique_links[(link.source, link.target, link.relation)] = link
 
     return GraphPayload(
-        nodes=nodes,
-        links=links,
+        nodes=list(unique_nodes.values()),
+        links=list(unique_links.values()),
     )
