@@ -79,12 +79,7 @@ export default function GraphPage({
         "Unknown entity",
     ),
 
-    type: String(
-      node.type ??
-        node.category ??
-        node.label ??
-        "unknown",
-    ),
+    type: node.type,
   }),
 );
 
@@ -100,11 +95,7 @@ export default function GraphPage({
       link.target,
     ),
 
-    type: String(
-      link.type ??
-        link.relation ??
-        "RELATED_TO",
-    ),
+    relation: link.relation,
   }),
 );
 
@@ -150,7 +141,7 @@ export default function GraphPage({
   ): string {
     const explicitType =
       String(
-        node.type ?? "",
+        node.type,
       )
         .trim()
         .toLowerCase();
