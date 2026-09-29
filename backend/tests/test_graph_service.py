@@ -15,8 +15,8 @@ def test_sync_actor_batch_issues_expected_writes():
     with patch.object(graph_service.neo4j_conn, "write", side_effect=fake_write):
         graph_service.sync_actor_batch(
             actors=[{"actor_id": "A00001", "primary_handle": "nyxinhex99", "risk_category": "drugs"}],
-            handles=[{"handle": "nyxinhex99", "platform": "X", "actor_id": "A00001", "status": "active"}],
-            wallets=[{"address": "w1", "associated_handle": "nyxinhex99", "currency": "BTC"}],
+            handles=[{"handle_id": "H00001", "handle": "nyxinhex99", "platform": "X", "actor_id": "A00001", "status": "active"}],
+            wallets=[{"address": "w1", "handle_id": "H00001", "associated_handle": "nyxinhex99", "currency": "BTC"}],
         )
 
     assert len(calls) == 3
@@ -38,6 +38,7 @@ def test_get_actor_subgraph_returns_correlation_data():
     fake_row = {
         "actor_id": "A00001",
         "primary_handle": "nyxinhex99",
+        "handle_nodes": [{"handle_id": "H00001", "handle": "nyxinhex99", "platform": "X"}, {"handle_id": "H00002", "handle": "vexatrace", "platform": "Y"}],
         "handles": ["nyxinhex99", "vexatrace"],
         "wallets": ["w1"],
         "correlated_handles": ["some_other_handle"],
@@ -98,3 +99,25 @@ def test_actor_graph_uses_postgres_fallback(client, admin_headers):
     assert payload["links"]
     actor_node = next(node for node in payload["nodes"] if node["id"] == "A00001")
     assert actor_node["properties"]["priority_score"] is not None
+\n\ndef test_graph_sync_uses_handle_id_when_names_collide():
+    calls = []
+
+    def fake_write(query, params):
+        calls.append((query, params))
+
+    with patch.object(graph_service.neo4j_conn, "write", side_effect=fake_write):
+        graph_service.sync_actor_batch(
+            actors=[
+                {"actor_id": "A00001", "primary_handle": "shared", "risk_category": "drugs"},
+                {"actor_id": "A00002", "primary_handle": "shared", "risk_category": "fraud"},
+            ],
+            handles=[
+                {"handle_id": "H00001", "handle": "shared", "platform": "X", "actor_id": "A00001", "status": "active"},
+                {"handle_id": "H00002", "handle": "shared", "platform": "Y", "actor_id": "A00002", "status": "active"},
+            ],
+            wallets=[],
+        )
+
+    query, params = calls[1]
+    assert "MERGE (h:Handle {handle_id: row.handle_id})" in query
+    assert {row["handle_id"] for row in params["rows"]} == {"H00001", "H00002"}
