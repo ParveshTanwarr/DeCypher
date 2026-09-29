@@ -992,6 +992,14 @@ export default function GraphPage({
                 "Observation",
                 "#ffa94d",
               ],
+              [
+                "PGP Key",
+                "#f783ac",
+              ],
+              [
+                "Trusted Handle",
+                "#74c0fc",
+              ],
             ].map(
               ([name, color]) => (
                 <div
