@@ -14,6 +14,7 @@ interface ActorDetail {
   priority_score: number;
   first_seen: string;
   last_seen: string;
+  last_scan_date?: string;
   handles: string[];
   wallets: string[];
   marketplaces: string[];
@@ -42,6 +43,7 @@ interface Evidence {
   detected: boolean;
   value?: string;
   timestamp?: string;
+  source?: string;
 }
 
 function formatPercent(value: number) {
@@ -278,6 +280,11 @@ export default function ActorPage({
           <div>
             <div className="eyebrow">LAST SEEN</div>
             <strong>{formatDate(actor.last_seen)}</strong>
+          </div>
+
+          <div>
+            <div className="eyebrow">LAST SCAN</div>
+            <strong>{formatDate(actor.last_scan_date)}</strong>
           </div>
         </div>
       </div>
@@ -877,6 +884,9 @@ export default function ActorPage({
                       >
                         <span>
                           {item.observation_id}
+                        </span>
+                        <span>
+                          Source: {item.source || "unknown"}
                         </span>
                       </div>
                     </div>
