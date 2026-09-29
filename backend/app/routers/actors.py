@@ -56,6 +56,15 @@ def _build_actor_detail(actor: Actor, db: Session) -> ActorDetail:
 
     platforms = list({h.platform for h in handles if h.platform})
 
+    target_keys = [actor.actor_id.lower(), actor.primary_handle.lower(), *[h.handle.lower() for h in handles]]
+    scan_observations = (
+        db.query(Observation)
+        .filter(func.lower(Observation.target).in_(target_keys), Observation.detected.is_(True))
+        .all()
+    )
+    scan_dates = [o.timestamp for o in scan_observations if o.timestamp]
+    last_scan_date = max(scan_dates).strftime("%Y-%m-%d") if scan_dates else None
+
     return ActorDetail(
         actor_id=actor.actor_id,
         primary_handle=actor.primary_handle,
@@ -63,6 +72,7 @@ def _build_actor_detail(actor: Actor, db: Session) -> ActorDetail:
         confidence_score=actor.confidence_score,
         priority_score=actor.priority_score,
         first_seen=first_seen_str,
+        last_scan_date=last_scan_date,
         last_seen=last_seen_str,
         handles=handle_names,
         wallets=wallet_addrs,
