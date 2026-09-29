@@ -1,9 +1,11 @@
+import base64
 import csv
 import io
 from collections import Counter
 from datetime import datetime, timezone
 from typing import Any, Dict, List
 from fastapi import APIRouter, Depends, Response, HTTPException
+from pydantic import BaseModel
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 
@@ -12,7 +14,7 @@ from reportlab.lib.pagesizes import letter
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import inch
 from reportlab.platypus import (
-    SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, PageBreak,
+    SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, PageBreak, Image as ReportLabImage,
 )
 
 from app.database.postgres import get_db
@@ -22,6 +24,10 @@ from app.routers.auth import require_role
 # Bulk export is limited to authenticated investigative roles because it
 # exposes the consolidated actor intelligence result set.
 router = APIRouter(prefix="/export", tags=["Export"], dependencies=[Depends(require_role("admin", "investigator"))])
+
+class ActorReportExportRequest(BaseModel):
+    graph_image: str | None = None
+
 
 CSV_HEADERS = [
     "actor_id",
@@ -226,6 +232,22 @@ def export_actor_report(actor_id: str, db: Session = Depends(get_db)):
     )
 
 
+@router.post("/actor/{actor_id}/report")
+def export_actor_report_with_graph(
+    actor_id: str,
+    payload: ActorReportExportRequest,
+    db: Session = Depends(get_db),
+):
+    record = _get_actor_record(db, actor_id)
+    pdf_bytes = _build_report_pdf([record], graph_image=payload.graph_image)
+    safe_id = "".join(ch if ch.isalnum() or ch in "-_" else "_" for ch in actor_id)
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f"attachment; filename=actor_{safe_id}_report.pdf"},
+    )
+
+
 @router.get("/json")
 def export_json(db: Session = Depends(get_db)):
     records = _get_live_actor_records(db)
@@ -294,7 +316,7 @@ def _risk_color(risk_category: str) -> colors.Color:
     return RISK_COLORS.get((risk_category or "").strip().lower(), colors.HexColor("#374151"))
 
 
-def _build_report_pdf(records: List[Dict[str, Any]]) -> bytes:
+def _build_report_pdf(records: List[Dict[str, Any]], graph_image: str | None = None) -> bytes:
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(
         buffer, pagesize=letter,
@@ -363,6 +385,131 @@ def _build_report_pdf(records: List[Dict[str, Any]]) -> bytes:
         "support -- not replace -- human investigator review.",
         disclaimer_style,
     ))
+    # --- Detailed actor intelligence ---
+    if records:
+        record = records[0]
+        story.append(Paragraph("Actor Intelligence", section_style))
+        identity_rows = [
+            ["Actor ID", str(record.get("actor_id", "N/A"))],
+            ["Primary handle", str(record.get("primary_handle", "N/A"))],
+            ["Risk category", str(record.get("risk_category", "N/A"))],
+            ["Attribution confidence", f"{float(record.get("confidence_score") or 0):.2f}"],
+            ["Priority score", str(record.get("priority_score", "N/A"))],
+            ["First seen", str(record.get("first_seen", "N/A"))],
+            ["Last seen", str(record.get("last_seen", "N/A"))],
+            ["Last scan", str(record.get("last_scan_date", "N/A"))],
+        ]
+        identity_table = Table(identity_rows, colWidths=[1.8 * inch, 4.6 * inch])
+        identity_table.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (0, -1), colors.HexColor("#E5E7EB")),
+            ("FONTNAME", (0, 0), (0, -1), "Helvetica-Bold"),
+            ("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#D1D5DB")),
+            ("FONTSIZE", (0, 0), (-1, -1), 9),
+            ("VALIGN", (0, 0), (-1, -1), "TOP"),
+            ("TOPPADDING", (0, 0), (-1, -1), 5),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+        ]))
+        story.append(identity_table)
+        story.append(Spacer(1, 10))
+
+        def _joined(values: list) -> str:
+            return ", ".join(str(v) for v in values if v) or "None recorded"
+
+        intelligence_rows = [
+            ["Associated handles", _joined(record.get("handles", []))],
+            ["Wallet addresses", _joined(record.get("wallets", []))],
+            ["PGP fingerprints", _joined(record.get("pgp_keys", []))],
+            ["Infrastructure indicators", _joined(record.get("infrastructure_indicators", []))],
+            ["Evidence sources", _joined(record.get("sources", []))],
+        ]
+        intelligence_table = Table(intelligence_rows, colWidths=[1.8 * inch, 4.6 * inch])
+        intelligence_table.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (0, -1), colors.HexColor("#F3F4F6")),
+            ("FONTNAME", (0, 0), (0, -1), "Helvetica-Bold"),
+            ("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#D1D5DB")),
+            ("FONTSIZE", (0, 0), (-1, -1), 8),
+            ("VALIGN", (0, 0), (-1, -1), "TOP"),
+            ("TOPPADDING", (0, 0), (-1, -1), 5),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+        ]))
+        story.append(intelligence_table)
+
+        # Trust relationships
+        trust_links = record.get("trust_links", [])
+        if trust_links:
+            story.append(Spacer(1, 10))
+            story.append(Paragraph("Persona / Trust Linkages", section_style))
+            trust_rows = [["Source", "Target", "Relationship", "Confidence"]]
+            for link in trust_links:
+                trust_rows.append([
+                    str(link.get("source", "")),
+                    str(link.get("target", "")),
+                    str(link.get("relationship_type", "")),
+                    f"{float(link.get("confidence") or 0):.0%}",
+                ])
+            trust_table = Table(trust_rows, colWidths=[1.55*inch, 1.55*inch, 1.65*inch, 1.25*inch], repeatRows=1)
+            trust_table.setStyle(TableStyle([
+                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#111827")),
+                ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+                ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                ("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#D1D5DB")),
+                ("FONTSIZE", (0, 0), (-1, -1), 7.5),
+                ("VALIGN", (0, 0), (-1, -1), "TOP"),
+            ]))
+            story.append(trust_table)
+
+        # Evidence records
+        observations = record.get("observations", [])
+        if observations:
+            story.append(PageBreak())
+            story.append(Paragraph("Evidence Records", section_style))
+            evidence_rows = [["Type", "Value / Target", "Source", "Confidence", "Timestamp"]]
+            for obs in observations:
+                evidence_rows.append([
+                    str(obs.get("indicator_type", "unknown")),
+                    str(obs.get("value") or obs.get("description") or obs.get("target") or "N/A")[:90],
+                    str(obs.get("source") or "N/A"),
+                    f"{float(obs.get("confidence") or 0):.0%}",
+                    str(obs.get("timestamp") or "N/A")[:19],
+                ])
+            evidence_table = Table(
+                evidence_rows,
+                colWidths=[1.0*inch, 2.45*inch, 1.25*inch, 0.8*inch, 1.0*inch],
+                repeatRows=1,
+            )
+            evidence_table.setStyle(TableStyle([
+                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#111827")),
+                ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+                ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                ("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#D1D5DB")),
+                ("FONTSIZE", (0, 0), (-1, -1), 7),
+                ("VALIGN", (0, 0), (-1, -1), "TOP"),
+            ]))
+            story.append(evidence_table)
+
+        # Browser-generated investigation graph snapshot.
+        if graph_image:
+            try:
+                encoded = graph_image.split(",", 1)[1] if "," in graph_image else graph_image
+                graph_bytes = base64.b64decode(encoded, validate=True)
+                story.append(PageBreak())
+                story.append(Paragraph("Investigation Graph Snapshot", section_style))
+                story.append(Paragraph(
+                    "Relationship snapshot generated from the actor graph returned by the DeCypher API.",
+                    body_style,
+                ))
+                image_buffer = io.BytesIO(graph_bytes)
+                graph_flowable = ReportLabImage(image_buffer, width=7.1 * inch, height=4.35 * inch)
+                graph_flowable.hAlign = "CENTER"
+                story.append(Spacer(1, 8))
+                story.append(graph_flowable)
+            except Exception:
+                # A malformed optional image must never break actor export.
+                story.append(Paragraph(
+                    "Graph snapshot could not be embedded in this export.",
+                    body_style,
+                ))
+
     story.append(PageBreak())
 
     # --- Actor detail table ---
