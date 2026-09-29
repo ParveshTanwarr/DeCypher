@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Activity, AlertTriangle, BarChart3, GitBranch, LayoutDashboard, LogOut, Search, ShieldCheck, Target } from "lucide-react";
+import { Activity, AlertTriangle, BarChart3, GitBranch, LayoutDashboard, LogOut, Moon, Search, ShieldCheck, Sun, Target } from "lucide-react";
 import "./App.css";
 import "./dashboard.css";
 import { getActors, getAllCorrelations, setAuthToken } from "./api/client";
@@ -23,6 +23,12 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState("");
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
+  const [theme, setTheme] = useState<"dark" | "light">(() => (localStorage.getItem("decypher_theme") as "dark" | "light") || "dark");
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+    localStorage.setItem("decypher_theme", theme);
+  }, [theme]);
 
   useEffect(() => {
     if (!token) return;
@@ -61,7 +67,7 @@ function App() {
       <div className="sidebar-label">Workspace</div>
       <nav aria-label="Primary navigation">{navItems.map(({ id, label, icon: Icon }) => <button key={id} className={`nav-item${page === id ? " active" : ""}`} onClick={() => setPage(id)}><span className="nav-icon"><Icon size={16} strokeWidth={1.8} /></span><span className="nav-label">{label}</span></button>)}</nav>
       <div className="sidebar-status"><span className="status-dot" /><div><strong>System online</strong><small>Evidence correlation engine ready</small></div></div>
-      <div className="sidebar-bottom"><div className="sidebar-meta"><Activity size={13} /><span>LIVE WORKSPACE</span></div><button className="logout-button" onClick={handleLogout}><LogOut size={15} /><span>Sign out</span></button></div>
+      <div className="sidebar-bottom"><div className="sidebar-meta"><Activity size={13} /><span>LIVE WORKSPACE</span></div><button className="theme-toggle" onClick={() => setTheme((value) => value === "dark" ? "light" : "dark")} aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} mode`} title={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}><span className="theme-toggle-icon">{theme === "dark" ? <Sun size={14} /> : <Moon size={14} />}</span><span>{theme === "dark" ? "Light mode" : "Dark mode"}</span></button><button className="logout-button" onClick={handleLogout}><LogOut size={15} /><span>Sign out</span></button></div>
     </aside>
 
     <main className="main-content"><div className="content-frame">
