@@ -9,12 +9,16 @@ Graph schema:
     (:Marketplace)
     (:Infrastructure)
     (:Observation)
+    (:PGPKey)
 
 Relationships:
 
     Actor -[:USES_HANDLE]-> Handle
     Handle -[:USED_WALLET]-> Wallet
     Handle -[:USES_MARKETPLACE]-> Marketplace
+    Handle -[:HAS_PGP_KEY]-> PGPKey
+    Handle -[:TRUSTS]-> Handle
+    PGPKey -[:TRUSTS]-> Handle
     Actor -[:HAS_INFRASTRUCTURE]-> Infrastructure
     Actor -[:HAS_OBSERVATION]-> Observation
     Handle -[:HAS_OBSERVATION]-> Observation
