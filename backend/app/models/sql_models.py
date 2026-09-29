@@ -86,6 +86,14 @@ class TrustLink(Base):
     source_handle = relationship("DarkWebHandle", foreign_keys=[source_handle_id], back_populates="trust_links_out")
     target_handle = relationship("DarkWebHandle", foreign_keys=[target_handle_id], back_populates="trust_links_in")
     source_pgp_key = relationship("PGPKey", foreign_keys=[source_pgp_key_id], back_populates="trust_links")
+    __table_args__ = (
+        UniqueConstraint(
+            "source_handle_id",
+            "target_handle_id",
+            "relationship_type",
+            name="uq_trust_link_pair_type",
+        ),
+    )
 
 
 class Wallet(Base):
