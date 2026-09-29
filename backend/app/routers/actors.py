@@ -63,11 +63,14 @@ def _build_actor_detail(actor: Actor, db: Session) -> ActorDetail:
         .all()
     )
     scan_dates = [o.timestamp for o in scan_observations if o.timestamp]
-    target_scan_dates = [
-        target.last_scan_at
-        for target in db.query(ScanTarget)
+    actor_scan_targets = (
+        db.query(ScanTarget)
         .filter(ScanTarget.actor_id == actor.actor_id)
         .all()
+    )
+    target_scan_dates = [
+        target.last_scan_at
+        for target in actor_scan_targets
         if target.last_scan_at
     ]
     latest_scan = max(target_scan_dates or scan_dates, default=None)
@@ -87,7 +90,20 @@ def _build_actor_detail(actor: Actor, db: Session) -> ActorDetail:
         marketplaces=platforms,
         pgp_keys=pgp_fingerprints,
         trust_links=trust_links,
-        evidence_trail=[],
+        evidence_trail=[
+            {
+                "observation_id": o.observation_id,
+                "indicator_type": o.indicator_type,
+                "detected": o.detected,
+                "value": o.value,
+                "target": o.target,
+                "source": o.source,
+                "confidence": o.confidence,
+                "timestamp": o.timestamp,
+                "description": o.description,
+            }
+            for o in scan_observations
+        ],
     )
 
 
@@ -160,10 +176,30 @@ def get_actor_evidence(actor_id: str, db: Session = Depends(get_db)):
         handles = db.query(DarkWebHandle).filter(DarkWebHandle.actor_id == actor.actor_id).all()
         target_keys.extend([h.handle.lower() for h in handles])
 
+        # Scanner observations may be keyed by the monitored URL rather
+        # than the actor/handle. Include the actor's scan targets so the
+        # investigation view does not lose real scanner evidence.
+        scan_targets = (
+            db.query(ScanTarget)
+            .filter(ScanTarget.actor_id == actor.actor_id)
+            .all()
+        )
+        target_keys.extend(
+            target.target_url.lower()
+            for target in scan_targets
+            if target.target_url
+        )
+        target_keys.extend(
+            target.name.lower()
+            for target in scan_targets
+            if target.name
+        )
+
     # Query filtered directly in SQL instead of doing full table scan
     matched_observations = (
         db.query(Observation)
         .filter(func.lower(Observation.target).in_(target_keys))
+        .order_by(Observation.timestamp.desc())
         .all()
     )
 
