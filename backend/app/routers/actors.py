@@ -12,7 +12,7 @@ from app.models.schemas import (
     GraphNode,
     GraphPayload,
 )
-from app.models.sql_models import Actor, DarkWebHandle, Wallet, Observation, PGPKey, TrustLink, Marketplace
+from app.models.sql_models import Actor, DarkWebHandle, Wallet, Observation, PGPKey, TrustLink, Marketplace, ScanTarget
 from app.routers.auth import get_current_user
 from app.services import graph_service
 
@@ -63,7 +63,15 @@ def _build_actor_detail(actor: Actor, db: Session) -> ActorDetail:
         .all()
     )
     scan_dates = [o.timestamp for o in scan_observations if o.timestamp]
-    last_scan_date = max(scan_dates).strftime("%Y-%m-%d") if scan_dates else None
+    target_scan_dates = [
+        target.last_scan_at
+        for target in db.query(ScanTarget)
+        .filter(ScanTarget.actor_id == actor.actor_id)
+        .all()
+        if target.last_scan_at
+    ]
+    latest_scan = max(target_scan_dates or scan_dates, default=None)
+    last_scan_date = latest_scan.strftime("%Y-%m-%d") if latest_scan else None
 
     return ActorDetail(
         actor_id=actor.actor_id,
