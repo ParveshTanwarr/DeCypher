@@ -403,7 +403,6 @@ def init_db_and_load_csvs(reset_tables: bool = False, sync_neo4j: bool = True):
     wallet_pairs_for_neo4j = []
     pgp_records_count = 0
     trust_records_count = 0
-    trust_links_for_neo4j = []
     trust_df_for_neo4j = None
 
     session = SessionLocal()
