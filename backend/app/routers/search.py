@@ -4,7 +4,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.database.postgres import get_db
-from app.models.sql_models import Actor, DarkWebHandle, Wallet
+from app.models.sql_models import Actor, DarkWebHandle, Wallet, PGPKey, handle_pgp_keys
 from app.routers.auth import get_current_user
 
 router = APIRouter(prefix="/search", tags=["Search"], dependencies=[Depends(get_current_user)])
@@ -94,6 +94,30 @@ def global_search(
                         type="wallet",
                         id=actor.actor_id,
                         matched_value=wallet.address,
+                        risk_category=actor.risk_category,
+                    )
+                )
+
+    # 4. Search normalized PGP fingerprints through the handle-key association.
+    if len(results) < limit:
+        remaining = limit - len(results)
+        matched_pgp = (
+            db.query(PGPKey, DarkWebHandle, Actor)
+            .join(handle_pgp_keys, PGPKey.id == handle_pgp_keys.c.pgp_key_id)
+            .join(DarkWebHandle, DarkWebHandle.id == handle_pgp_keys.c.handle_id)
+            .join(Actor, DarkWebHandle.actor_id == Actor.actor_id)
+            .filter(PGPKey.fingerprint.ilike(search_pattern))
+            .limit(remaining)
+            .all()
+        )
+        for key, handle, actor in matched_pgp:
+            if actor.actor_id not in seen_actor_ids:
+                seen_actor_ids.add(actor.actor_id)
+                results.append(
+                    SearchResultItem(
+                        type="pgp_key",
+                        id=actor.actor_id,
+                        matched_value=key.fingerprint,
                         risk_category=actor.risk_category,
                     )
                 )

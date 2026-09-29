@@ -45,6 +45,8 @@ class ActorDetail(BaseModel):
     handles: List[str] = Field(default_factory=list)
     wallets: List[str] = Field(default_factory=list)
     marketplaces: List[str] = Field(default_factory=list)
+    pgp_keys: List[str] = Field(default_factory=list)
+    trust_links: List[Dict[str, Any]] = Field(default_factory=list)
     evidence_trail: List[EvidenceSignal] = Field(default_factory=list)
 
 

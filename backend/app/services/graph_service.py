@@ -9,12 +9,16 @@ Graph schema:
     (:Marketplace)
     (:Infrastructure)
     (:Observation)
+    (:PGPKey)
 
 Relationships:
 
     Actor -[:USES_HANDLE]-> Handle
     Handle -[:USED_WALLET]-> Wallet
     Handle -[:USES_MARKETPLACE]-> Marketplace
+    Handle -[:HAS_PGP_KEY]-> PGPKey
+    Handle -[:TRUSTS]-> Handle
+    PGPKey -[:TRUSTS]-> Handle
     Actor -[:HAS_INFRASTRUCTURE]-> Infrastructure
     Actor -[:HAS_OBSERVATION]-> Observation
     Handle -[:HAS_OBSERVATION]-> Observation
@@ -109,6 +113,110 @@ def sync_actor_batch(
                 """,
                 {"rows": wallet_rows},
             )
+
+
+def sync_pgp_and_trust_graph(
+    handles: List[Dict[str, Any]],
+    trust_links: List[Dict[str, Any]],
+) -> None:
+    """Synchronize normalized PGP keys and synthetic trust relationships."""
+
+    handle_rows = [
+        row for row in handles
+        if row.get("handle") and row.get("actor_id")
+    ]
+
+    if handle_rows:
+        neo4j_conn.write(
+            """
+            UNWIND $rows AS row
+            MATCH (h:Handle {handle: row.handle})
+            SET h.pgp_fingerprint = row.pgp_fingerprint
+
+            FOREACH (
+                fingerprint IN CASE
+                    WHEN row.pgp_fingerprint IS NULL OR row.pgp_fingerprint = ""
+                    THEN []
+                    ELSE [toUpper(row.pgp_fingerprint)]
+                END |
+                    MERGE (p:PGPKey {fingerprint: fingerprint})
+                    SET p.key_type = "OpenPGP",
+                        p.source = "synthetic_dataset"
+                    MERGE (h)-[:HAS_PGP_KEY]->(p)
+            )
+            """,
+            {"rows": handle_rows},
+        )
+
+    if not trust_links:
+        return
+
+    by_id = {
+        str(row.get("handle_id")): row
+        for row in handles
+        if row.get("handle_id") is not None
+    }
+
+    rows = []
+    for link in trust_links:
+        source = by_id.get(str(link.get("source_handle_id")))
+        target = by_id.get(str(link.get("target_handle_id")))
+        if not source or not target:
+            continue
+        if not source.get("handle") or not target.get("handle"):
+            continue
+
+        rows.append({
+            "source_handle": source["handle"],
+            "target_handle": target["handle"],
+            "source_pgp_fingerprint": (
+                str(source.get("pgp_fingerprint") or "").strip().upper()
+                or None
+            ),
+            "relationship_type": link.get("relationship_type") or "trust",
+            "source": link.get("source") or "synthetic_dataset",
+            "confidence": float(link.get("confidence") or 0.75),
+            "first_seen": link.get("first_seen"),
+            "last_seen": link.get("last_seen"),
+        })
+
+    if not rows:
+        return
+
+    neo4j_conn.write(
+        """
+        UNWIND $rows AS row
+
+        MATCH (source:Handle {handle: row.source_handle})
+        MATCH (target:Handle {handle: row.target_handle})
+
+        MERGE (source)-[t:TRUSTS]->(target)
+        SET t.relationship_type = row.relationship_type,
+            t.source = row.source,
+            t.confidence = row.confidence,
+            t.first_seen = row.first_seen,
+            t.last_seen = row.last_seen
+
+        FOREACH (
+            fingerprint IN CASE
+                WHEN row.source_pgp_fingerprint IS NULL
+                THEN []
+                ELSE [row.source_pgp_fingerprint]
+            END |
+                MERGE (p:PGPKey {fingerprint: fingerprint})
+                SET p.key_type = "OpenPGP",
+                    p.source = row.source
+                MERGE (source)-[:HAS_PGP_KEY]->(p)
+                MERGE (p)-[pt:TRUSTS]->(target)
+                SET pt.relationship_type = row.relationship_type,
+                    pt.source = row.source,
+                    pt.confidence = row.confidence,
+                    pt.first_seen = row.first_seen,
+                    pt.last_seen = row.last_seen
+        )
+        """,
+        {"rows": rows},
+    )
 
 
 def sync_actor_observations(
@@ -257,6 +365,10 @@ def get_actor_subgraph(
 
             OPTIONAL MATCH (h)-[:USES_MARKETPLACE]->(m:Marketplace)
 
+            OPTIONAL MATCH (h)-[:HAS_PGP_KEY]->(p:PGPKey)
+            OPTIONAL MATCH (h)-[t:TRUSTS]->(trusted:Handle)
+            OPTIONAL MATCH (h)<-[ti:TRUSTS]-(trusting:Handle)
+
             OPTIONAL MATCH (a)-[:HAS_OBSERVATION]->(o:Observation)
             OPTIONAL MATCH (o)-[:EVIDENCE_OF]->(i:Infrastructure)
 
@@ -278,6 +390,37 @@ def get_actor_subgraph(
                 ) AS wallet_correlations,
 
                 collect(DISTINCT m.name) AS marketplaces,
+
+                collect(DISTINCT {
+                    fingerprint: p.fingerprint,
+                    key_type: p.key_type,
+                    source: p.source
+                }) AS pgp_keys,
+
+                collect(DISTINCT {
+                    handle: h.handle,
+                    fingerprint: p.fingerprint
+                }) AS handle_pgp_keys,
+
+                collect(DISTINCT {
+                    source: h.handle,
+                    target: trusted.handle,
+                    relationship_type: t.relationship_type,
+                    confidence: t.confidence,
+                    source_name: t.source,
+                    first_seen: t.first_seen,
+                    last_seen: t.last_seen
+                }) AS trust_links_out,
+
+                collect(DISTINCT {
+                    source: trusting.handle,
+                    target: h.handle,
+                    relationship_type: ti.relationship_type,
+                    confidence: ti.confidence,
+                    source_name: ti.source,
+                    first_seen: ti.first_seen,
+                    last_seen: ti.last_seen
+                }) AS trust_links_in,
 
 collect(
     DISTINCT {
@@ -341,6 +484,18 @@ collect(
             and pair.get("handle")
             and pair.get("handle") not in row["handles"]
         )
+    ]
+
+    row["pgp_keys"] = [
+        key for key in row.get("pgp_keys", [])
+        if key and key.get("fingerprint")
+    ]
+
+    row["trust_links"] = [
+        link for link in (
+            row.get("trust_links_out", []) + row.get("trust_links_in", [])
+        )
+        if link and link.get("source") and link.get("target")
     ]
 
     row["marketplaces"] = [

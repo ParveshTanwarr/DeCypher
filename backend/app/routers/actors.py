@@ -12,7 +12,7 @@ from app.models.schemas import (
     GraphNode,
     GraphPayload,
 )
-from app.models.sql_models import Actor, DarkWebHandle, Wallet, Observation
+from app.models.sql_models import Actor, DarkWebHandle, Wallet, Observation, PGPKey, TrustLink
 from app.routers.auth import get_current_user
 from app.services import graph_service
 
@@ -25,6 +25,28 @@ def _build_actor_detail(actor: Actor, db: Session) -> ActorDetail:
 
     handle_names = [h.handle for h in handles]
     wallet_addrs = [w.address for w in wallets]
+
+    pgp_fingerprints = sorted({
+        key.fingerprint
+        for handle in handles
+        for key in getattr(handle, "pgp_keys", [])
+        if key.fingerprint
+    })
+
+    trust_links = [
+        {
+            "source": link.source_handle.handle,
+            "target": link.target_handle.handle,
+            "relationship_type": link.relationship_type,
+            "confidence": link.confidence,
+            "source_name": link.source,
+            "first_seen": link.first_seen,
+            "last_seen": link.last_seen,
+        }
+        for handle in handles
+        for link in (handle.trust_links_out + handle.trust_links_in)
+        if link.source_handle and link.target_handle
+    ]
 
     first_dates = [h.first_seen for h in handles if h.first_seen]
     last_dates = [h.last_seen for h in handles if h.last_seen]
@@ -45,6 +67,8 @@ def _build_actor_detail(actor: Actor, db: Session) -> ActorDetail:
         handles=handle_names,
         wallets=wallet_addrs,
         marketplaces=platforms,
+        pgp_keys=pgp_fingerprints,
+        trust_links=trust_links,
         evidence_trail=[],
     )
 
@@ -195,6 +219,26 @@ def get_actor_subgraph(actor_id: str, db: Session = Depends(get_db)):
         .all()
     )
 
+    actor_handle_ids = [h.id for h in handles]
+    actor_trust_links = (
+        db.query(TrustLink)
+        .filter(TrustLink.source_handle_id.in_(actor_handle_ids))
+        .all()
+        if actor_handle_ids
+        else []
+    )
+    related_handle_ids = set(actor_handle_ids)
+    for link in actor_trust_links:
+        related_handle_ids.add(link.target_handle_id)
+
+    graph_identity_handles = (
+        db.query(DarkWebHandle)
+        .filter(DarkWebHandle.id.in_(related_handle_ids))
+        .all()
+        if related_handle_ids
+        else []
+    )
+
     # ---------------------------------------------------------
     # Synchronize the current actor's PostgreSQL evidence into
     # Neo4j. This makes the graph usable even when the ingestion
@@ -228,6 +272,34 @@ def get_actor_subgraph(actor_id: str, db: Session = Depends(get_db)):
                     "associated_handle": w.associated_handle,
                 }
                 for w in wallets
+            ],
+        )
+
+        graph_service.sync_pgp_and_trust_graph(
+            [
+                {
+                    "handle_id": h.id,
+                    "actor_id": h.actor_id,
+                    "handle": h.handle,
+                    "pgp_fingerprint": (
+                        h.pgp_keys[0].fingerprint
+                        if h.pgp_keys
+                        else None
+                    ),
+                }
+                for h in graph_identity_handles
+            ],
+            [
+                {
+                    "source_handle_id": link.source_handle_id,
+                    "target_handle_id": link.target_handle_id,
+                    "relationship_type": link.relationship_type,
+                    "confidence": link.confidence,
+                    "source": link.source,
+                    "first_seen": link.first_seen.isoformat() if link.first_seen else None,
+                    "last_seen": link.last_seen.isoformat() if link.last_seen else None,
+                }
+                for link in actor_trust_links
             ],
         )
 
@@ -294,6 +366,74 @@ def get_actor_subgraph(actor_id: str, db: Session = Depends(get_db)):
                     source=actor.actor_id,
                     target=f"handle:{handle}",
                     relation="USES_HANDLE",
+                )
+            )
+
+        # PGP keys
+        for pgp_key in neo4j_graph.get("pgp_keys", []):
+            fingerprint = pgp_key.get("fingerprint")
+            if not fingerprint:
+                continue
+
+            nodes.append(
+                GraphNode(
+                    id=f"pgp:{fingerprint}",
+                    label="PGP Key",
+                    name=fingerprint,
+                    category="PGPKey",
+                )
+            )
+
+        for pair in neo4j_graph.get("handle_pgp_keys", []):
+            handle = pair.get("handle")
+            fingerprint = pair.get("fingerprint")
+            if not handle or not fingerprint:
+                continue
+
+            nodes.append(
+                GraphNode(
+                    id=f"pgp:{fingerprint}",
+                    label="PGP Key",
+                    name=fingerprint,
+                    category="PGPKey",
+                )
+            )
+            links.append(
+                GraphEdge(
+                    source=f"handle:{handle}",
+                    target=f"pgp:{fingerprint}",
+                    relation="HAS_PGP_KEY",
+                )
+            )
+
+        # Trust links
+        for trust in neo4j_graph.get("trust_links", []):
+            source = trust.get("source")
+            target = trust.get("target")
+            if not source or not target:
+                continue
+
+            nodes.append(
+                GraphNode(
+                    id=f"handle:{source}",
+                    label="Handle",
+                    name=source,
+                    category="Handle",
+                )
+            )
+            nodes.append(
+                GraphNode(
+                    id=f"handle:{target}",
+                    label="Handle",
+                    name=target,
+                    category="TrustedHandle",
+                )
+            )
+            links.append(
+                GraphEdge(
+                    source=f"handle:{source}",
+                    target=f"handle:{target}",
+                    relation="TRUSTS",
                 )
             )
 
@@ -508,6 +648,49 @@ def get_actor_subgraph(actor_id: str, db: Session = Depends(get_db)):
                 relation="USES_HANDLE",
             )
         )
+
+    for key in sorted({
+        key.fingerprint
+        for h in handles
+        for key in h.pgp_keys
+        if key.fingerprint
+    }):
+        nodes.append(
+            GraphNode(
+                id=f"pgp:{key}",
+                label="PGP Key",
+                name=key,
+                category="PGPKey",
+            )
+        )
+
+    for h in handles:
+        for key in h.pgp_keys:
+            links.append(
+                GraphEdge(
+                    source=f"handle:{h.handle}",
+                    target=f"pgp:{key.fingerprint}",
+                    relation="HAS_PGP_KEY",
+                )
+            )
+
+    for h in handles:
+        for link in h.trust_links_out:
+            nodes.append(
+                GraphNode(
+                    id=f"handle:{link.target_handle.handle}",
+                    label="Handle",
+                    name=link.target_handle.handle,
+                    category="TrustedHandle",
+                )
+            )
+            links.append(
+                GraphEdge(
+                    source=f"handle:{h.handle}",
+                    target=f"handle:{link.target_handle.handle}",
+                    relation="TRUSTS",
+                )
+            )
 
     for w in wallets:
         nodes.append(

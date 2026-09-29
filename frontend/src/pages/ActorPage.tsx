@@ -17,6 +17,14 @@ interface ActorDetail {
   handles: string[];
   wallets: string[];
   marketplaces: string[];
+  pgp_keys: string[];
+  trust_links: {
+    source: string;
+    target: string;
+    relationship_type: string;
+    confidence: number;
+    source_name?: string;
+  }[];
   evidence_trail: unknown[];
 }
 
@@ -552,7 +560,82 @@ export default function ActorPage({
         </div>
       </div>
 
-           {/* Evidence timeline */}
+           {/* PGP / trust intelligence */}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))",
+          gap: "20px",
+          marginTop: "20px",
+        }}
+      >
+        <div className="card">
+          <div className="eyebrow">PGP IDENTIFIERS</div>
+          <div style={{ marginTop: "12px" }}>
+            {actor.pgp_keys?.length ? (
+              actor.pgp_keys.map((fingerprint) => (
+                <div
+                  key={fingerprint}
+                  style={{
+                    padding: "8px 0",
+                    fontFamily: "monospace",
+                    fontSize: "11px",
+                    wordBreak: "break-all",
+                  }}
+                >
+                  {fingerprint}
+                </div>
+              ))
+            ) : (
+              <div style={{ opacity: 0.6 }}>No PGP keys recorded.</div>
+            )}
+          </div>
+        </div>
+
+        <div className="card">
+          <div className="eyebrow">TRUST LINKS</div>
+          <div style={{ marginTop: "12px" }}>
+            {actor.trust_links?.length ? (
+              actor.trust_links.map((link, index) => (
+                <div
+                  key={`${link.source}-${link.target}-${index}`}
+                  style={{
+                    padding: "9px 0",
+                    borderBottom:
+                      index === actor.trust_links.length - 1
+                        ? "0"
+                        : "1px solid rgba(255,255,255,0.08)",
+                  }}
+                >
+                  <div
+                    style={{
+                      fontFamily: "monospace",
+                      fontSize: "11px",
+                    }}
+                  >
+                    {link.source} → {link.target}
+                  </div>
+                  <div
+                    style={{
+                      marginTop: "4px",
+                      fontSize: "10px",
+                      opacity: 0.6,
+                      textTransform: "uppercase",
+                    }}
+                  >
+                    {link.relationship_type} ·{" "}
+                    {(link.confidence * 100).toFixed(0)}% confidence
+                  </div>
+                </div>
+              ))
+            ) : (
+              <div style={{ opacity: 0.6 }}>No trust links recorded.</div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Evidence timeline */}
       <div className="card" style={{ marginTop: "20px" }}>
         <div className="eyebrow">EVIDENCE TIMELINE</div>
 

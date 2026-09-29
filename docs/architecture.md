@@ -34,7 +34,9 @@ Provides authentication, actor/search APIs, scanner ingestion, NLP integration, 
 The NLP service loads the project's trained authorship artifacts and compares text associated with handles. Its result is one evidence signal within the larger correlation model.
 
 ### Neo4j
-Represents relationships between actors, handles, wallets, marketplaces, observations and infrastructure as an evidence graph for investigator exploration.
+Represents relationships between actors, handles, wallets, marketplaces, observations, infrastructure, PGP keys and trust/signature links as an evidence graph for investigator exploration.
+
+PGP fingerprints from the synthetic handle dataset are normalized into PGPKey nodes and connected with (:Handle)-[:HAS_PGP_KEY]->(:PGPKey). Synthetic trust/signature evidence is represented as (:Handle)-[:TRUSTS]->(:Handle) and (:PGPKey)-[:TRUSTS]->(:Handle) relationships, with source, confidence and observation-window metadata retained in PostgreSQL and Neo4j.
 
 ### React/Vite frontend
 Provides the investigation dashboard, actor investigation view, correlation results and graph exploration interface.

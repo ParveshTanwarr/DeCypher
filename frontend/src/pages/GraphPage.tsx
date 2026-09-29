@@ -36,6 +36,8 @@ const ENTITY_TYPES = [
   "marketplace",
   "infrastructure",
   "observation",
+  "pgpkey",
+  "trustedhandle",
 ];
 
 export default function GraphPage({
@@ -201,6 +203,12 @@ export default function GraphPage({
       case "observation":
         return "#ffa94d";
 
+      case "pgpkey":
+        return "#f783ac";
+
+      case "trustedhandle":
+        return "#74c0fc";
+
       default:
         return "#adb5bd";
     }
@@ -227,6 +235,12 @@ export default function GraphPage({
 
       case "observation":
         return 8;
+
+      case "pgpkey":
+        return 10;
+
+      case "trustedhandle":
+        return 9;
 
       default:
         return 8;
@@ -271,8 +285,8 @@ export default function GraphPage({
       );
 
     if (
-      getNodeType(node) ===
-        "wallet" &&
+      (getNodeType(node) === "wallet" ||
+        getNodeType(node) === "pgpkey") &&
       label.length > 18
     ) {
       return `${label.slice(
@@ -977,6 +991,14 @@ export default function GraphPage({
               [
                 "Observation",
                 "#ffa94d",
+              ],
+              [
+                "PGP Key",
+                "#f783ac",
+              ],
+              [
+                "Trusted Handle",
+                "#74c0fc",
               ],
             ].map(
               ([name, color]) => (

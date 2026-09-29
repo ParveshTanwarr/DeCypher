@@ -54,7 +54,7 @@ graph, uses AI to catch actors rebranding under new handles, and — where infra
 leaks allow — links a known actor to real-world hosting infrastructure. Every attribution
 ships with an explainable, signal-by-signal confidence score, not a black-box number.
 
-- ✅ Links fragmented personas (handles, PGP keys, wallets) into one actor profile
+- ✅ Links fragmented personas (handles, PGP keys, wallets, and trust relationships) into one actor profile
 - ✅ Detects rebranded/migrated accounts via stylometric AI, validated on an academic
   benchmark (92.57% accuracy)
 - ✅ Surfaces infrastructure leaks (SSL cert reuse, exposed status pages, banners) pointing
@@ -134,6 +134,7 @@ and terror financing conducted there.
 ┌────────────────────────┐        ┌────────────────────────┐
 │        NEO4J            │        │      POSTGRESQL         │
 │ Actor↔Handle↔Wallet      │        │ Actors, handles, wallets│
+│ ↕ PGP ↕ Trust links      │        │ PGP keys, trust links   │
 │ relationship graph       │        │ Observations, feedback  │
 └────────────┬─────────────┘        │ Audit log                │
              └────────────┬──────────┴────────────┬─────────────┘
@@ -190,7 +191,7 @@ and terror financing conducted there.
 
 ### 🕸️ Cross-Platform Actor Correlation
 
-- Neo4j relationship graph linking handles, wallets, and PGP keys across marketplaces
+- Neo4j relationship graph linking handles, wallets, normalized PGP key nodes, and trust/signature relationships across marketplaces
 - Surfaces linked personas even when they present as unrelated accounts on the surface
 
 ### 🎯 Explainable & Prioritized Intelligence
@@ -400,7 +401,10 @@ audit_logs            -- username, method, endpoint, query_params, timestamp
 
 ```
 (:Actor)-[:USES_HANDLE]->(:Handle)
-(:Actor)-[:SHARES_WALLET]->(:Wallet)
+(:Handle)-[:HAS_PGP_KEY]->(:PGPKey)
+(:Handle)-[:TRUSTS]->(:Handle)
+(:PGPKey)-[:TRUSTS]->(:Handle)
+(:Handle)-[:USED_WALLET]->(:Wallet)
 (:Wallet)-[:ALSO_USED_BY]->(:Handle)   -- surfaces cross-actor wallet reuse
 ```
 
@@ -577,7 +581,8 @@ Designed for, not yet deployed in this prototype:
 - [x] Celery + Redis for authorized autonomous, priority-aware rescanning
 - [ ] Kubernetes deployment for horizontal scaling
 - [ ] Grafana dashboards on top of the existing Prometheus metrics endpoint
-- [ ] Formatted PDF report export (CSV/JSON export already implemented)
+- [x] PGP key normalization and trust/signature relationship graph
+- [x] Formatted PDF report export
 - [ ] Neo4j Graph Data Science-based cluster/community detection for organized-actor groups
 - [ ] Cross-dataset domain adaptation to close the PAN20→PAN11 transfer gap
 
