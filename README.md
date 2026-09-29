@@ -412,10 +412,10 @@ audit_logs            -- username, method, endpoint, query_params, timestamp
 
 ## 🔌 API Documentation
 
-All endpoints except `/health` and `/auth/login` require a bearer JWT.
+All protected endpoints require a bearer JWT; `/health` and `/auth/token` are public.
 
 ```http
-POST /auth/login                    → issue JWT
+POST /auth/token                    → issue JWT
 
 GET  /actors?category=&min_confidence=&limit=&offset=
                                      → paginated, filterable actor list
@@ -427,7 +427,7 @@ GET  /actors/{actor_id}/graph          → Neo4j-backed relationship subgraph
 
 GET  /search?q=                        → cross-entity search
 
-POST /feedback                         → investigator confirm/reject verdict
+POST /investigator/feedback           → investigator confirm/reject verdict
 
 GET  /export/json                       → bulk actor export (admin)
 GET  /export/csv                         → bulk actor export (admin)
