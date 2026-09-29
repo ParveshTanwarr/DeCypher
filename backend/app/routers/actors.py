@@ -15,6 +15,7 @@ from app.models.schemas import (
 from app.models.sql_models import Actor, DarkWebHandle, Wallet, Observation, PGPKey, TrustLink, Marketplace, ScanTarget
 from app.routers.auth import get_current_user
 from app.services import graph_service
+from app.services.observation_scope import build_observation_target_keys
 
 router = APIRouter(prefix="/actors", tags=["Actors"], dependencies=[Depends(get_current_user)])
 
@@ -56,18 +57,26 @@ def _build_actor_detail(actor: Actor, db: Session) -> ActorDetail:
 
     platforms = list({h.platform for h in handles if h.platform})
 
-    target_keys = [actor.actor_id.lower(), actor.primary_handle.lower(), *[h.handle.lower() for h in handles]]
-    scan_observations = (
-        db.query(Observation)
-        .filter(func.lower(Observation.target).in_(target_keys), Observation.detected.is_(True))
-        .all()
-    )
-    scan_dates = [o.timestamp for o in scan_observations if o.timestamp]
     actor_scan_targets = (
         db.query(ScanTarget)
         .filter(ScanTarget.actor_id == actor.actor_id)
         .all()
     )
+    target_keys = build_observation_target_keys(
+        actor.actor_id,
+        actor.primary_handle,
+        handles,
+        actor_scan_targets,
+    )
+    scan_observations = (
+        db.query(Observation)
+        .filter(
+            func.lower(Observation.target).in_(target_keys),
+            Observation.detected.is_(True),
+        )
+        .all()
+    )
+    scan_dates = [o.timestamp for o in scan_observations if o.timestamp]
     target_scan_dates = [
         target.last_scan_at
         for target in actor_scan_targets
@@ -170,30 +179,20 @@ def get_actor_detail(actor_id: str, db: Session = Depends(get_db)):
 @router.get("/{actor_id}/evidence", response_model=List[EvidenceSignal])
 def get_actor_evidence(actor_id: str, db: Session = Depends(get_db)):
     actor = db.query(Actor).filter(func.lower(Actor.actor_id) == actor_id.lower()).first()
-    target_keys = [actor_id.lower()]
+    target_keys = {actor_id.lower()}
 
     if actor:
-        target_keys.append(actor.primary_handle.lower())
         handles = db.query(DarkWebHandle).filter(DarkWebHandle.actor_id == actor.actor_id).all()
-        target_keys.extend([h.handle.lower() for h in handles])
-
-        # Scanner observations may be keyed by the monitored URL rather
-        # than the actor/handle. Include the actor's scan targets so the
-        # investigation view does not lose real scanner evidence.
         scan_targets = (
             db.query(ScanTarget)
             .filter(ScanTarget.actor_id == actor.actor_id)
             .all()
         )
-        target_keys.extend(
-            target.target_url.lower()
-            for target in scan_targets
-            if target.target_url
-        )
-        target_keys.extend(
-            target.name.lower()
-            for target in scan_targets
-            if target.name
+        target_keys = build_observation_target_keys(
+            actor.actor_id,
+            actor.primary_handle,
+            handles,
+            scan_targets,
         )
 
     # Query filtered directly in SQL instead of doing full table scan
@@ -261,17 +260,20 @@ def get_actor_subgraph(actor_id: str, db: Session = Depends(get_db)):
         .all()
     )
 
+    scan_targets = (
+        db.query(ScanTarget)
+        .filter(ScanTarget.actor_id == actor.actor_id)
+        .all()
+    )
+    observation_target_keys = build_observation_target_keys(
+        actor.actor_id,
+        actor.primary_handle,
+        handles,
+        scan_targets,
+    )
     observations = (
         db.query(Observation)
-        .filter(
-            func.lower(Observation.target).in_(
-                [
-                    actor.actor_id.lower(),
-                    actor.primary_handle.lower(),
-                    *[h.handle.lower() for h in handles],
-                ]
-            )
-        )
+        .filter(func.lower(Observation.target).in_(observation_target_keys))
         .all()
     )
 
@@ -310,6 +312,12 @@ def get_actor_subgraph(actor_id: str, db: Session = Depends(get_db)):
     # ---------------------------------------------------------
 
     try:
+        handle_id_by_name = {
+            h.handle.strip().lower(): h.id
+            for h in handles
+            if h.handle
+        }
+
         graph_service.sync_actor_batch(
             actors=[
                 {
@@ -321,6 +329,7 @@ def get_actor_subgraph(actor_id: str, db: Session = Depends(get_db)):
             ],
             handles=[
                 {
+                    "handle_id": h.id,
                     "actor_id": h.actor_id,
                     "handle": h.handle,
                     "platform": h.platform,
@@ -334,6 +343,11 @@ def get_actor_subgraph(actor_id: str, db: Session = Depends(get_db)):
                     "address": w.address,
                     "currency": w.currency,
                     "associated_handle": w.associated_handle,
+                    "handle_id": (
+                        handle_id_by_name.get(w.associated_handle.strip().lower())
+                        if w.associated_handle
+                        else None
+                    ),
                 }
                 for w in wallets
             ],
