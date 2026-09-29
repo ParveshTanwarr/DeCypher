@@ -331,7 +331,7 @@ def _risk_color(risk_category: str) -> colors.Color:
     return RISK_COLORS.get((risk_category or "").strip().lower(), colors.HexColor("#374151"))
 
 
-def _build_report_pdf(records: List[Dict[str, Any]], graph_image: str | None = None) -> bytes:
+def _build_report_pdf(records: List[Dict[str, Any]], graph_image: Optional[str] = None) -> bytes:
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(
         buffer, pagesize=letter,
@@ -408,7 +408,7 @@ def _build_report_pdf(records: List[Dict[str, Any]], graph_image: str | None = N
             ["Actor ID", str(record.get("actor_id", "N/A"))],
             ["Primary handle", str(record.get("primary_handle", "N/A"))],
             ["Risk category", str(record.get("risk_category", "N/A"))],
-            ["Attribution confidence", f"{float(record.get("confidence_score") or 0):.2f}"],
+            ["Attribution confidence", f"{float(record.get('confidence_score') or 0):.2f}"],
             ["Priority score", str(record.get("priority_score", "N/A"))],
             ["First seen", str(record.get("first_seen", "N/A"))],
             ["Last seen", str(record.get("last_seen", "N/A"))],
