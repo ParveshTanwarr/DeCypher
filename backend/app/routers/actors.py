@@ -219,6 +219,26 @@ def get_actor_subgraph(actor_id: str, db: Session = Depends(get_db)):
         .all()
     )
 
+    actor_handle_ids = [h.id for h in handles]
+    actor_trust_links = (
+        db.query(TrustLink)
+        .filter(TrustLink.source_handle_id.in_(actor_handle_ids))
+        .all()
+        if actor_handle_ids
+        else []
+    )
+    related_handle_ids = set(actor_handle_ids)
+    for link in actor_trust_links:
+        related_handle_ids.add(link.target_handle_id)
+
+    graph_identity_handles = (
+        db.query(DarkWebHandle)
+        .filter(DarkWebHandle.id.in_(related_handle_ids))
+        .all()
+        if related_handle_ids
+        else []
+    )
+
     # ---------------------------------------------------------
     # Synchronize the current actor's PostgreSQL evidence into
     # Neo4j. This makes the graph usable even when the ingestion
@@ -267,7 +287,7 @@ def get_actor_subgraph(actor_id: str, db: Session = Depends(get_db)):
                         else None
                     ),
                 }
-                for h in handles
+                for h in graph_identity_handles
             ],
             [
                 {
@@ -279,8 +299,7 @@ def get_actor_subgraph(actor_id: str, db: Session = Depends(get_db)):
                     "first_seen": link.first_seen.isoformat() if link.first_seen else None,
                     "last_seen": link.last_seen.isoformat() if link.last_seen else None,
                 }
-                for handle in handles
-                for link in handle.trust_links_out
+                for link in actor_trust_links
             ],
         )
 
