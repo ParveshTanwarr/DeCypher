@@ -281,6 +281,8 @@ class CorrelationService:
                 for o in self._actor_observations(actor)
                 if o.timestamp
             )
+        if not dates:
+            return 20.0
         latest = max(dates)
         if latest.tzinfo is None:
             latest = latest.replace(tzinfo=timezone.utc)
