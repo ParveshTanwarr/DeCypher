@@ -9,6 +9,7 @@ import LoginPage from "./pages/LoginPage";
 import SearchPage from "./pages/SearchPage";
 import ActorPage from "./pages/ActorPage";
 import GraphPage from "./pages/GraphPage";
+import ChatAssistant from "./components/ai/ChatAssistant";
 
 type Page = "dashboard" | "search" | "actor" | "graph";
 type NavItem = { id: Page; label: string; icon: typeof LayoutDashboard };
