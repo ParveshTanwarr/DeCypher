@@ -39,6 +39,49 @@ export async function downloadExport(format: "pdf" | "csv" | "json"): Promise<vo
   URL.revokeObjectURL(url);
 }
 
+export async function downloadActorReport(
+  actorId: string,
+  graphImage?: string,
+): Promise<void> {
+  const response = await fetch(
+    `${API_BASE}/export/actor/${encodeURIComponent(actorId)}/report`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(authToken
+          ? { Authorization: `Bearer ${authToken}` }
+          : {}),
+      },
+      body: JSON.stringify({
+        graph_image: graphImage || null,
+      }),
+    },
+  );
+  if (!response.ok) {
+    throw new Error(
+      (await response.text()) ||
+        `Actor PDF export failed: ${response.status}`,
+    );
+  }
+  const blob = await response.blob();
+  const disposition =
+    response.headers.get("Content-Disposition") || "";
+  const match =
+    disposition.match(/filename="?([^"]+)"?/i);
+  const filename =
+    match?.[1] ||
+    `actor_${actorId}_report.pdf`;
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = filename;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(url);
+}
+
 export async function downloadActorExport(
   actorId: string,
   format: "pdf" | "csv" | "json",
