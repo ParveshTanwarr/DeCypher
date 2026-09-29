@@ -1,9 +1,15 @@
-"""Export is admin-only -- role authorization regression tests."""
+"""Export authorization regression tests."""
 
 
-def test_investigator_role_cannot_export(client, analyst_headers):
+def test_investigator_role_can_export(client, analyst_headers):
     r = client.get("/export/json", headers=analyst_headers)
-    assert r.status_code == 403
+    assert r.status_code == 200
+    assert len(r.json()) > 0
+
+def test_investigator_can_export_pdf(client, analyst_headers):
+    r = client.get("/export/report", headers=analyst_headers)
+    assert r.status_code == 200
+    assert r.headers["content-type"].startswith("application/pdf")
 
 
 def test_admin_role_can_export(client, admin_headers):
