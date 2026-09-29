@@ -285,8 +285,8 @@ export default function GraphPage({
       );
 
     if (
-      getNodeType(node) ===
-        "wallet" &&
+      (getNodeType(node) === "wallet" ||
+        getNodeType(node) === "pgpkey") &&
       label.length > 18
     ) {
       return `${label.slice(
