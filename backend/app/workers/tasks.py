@@ -70,7 +70,7 @@ def run_authorized_scan(target_url: str, actor_id: str | None) -> list[dict[str,
             "value": raw.get("observed_value"),
             "target": actor_id or target_url,
             "source": raw.get("source", "authorized-test-service"),
-            "timestamp": raw.get("scan_date") or utc_now(),
+            "timestamp": (datetime.fromisoformat(str(raw.get("scan_date")).replace("Z", "+00:00")) if raw.get("scan_date") else utc_now()),
             "confidence": raw.get("confidence", 0.0),
             "description": description or "Authorized infrastructure scan result.",
         })
