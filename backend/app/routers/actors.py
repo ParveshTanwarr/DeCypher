@@ -12,7 +12,7 @@ from app.models.schemas import (
     GraphNode,
     GraphPayload,
 )
-from app.models.sql_models import Actor, DarkWebHandle, Wallet, Observation, PGPKey, TrustLink
+from app.models.sql_models import Actor, DarkWebHandle, Wallet, Observation, PGPKey, TrustLink, Marketplace
 from app.routers.auth import get_current_user
 from app.services import graph_service
 
@@ -236,6 +236,14 @@ def get_actor_subgraph(actor_id: str, db: Session = Depends(get_db)):
         .filter(TrustLink.source_handle_id.in_(actor_handle_ids))
         .all()
         if actor_handle_ids
+        else []
+    )
+    marketplace_names = {h.platform for h in handles if h.platform}
+    related_marketplaces = (
+        db.query(Marketplace)
+        .filter(Marketplace.name.in_(marketplace_names))
+        .all()
+        if marketplace_names
         else []
     )
     related_handle_ids = set(actor_handle_ids)
@@ -720,6 +728,93 @@ def get_actor_subgraph(actor_id: str, db: Session = Depends(get_db)):
                 relation="SHARES_WALLET",
             )
         )
+
+        # Surface wallet reuse even when Neo4j is unavailable.
+        reused_rows = (
+            db.query(Wallet)
+            .filter(Wallet.address == w.address, Wallet.actor_id != actor.actor_id)
+            .all()
+        )
+        for reused in reused_rows:
+            if reused.associated_handle:
+                nodes.append(
+                    GraphNode(
+                        id=f"handle:{reused.associated_handle}",
+                        label="Handle",
+                        name=reused.associated_handle,
+                        category="CorrelatedHandle",
+                    )
+                )
+                links.append(
+                    GraphEdge(
+                        source=f"wallet:{w.address}",
+                        target=f"handle:{reused.associated_handle}",
+                        relation="ALSO_USED_BY",
+                    )
+                )
+
+    # Marketplace nodes from the actual handle-platform relationships.
+    for marketplace in related_marketplaces:
+        nodes.append(
+            GraphNode(
+                id=f"marketplace:{marketplace.name}",
+                label="Marketplace",
+                name=marketplace.name,
+                category="Marketplace",
+            )
+        )
+        for handle in handles:
+            if handle.platform == marketplace.name:
+                links.append(
+                    GraphEdge(
+                        source=f"handle:{handle.handle}",
+                        target=f"marketplace:{marketplace.name}",
+                        relation="USES_MARKETPLACE",
+                    )
+                )
+
+    # Infrastructure/observation nodes from PostgreSQL evidence.
+    for observation in observations:
+        nodes.append(
+            GraphNode(
+                id=f"observation:{observation.observation_id}",
+                label="Observation",
+                name=observation.description or observation.value or observation.indicator_type,
+                category="Observation",
+            )
+        )
+        links.append(
+            GraphEdge(
+                source=actor.actor_id,
+                target=f"observation:{observation.observation_id}",
+                relation="HAS_OBSERVATION",
+            )
+        )
+        if observation.value:
+            infra_id = f"infrastructure:{observation.value}"
+            nodes.append(
+                GraphNode(
+                    id=infra_id,
+                    label="Infrastructure",
+                    name=observation.value,
+                    category="Infrastructure",
+                )
+            )
+            links.append(
+                GraphEdge(
+                    source=f"observation:{observation.observation_id}",
+                    target=infra_id,
+                    relation="EVIDENCE_OF",
+                )
+            )
+
+    # Remove duplicate nodes/edges in the PostgreSQL fallback too.
+    unique_nodes = {}
+    for node in nodes:
+        unique_nodes[node.id] = node
+    unique_links = {}
+    for link in links:
+        unique_links[(link.source, link.target, link.relation)] = link
 
     return GraphPayload(
         nodes=nodes,
