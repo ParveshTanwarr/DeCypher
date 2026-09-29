@@ -489,6 +489,12 @@ def init_db_and_load_csvs(reset_tables: bool = False, sync_neo4j: bool = True):
 
     if sync_neo4j and (actor_records or handle_records or wallet_pairs_for_neo4j):
         try:
+            # A full SQL reset means the graph must be reset too; otherwise
+            # legacy name-keyed Handle nodes can coexist with the new
+            # stable-handle-ID graph and corrupt correlations.
+            if reset_tables:
+                graph_service.reset_graph()
+
             # wallet_pairs_for_neo4j contains the complete non-deduplicated
             # handle<->wallet relationships from the CSV.
             graph_service.sync_actor_batch(actor_records, handle_records, wallet_pairs_for_neo4j)
