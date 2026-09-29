@@ -13,6 +13,8 @@ class Settings(BaseSettings):
     AUTOSCAN_ENABLED: bool = False
     AUTOSCAN_DEFAULT_INTERVAL_MINUTES: int = 180
     AUTOSCAN_ALLOWED_HOSTS: str = "127.0.0.1,localhost"
+    GEMINI_API_KEY: str = ""
+    GEMINI_MODEL: str = "gemini-3.6-flash"
     class Config:
         env_file = ".env"
 settings = Settings()
