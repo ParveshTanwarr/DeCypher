@@ -64,3 +64,23 @@ def test_global_search_finds_pgp_fingerprint(client, admin_headers):
         and result["matched_value"] == fingerprint
         for result in response.json()["results"]
     )
+
+
+def test_pgp_reuse_links_rebranded_handles():
+    session = SessionLocal()
+    try:
+        handles = (
+            session.query(DarkWebHandle)
+            .filter(DarkWebHandle.handle.in_(["nyxinhex99", "vexatrace"]))
+            .all()
+        )
+        fingerprints = {
+            key.fingerprint
+            for handle in handles
+            for key in handle.pgp_keys
+        }
+
+        assert len(handles) == 2
+        assert len(fingerprints) == 1
+    finally:
+        session.close()
