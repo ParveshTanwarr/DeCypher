@@ -394,6 +394,11 @@ def get_actor_subgraph(
                 }) AS pgp_keys,
 
                 collect(DISTINCT {
+                    handle: h.handle,
+                    fingerprint: p.fingerprint
+                }) AS handle_pgp_keys,
+
+                collect(DISTINCT {
                     source: h.handle,
                     target: trusted.handle,
                     relationship_type: t.relationship_type,
