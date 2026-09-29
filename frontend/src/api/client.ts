@@ -122,8 +122,8 @@ export function getActors(): Promise<Actor[]> { return request<Actor[]>("/actors
 export function getActor(actorId: string) { return request(`/actors/${encodeURIComponent(actorId)}`); }
 export function getActorEvidence(actorId: string) { return request(`/actors/${encodeURIComponent(actorId)}/evidence`); }
 
-export interface GraphNode { id: string; label: string; name?: string; category?: string; type?: string; properties?: Record<string, unknown>; }
-export interface GraphLink { source: string; target: string; relation?: string; type?: string; }
+export interface GraphNode { id: string; label: string; name: string; category: string; type: string; properties?: Record<string, unknown>; }
+export interface GraphLink { source: string; target: string; relation: string; }
 export interface GraphPayload { nodes: GraphNode[]; links: GraphLink[]; }
 export function getActorGraph(actorId: string): Promise<GraphPayload> { return request<GraphPayload>(`/actors/${encodeURIComponent(actorId)}/graph`); }
 
