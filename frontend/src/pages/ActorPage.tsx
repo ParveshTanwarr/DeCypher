@@ -205,8 +205,6 @@ async function createGraphSnapshot(actorId: string): Promise<string | undefined>
     trustedhandle: "#74c0fc",
   };
 
-  const nodeById = new Map(nodes.map((node) => [node.id, node]));
-
   // Relationships first.
   for (const link of links as GraphLink[]) {
     const source = positions.get(String(link.source));
