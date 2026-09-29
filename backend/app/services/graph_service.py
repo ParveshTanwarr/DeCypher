@@ -62,7 +62,7 @@ def sync_actor_batch(
         handle_rows = [
             h
             for h in handles
-            if h.get("handle") and h.get("actor_id")
+            if h.get("handle_id") and h.get("handle") and h.get("actor_id")
         ]
 
         if handle_rows:
@@ -97,7 +97,7 @@ def sync_actor_batch(
         wallet_rows = [
             w
             for w in wallets
-            if w.get("address") and w.get("associated_handle")
+            if w.get("address") and w.get("associated_handle") and w.get("handle_id")
         ]
 
         if wallet_rows:
