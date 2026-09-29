@@ -39,6 +39,42 @@ export async function downloadExport(format: "pdf" | "csv" | "json"): Promise<vo
   URL.revokeObjectURL(url);
 }
 
+export async function downloadActorExport(
+  actorId: string,
+  format: "pdf" | "csv" | "json",
+): Promise<void> {
+  const endpoint = format === "pdf" ? "report" : format;
+  const response = await fetch(
+    `${API_BASE}/export/actor/${encodeURIComponent(actorId)}/${endpoint}`,
+    {
+      headers: authToken
+        ? { Authorization: `Bearer ${authToken}` }
+        : {},
+    },
+  );
+  if (!response.ok) {
+    throw new Error(
+      (await response.text()) ||
+        `Actor export failed: ${response.status}`,
+    );
+  }
+  const blob = await response.blob();
+  const disposition =
+    response.headers.get("Content-Disposition") || "";
+  const match = disposition.match(/filename="?([^"]+)"?/i);
+  const filename =
+    match?.[1] ||
+    `actor_${actorId}_export.${format}`;
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = filename;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(url);
+}
+
 export function getActors(): Promise<Actor[]> { return request<Actor[]>("/actors"); }
 export function getActor(actorId: string) { return request(`/actors/${encodeURIComponent(actorId)}`); }
 export function getActorEvidence(actorId: string) { return request(`/actors/${encodeURIComponent(actorId)}/evidence`); }
