@@ -493,7 +493,7 @@ def init_db_and_load_csvs(reset_tables: bool = False, sync_neo4j: bool = True):
             graph_service.sync_actor_batch(actor_records, handle_records, wallet_pairs_for_neo4j)
             if prepared_handles is not None:
                 graph_service.sync_pgp_and_trust_graph(
-                    prepared_handles,
+                    prepared_handles.to_dict("records"),
                     trust_df_for_neo4j.to_dict("records") if trust_df_for_neo4j is not None else [],
                 )
             print(
