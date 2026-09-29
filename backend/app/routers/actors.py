@@ -790,6 +790,18 @@ def get_actor_subgraph(actor_id: str, db: Session = Depends(get_db)):
                 )
             )
 
+    wallet_addresses = {w.address for w in wallets if w.address}
+    reused_wallet_rows = (
+        db.query(Wallet)
+        .filter(
+            Wallet.address.in_(wallet_addresses),
+            Wallet.actor_id != actor.actor_id,
+        )
+        .all()
+        if wallet_addresses
+        else []
+    )
+
     for w in wallets:
         nodes.append(
             GraphNode(
@@ -808,29 +820,24 @@ def get_actor_subgraph(actor_id: str, db: Session = Depends(get_db)):
             )
         )
 
-        # Surface wallet reuse even when Neo4j is unavailable.
-        reused_rows = (
-            db.query(Wallet)
-            .filter(Wallet.address == w.address, Wallet.actor_id != actor.actor_id)
-            .all()
-        )
-        for reused in reused_rows:
-            if reused.associated_handle:
-                nodes.append(
-                    GraphNode(
-                        id=f"handle:{reused.associated_handle}",
-                        label="Handle",
-                        name=reused.associated_handle,
-                        category="CorrelatedHandle",
-                    )
+    # Surface wallet reuse even when Neo4j is unavailable.
+    for reused in reused_wallet_rows:
+        if reused.associated_handle and reused.address:
+            nodes.append(
+                GraphNode(
+                    id=f"handle:{reused.associated_handle}",
+                    label="Handle",
+                    name=reused.associated_handle,
+                    category="CorrelatedHandle",
                 )
-                links.append(
-                    GraphEdge(
-                        source=f"wallet:{w.address}",
-                        target=f"handle:{reused.associated_handle}",
-                        relation="ALSO_USED_BY",
-                    )
+            )
+            links.append(
+                GraphEdge(
+                    source=f"wallet:{reused.address}",
+                    target=f"handle:{reused.associated_handle}",
+                    relation="ALSO_USED_BY",
                 )
+            )
 
     # Marketplace nodes from the actual handle-platform relationships.
     for marketplace in related_marketplaces:
