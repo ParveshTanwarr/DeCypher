@@ -19,7 +19,7 @@ content, no real people, no real infrastructure — safe to use, share, and demo
 
 ## How to use this for each part of your system
 
-- **Neo4j graph (Level 1):** Load `handles.csv` + `wallets.csv` + `trust_links.csv`. PGP fingerprints are normalized into first-class PGP key nodes, while trust/signature relationships create cross-marketplace handle links. Wallet reuse remains an independent correlation signal.
+- **Neo4j graph (Level 1):** Load `handles.csv` + `wallets.csv` + `trust_links.csv`. PGP fingerprints are normalized into first-class PGP key nodes; selected synthetic rebrands deliberately reuse a PGP fingerprint so the graph can demonstrate key reuse, while trust/signature relationships create additional cross-marketplace handle links. Wallet reuse remains an independent correlation signal.
 - **Stylometry AI (Level 1):** Use `posts.csv`, grouped by `handle_id`. Train/test your similarity model on pairs of handles — pairs sharing the same `actor_id_ground_truth` should score high; pairs that don't should score low. `actor_id_ground_truth` is your answer key for measuring accuracy — don't feed it to the model itself.
 - **Infrastructure attribution (Level 2):** Use `infrastructure_indicators.csv` as your demo data for the cert/banner leak-matching module.
 - **Dashboard:** Join `handles.csv` + `posts.csv` + `wallets.csv` + `infrastructure_indicators.csv` + `trust_links.csv` on `handle_id` / `actor_id_ground_truth` for a full actor profile and relationship view.
