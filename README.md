@@ -318,7 +318,7 @@ routers/
 ├── actors.py      — actor list/detail/evidence/graph endpoints
 ├── search.py      — cross-entity search
 ├── feedback.py     — investigator confirm/reject verdicts
-├── export.py       — CSV / JSON bulk export (admin-only)
+├── export.py       — CSV / JSON / PDF bulk export (admin + investigator)
 ├── scanner.py       — Level 2 observation ingestion
 └── nlp.py           — Level 1 authorship comparison
 
