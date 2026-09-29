@@ -604,10 +604,7 @@ export default function GraphPage({
                 const l =
                   link as GraphLink;
 
-                return String(
-                  l.type ??
-                    "RELATED_TO",
-                );
+                return String(l.relation || "RELATED_TO");
               }}
 
               linkDirectionalArrowLength={
@@ -951,7 +948,7 @@ export default function GraphPage({
                           </div>
 
                           <span className="relationship-type">
-                            {link.type}
+                            {link.relation}
                           </span>
                         </div>
                       );
