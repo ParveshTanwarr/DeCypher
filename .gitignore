@@ -21,3 +21,6 @@ Thumbs.db
 # Local TLS test certificates
 mock_service/certs/server.key
 mock_service/certs/server.crt
+backend/celerybeat-schedule
+backend/celerybeat-schedule-shm
+backend/celerybeat-schedule-wal
