@@ -625,3 +625,17 @@ _Smart India Hackathon 2026 · Problem Statement 26151_
 [⬆ Back to Top](#️-decypher--dark-web-threat-actor-de-anonymization-platform)
 
 </div>
+
+
+## Investigation Copilot
+
+DeCypher includes an optional Gemini-powered investigation copilot at `POST /ai/chat`. The API key stays on the FastAPI backend; the React client never receives it. When an actor is selected, the copilot is scoped to that actor's stored handles, wallets, PGP keys, scan targets and evidence observations.
+
+Set these backend environment variables:
+
+```env
+GEMINI_API_KEY=your_gemini_api_key
+GEMINI_MODEL=gemini-3.6-flash
+```
+
+Then restart FastAPI. The floating **Copilot** control appears in the frontend. Without a Gemini key, the rest of DeCypher remains usable and the copilot reports that it is not configured.
