@@ -35,6 +35,16 @@ from typing import Any, Dict, List, Optional
 from app.database.neo4j_client import neo4j_conn
 
 
+def reset_graph() -> None:
+    """Clear the controlled demo graph before a full deterministic re-ingestion.
+
+    This is intentionally separate from normal incremental sync. It prevents
+    legacy Handle nodes keyed by human-readable names from surviving after the
+    graph schema switches to stable handle_id identity.
+    """
+    neo4j_conn.write("MATCH (n) DETACH DELETE n")
+
+
 def sync_actor_batch(
     actors: List[Dict[str, Any]],
     handles: List[Dict[str, Any]],
