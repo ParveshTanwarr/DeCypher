@@ -60,6 +60,7 @@ class GraphNode(BaseModel):
     label: str
     name: str
     category: str
+    properties: Optional[Dict[str, Any]] = None
 
 
 class GraphEdge(BaseModel):
