@@ -337,68 +337,78 @@ export default function ActorPage({
   const [correlationLoading, setCorrelationLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
   const [exportError, setExportError] = useState("");
+  const [loadError, setLoadError] = useState("");
 
   useEffect(() => {
+    let cancelled = false;
+
     setLoading(true);
+    setLoadError("");
     setCorrelation(null);
     setCorrelationLoading(true);
 
-    Promise.all([
-      getActor(actorId),
-      getActorEvidence(actorId),
-    ])
-      .then(([actorData, evidenceData]) => {
+    getActor(actorId)
+      .then((actorData) => {
+        if (cancelled) return;
+
         const actorResult = actorData as ActorDetail;
-        const evidenceResult = evidenceData as Evidence[];
-
         setActor(actorResult);
-        setEvidence(evidenceResult);
 
-        /*
-         * The correlation engine needs two handles for the
-         * stylometry signal. Prefer the first two known handles.
-         */
         const handles = actorResult.handles || [];
-
         const handleA =
           handles[0] || actorResult.primary_handle || undefined;
-
         const handleB = handles[1] || undefined;
 
         if (handleA && handleB) {
-          return getActorCorrelation(actorId, handleA, handleB)
+          getActorCorrelation(actorId, handleA, handleB)
             .then((correlationResult) => {
-              setCorrelation(correlationResult);
+              if (!cancelled) setCorrelation(correlationResult);
             })
             .catch((error) => {
               console.error(
                 "Failed to load correlation analysis:",
-                error
+                error,
               );
-              setCorrelation(null);
+              if (!cancelled) setCorrelation(null);
             })
             .finally(() => {
-              setCorrelationLoading(false);
+              if (!cancelled) setCorrelationLoading(false);
             });
+        } else {
+          setCorrelationLoading(false);
         }
-
-        setCorrelationLoading(false);
-        return null;
       })
       .catch((error) => {
-        console.error(
-          "Failed to load actor investigation:",
-          error
-        );
-
-        setActor(null);
-        setEvidence([]);
-        setCorrelation(null);
-        setCorrelationLoading(false);
+        console.error("Failed to load actor investigation:", error);
+        if (!cancelled) {
+          setActor(null);
+          setCorrelation(null);
+          setCorrelationLoading(false);
+          setLoadError(
+            error instanceof Error
+              ? error.message
+              : "Unable to load actor investigation.",
+          );
+        }
       })
       .finally(() => {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       });
+
+    // Evidence is supplementary to the actor record. A failure here
+    // must not make an otherwise valid actor appear as "Actor not found".
+    getActorEvidence(actorId)
+      .then((evidenceData) => {
+        if (!cancelled) setEvidence(evidenceData as Evidence[]);
+      })
+      .catch((error) => {
+        console.error("Failed to load actor evidence:", error);
+        if (!cancelled) setEvidence([]);
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, [actorId]);
 
   if (loading) {
@@ -412,7 +422,7 @@ export default function ActorPage({
   if (!actor) {
     return (
       <div className="empty-state">
-        Actor not found.
+        {loadError || "Actor not found."}
       </div>
     );
   }
