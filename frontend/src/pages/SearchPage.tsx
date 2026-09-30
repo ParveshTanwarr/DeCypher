@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { ArrowUpRight, Clock3, Search, Sparkles, TrendingUp, X } from "lucide-react";
 import { searchActors, type SearchResult } from "../api/client";
 
