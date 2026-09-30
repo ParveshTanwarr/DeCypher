@@ -21,7 +21,7 @@ function App() {
   const [page, setPage] = useState<Page>("dashboard");
   const [selectedActor, setSelectedActor] = useState("");
   const [actors, setActors] = useState<ActorSummary[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(() => Boolean(token));
   const [loadError, setLoadError] = useState("");
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [theme, setTheme] = useState<"dark" | "light">(() => (localStorage.getItem("decypher_theme") as "dark" | "light") || "dark");
@@ -116,8 +116,22 @@ function App() {
       .finally(() => setLoading(false));
   }, [token]);
 
-  function handleLogin(newToken: string) { sessionStorage.setItem("decypher_token", newToken); setAuthToken(newToken); setToken(newToken); setPage("dashboard"); }
-  function handleLogout() { sessionStorage.removeItem("decypher_token"); setAuthToken(""); setToken(""); setActors([]); setSelectedActor(""); setPage("dashboard"); }
+  function handleLogin(newToken: string) {
+    sessionStorage.setItem("decypher_token", newToken);
+    setAuthToken(newToken);
+    setLoading(true);
+    setToken(newToken);
+    setPage("dashboard");
+  }
+  function handleLogout() {
+    sessionStorage.removeItem("decypher_token");
+    setAuthToken("");
+    setLoading(false);
+    setToken("");
+    setActors([]);
+    setSelectedActor("");
+    setPage("dashboard");
+  }
   function openActor(actorId: string) { setSelectedActor(actorId); setPage("actor"); }
   function markAllRead() { setNotifications((items) => items.map((item) => ({ ...item, read: true }))); }
   async function handleExport(format: string) { console.info(`Exported ${format}`); }
@@ -200,8 +214,8 @@ function App() {
         </>}
       </section>}
       {page === "search" && <SearchPage onSelectActor={openActor} />}
-      {page === "actor" && selectedActor && <ActorPage actorId={selectedActor} onBack={() => setPage("search")} onGraph={() => setPage("graph")} />}
-      {page === "graph" && selectedActor && <GraphPage actorId={selectedActor} onBack={() => setPage("actor")} />}
+      {page === "actor" && selectedActor && <ActorPage key={selectedActor} actorId={selectedActor} onBack={() => setPage("search")} onGraph={() => setPage("graph")} />}
+      {page === "graph" && selectedActor && <GraphPage key={selectedActor} actorId={selectedActor} onBack={() => setPage("actor")} />}
     </div></main>
     <ChatAssistant actorId={selectedActor || undefined} />
   </div>;
