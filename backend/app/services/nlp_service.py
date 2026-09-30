@@ -193,4 +193,5 @@ class NLPStylometryService:
         except (KeyError, IndexError, ValueError) as exc:
             return {"contradiction_flag": False, "overlap_days": 0, "note": f"De-confliction check skipped: {exc}"}
 
-
+# Shared service instance used by the correlation and NLP routers.
+nlp_service = NLPStylometryService()
