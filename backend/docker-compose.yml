@@ -34,6 +34,42 @@ services:
       timeout: 5s
       retries: 10
 
+  celery_worker:
+    image: python:3.11-slim
+    container_name: threat_celery_worker
+    working_dir: /app
+    env_file:
+      - .env
+    volumes:
+      - .:/app
+    depends_on:
+      postgres:
+        condition: service_healthy
+      neo4j:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: >
+      sh -c "pip install --no-cache-dir -r requirements.txt &&
+      celery -A app.workers.celery_app.celery_app worker --loglevel=info"
+
+  celery_beat:
+    image: python:3.11-slim
+    container_name: threat_celery_beat
+    working_dir: /app
+    env_file:
+      - .env
+    volumes:
+      - .:/app
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: >
+      sh -c "pip install --no-cache-dir -r requirements.txt &&
+      celery -A app.workers.celery_app.celery_app beat --loglevel=info"
+
   redis:
     image: redis:7-alpine
     container_name: threat_redis
