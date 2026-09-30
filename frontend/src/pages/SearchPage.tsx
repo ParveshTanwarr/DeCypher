@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { ArrowUpRight, Clock3, Search, Sparkles, TrendingUp, X } from "lucide-react";
 import { searchActors, type SearchResult } from "../api/client";
 
@@ -71,11 +71,7 @@ export default function SearchPage({ onSelectActor }: SearchPageProps) {
   const [loading, setLoading] = useState(false);
   const [searched, setSearched] = useState(false);
   const [error, setError] = useState("");
-  const [frequentActors, setFrequentActors] = useState<FrequentActor[]>([]);
-
-  useEffect(() => {
-    setFrequentActors(loadFrequentActors());
-  }, []);
+  const [frequentActors, setFrequentActors] = useState<FrequentActor[]>(loadFrequentActors);
 
   async function handleSearch(searchValue = query) {
     const trimmed = searchValue.trim();

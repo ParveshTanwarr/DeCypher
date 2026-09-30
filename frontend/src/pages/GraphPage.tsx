@@ -58,7 +58,6 @@ export default function GraphPage({
   const graphRef = useRef<any>(null);
 
   useEffect(() => {
-    setLoading(true);
     setError("");
     setSelectedNode(null);
 
