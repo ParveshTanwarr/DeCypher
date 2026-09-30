@@ -3,15 +3,37 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from prometheus_fastapi_instrumentator import Instrumentator
+from sqlalchemy import func
 
 from app.database.postgres import Base, engine
 from app.config import settings
 import app.models.sql_models
+from app.models.sql_models import Actor
 from app.routers import actors, search, feedback, export, auth, scanner, nlp, correlation, ai
 from app.middleware.audit_log import AuditLogMiddleware
-from app.services.ingestion import ensure_investigation_evidence_for_all_actors
+from app.services.ingestion import ensure_investigation_evidence_for_all_actors, init_db_and_load_csvs
 
 _DEV_DEFAULT_SECRET_KEY = "threat_intel_dev_secret_key_change_in_prod_12345"
+
+
+def _bootstrap_demo_data() -> int:
+    """Populate a truly fresh demo database once, then return actor count."""
+    from app.database.postgres import SessionLocal
+
+    db = SessionLocal()
+    try:
+        actor_count = int(db.query(func.count(Actor.actor_id)).scalar() or 0)
+    finally:
+        db.close()
+
+    if actor_count == 0:
+        init_db_and_load_csvs(reset_tables=False, sync_neo4j=False)
+
+    db = SessionLocal()
+    try:
+        return int(db.query(func.count(Actor.actor_id)).scalar() or 0)
+    finally:
+        db.close()
 
 
 def _seed_investigation_evidence() -> int:
@@ -28,6 +50,10 @@ async def lifespan(app: FastAPI):
     print("[*] Creating and verifying database tables...")
     await asyncio.to_thread(Base.metadata.create_all, bind=engine)
     print("[*] Database tables ready.")
+
+    actor_count = await asyncio.to_thread(_bootstrap_demo_data)
+    if actor_count:
+        print(f"[+] Intelligence store contains {actor_count} actors.")
 
     seeded_evidence = await asyncio.to_thread(_seed_investigation_evidence)
     if seeded_evidence:
