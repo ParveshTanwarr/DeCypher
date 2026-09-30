@@ -243,12 +243,12 @@ The commands above use POSIX-style virtual-environment activation. On Windows Po
 ```powershell
 cd backend
 py -3.11 -m venv .venv
-.\\.venv\\Scripts\\Activate.ps1
+.\.venv\Scripts\Activate.ps1
 python -m pip install -r requirements.txt
 Copy-Item .env.example .env
 ```
 
-If PowerShell blocks the activation script, you can either activate the environment from a Command Prompt with `\\.venv\\Scripts\\activate.bat` or run the Python commands through `\\.venv\\Scripts\\python.exe` directly.
+If PowerShell blocks the activation script, you can either activate the environment from a Command Prompt with `\.venv\Scripts\activate.bat` or run the Python commands through `\.venv\Scripts\python.exe` directly.
 
 ### 5. Start the frontend
 
