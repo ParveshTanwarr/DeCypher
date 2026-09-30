@@ -81,11 +81,13 @@ class CorrelationService:
             signals.append(self._signal("descriptor_timing", timing_score, "Descriptor timing observations overlap."))
 
         nlp_result = None
+        contradiction = None
         if handle_a and handle_b:
             nlp_result = nlp_service.compare(handle_a=handle_a, handle_b=handle_b)
             if nlp_result.get("error"):
                 raise ValueError(nlp_result["error"])
             stylometry_score = nlp_result.get("similarity_score", 0.0)
+            contradiction = nlp_service.check_contradiction(handle_a, handle_b)
 
         if stylometry_score is not None:
             stylometry_score = self._clamp(stylometry_score)
@@ -98,10 +100,14 @@ class CorrelationService:
                     "threshold_used": nlp_result.get("threshold_used"),
                     "shared_markers": nlp_result.get("shared_markers", []),
                     "domain_routing": nlp_result.get("domain_routing", {}),
+                    "contradiction": contradiction,
                 }
             signals.append(signal)
 
         overall_confidence = self._weighted_score(signals)
+        if contradiction and contradiction.get("contradiction_flag"):
+            # De-confliction is a negative investigative signal, not another positive weight.
+            overall_confidence = self._clamp(overall_confidence - 0.15)
         risk_level = self._risk_level(overall_confidence, actor.risk_category)
         priority = self.calculate_priority(actor, overall_confidence, signals)
 
@@ -123,6 +129,7 @@ class CorrelationService:
             "signal_count": len(signals),
             "available_weight": round(sum(SIGNAL_WEIGHTS.get(s["type"], 0.0) for s in signals), 4),
             "interpretation": self._interpretation(overall_confidence, len(signals)),
+            "deconfliction": contradiction,
             "priority": priority,
         }
 
