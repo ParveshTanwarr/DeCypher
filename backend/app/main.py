@@ -13,6 +13,7 @@ from app.models.sql_models import Actor
 from app.routers import actors, search, feedback, export, auth, scanner, nlp, correlation, ai
 from app.middleware.audit_log import AuditLogMiddleware
 from app.services.ingestion import ensure_investigation_evidence_for_all_actors, init_db_and_load_csvs
+from app.services.nlp_service import nlp_service
 
 
 
@@ -153,7 +154,9 @@ def health_check():
     except Exception as exc:
         checks["redis"] = f"unavailable: {type(exc).__name__}"
 
-    status = "healthy" if all(v == "healthy" for v in checks.values()) else "degraded"
+    checks["nlp"] = nlp_service.engine_status
+
+    status = "healthy" if all(v == "healthy" or v == "validated_model" for v in checks.values()) else "degraded"
     return {"status": status, "service": "Threat Intel API", "checks": checks}
 
 
