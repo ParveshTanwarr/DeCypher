@@ -1095,7 +1095,7 @@ export default function ActorPage({
                       justifyContent: "center",
                     }}
                   >
-                    {index !== evidence.length - 1 && (
+                    {index !== filteredEvidence.length - 1 && (
                       <div
                         style={{
                           position: "absolute",
