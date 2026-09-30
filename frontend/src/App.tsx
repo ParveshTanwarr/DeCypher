@@ -33,7 +33,7 @@ function App() {
 
   useEffect(() => {
     if (!token) return;
-    setAuthToken(token); setLoading(true); setLoadError("");
+    setAuthToken(token); setLoadError("");
     Promise.allSettled([getActors(), getAllCorrelations()])
       .then(([actorsResult, correlationsResult]) => {
         if (actorsResult.status === "rejected") {
