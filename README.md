@@ -185,9 +185,30 @@ git clone https://github.com/ParveshTanwarr/DeCypher.git
 cd DeCypher
 ```
 
-### 2. Start infrastructure
+### 2. Configure the backend
 
-The easiest complete setup is:
+```bash
+cd backend
+python3.11 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+cp .env.example .env
+```
+
+Set a unique `SECRET_KEY` before starting the API. The Dockerized Celery worker/beat services also read this `.env`.
+
+For the optional Copilot:
+
+```env
+GEMINI_API_KEY=your_gemini_api_key
+GEMINI_MODEL=gemini-3.6-flash
+```
+
+**Never commit `.env` or expose the Gemini key to the frontend.** The key belongs only on the backend.
+
+### 3. Start infrastructure
+
+The complete demo stack is:
 
 ```bash
 cd backend
@@ -198,10 +219,11 @@ This starts:
 - PostgreSQL on `5432`
 - Neo4j HTTP/Bolt on `7474/7687`
 - Redis on `6379`
+- Celery worker and Celery Beat for autonomous scanning
 
 If you already run PostgreSQL locally, you can keep using it and start only the services you need.
 
-### 3. Configure the backend
+### 4. Start the backend
 
 ```bash
 cd backend
