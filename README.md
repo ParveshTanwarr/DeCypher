@@ -534,10 +534,15 @@ A repository-wide review was completed for the submission build. The core non-AI
 - Credentialed CORS is restricted to the configured frontend-origin allowlist and exposes `Content-Disposition` for browser downloads.
 - Duplicate configuration templates were removed; `backend/.env.example` is canonical.
 - Frontend export controls now use non-submit buttons, prevent duplicate export actions, close cleanly on outside click/Escape, and keep browser object URLs alive through the download hand-off.
+- Dashboard priority queue now renders all indexed actors in priority order inside an isolated scroll region; the surrounding dashboard remains fixed.
+- Dashboard notifications now surface the synchronized actor feed, priority updates and the top-ranked actors as active unread items.
+- On backend startup, every actor is guaranteed a four-signal synthetic investigation evidence trail for the controlled demo; existing evidence is preserved and missing signals are added idempotently.
 
-### AI/NLP intentionally unchanged
+### AI/NLP boundary for the submission build
 
-The AI/NLP implementation has not been modified in this submission pass. That includes the bundled authorship artifacts, fallback heuristic, model/runtime compatibility behavior, and Gemini Copilot implementation.
+The stylometry/NLP implementation has not been modified. The bundled authorship artifacts, fallback heuristic, feature extraction and model/runtime compatibility behavior remain unchanged.
+
+The Gemini Copilot received only a targeted context fix: actor scan-target context now uses the actual `ScanTarget.target_url` field, actor observations are resolved through the same evidence-target helper as the rest of the backend, and request failures are surfaced as a clean API error instead of an unhandled exception.
 
 ### Deployment-only notes
 
