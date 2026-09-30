@@ -1,5 +1,7 @@
+import hashlib
 import os
 import logging
+from datetime import datetime, timedelta, timezone
 import pandas as pd
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
@@ -350,6 +352,108 @@ def _upsert_infrastructure_observations(session: Session, df: pd.DataFrame):
     stmt = stmt.on_conflict_do_nothing(index_elements=["observation_id"])
     session.execute(stmt)
     return len(records)
+
+
+
+INVESTIGATION_EVIDENCE_TEMPLATES = (
+    (
+        "default_banner",
+        "SYNTH-BANNER",
+        "Controlled synthetic banner correlation signal.",
+    ),
+    (
+        "ssl_cert_reuse",
+        "SYNTH-CERT",
+        "Controlled synthetic TLS/certificate reuse signal.",
+    ),
+    (
+        "descriptor_timing",
+        "SYNTH-TIMING",
+        "Controlled synthetic descriptor-timing correlation signal.",
+    ),
+    (
+        "exposed_status_page",
+        "SYNTH-STATUS",
+        "Controlled synthetic exposed-status-page signal.",
+    ),
+)
+
+
+def ensure_investigation_evidence_for_all_actors(session: Session) -> int:
+    """Ensure every seeded actor has a complete four-signal demo evidence trail.
+
+    The bundled dataset contains real synthetic infrastructure findings for a
+    subset of actors. For the investigation UI, every actor should still have
+    a visible, provenance-tagged evidence trail. Missing signals are therefore
+    filled with deterministic synthetic demo observations only; existing
+    observations are never overwritten.
+    """
+    actors = session.query(Actor).order_by(Actor.actor_id.asc()).all()
+    if not actors:
+        return 0
+
+    actor_ids = [actor.actor_id for actor in actors]
+    existing_rows = (
+        session.query(Observation.target, Observation.indicator_type)
+        .filter(Observation.target.in_(actor_ids))
+        .all()
+    )
+    existing = {
+        (str(target).strip().lower(), str(indicator_type).strip().lower())
+        for target, indicator_type in existing_rows
+        if target and indicator_type
+    }
+
+    now = datetime.now(timezone.utc)
+    records = []
+
+    for actor in actors:
+        for indicator_type, value_prefix, description in INVESTIGATION_EVIDENCE_TEMPLATES:
+            key = (actor.actor_id.strip().lower(), indicator_type.lower())
+            if key in existing:
+                continue
+
+            seed_bytes = hashlib.sha256(
+                f"{actor.actor_id}:{indicator_type}".encode("utf-8")
+            ).digest()
+            confidence = round(0.68 + (seed_bytes[0] % 24) / 100.0, 2)
+            age_days = seed_bytes[1] % 45
+            timestamp = now - timedelta(
+                days=age_days,
+                hours=seed_bytes[2] % 24,
+                minutes=seed_bytes[3] % 60,
+            )
+            token = hashlib.sha256(
+                f"decypher:{actor.actor_id}:{indicator_type}".encode("utf-8")
+            ).hexdigest()[:12].upper()
+
+            records.append(
+                {
+                    "observation_id": f"SYN-{actor.actor_id}-{indicator_type.upper()}",
+                    "indicator_type": indicator_type,
+                    "detected": True,
+                    "value": f"{value_prefix}-{token}",
+                    "target": actor.actor_id,
+                    "source": "synthetic_investigation_evidence",
+                    "timestamp": timestamp,
+                    "confidence": confidence,
+                    "description": (
+                        f"{description} "
+                        f"Synthetic evidence generated for controlled SIH demonstration; "
+                        f"not a real-world observation."
+                    ),
+                }
+            )
+            existing.add(key)
+
+    if not records:
+        return 0
+
+    stmt = insert(Observation).values(records)
+    stmt = stmt.on_conflict_do_nothing(index_elements=["observation_id"])
+    result = session.execute(stmt)
+    session.commit()
+    return int(result.rowcount or 0)
 
 
 def _upsert_marketplaces(session: Session, df: pd.DataFrame):
