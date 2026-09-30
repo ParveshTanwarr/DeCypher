@@ -89,6 +89,7 @@ def get_observations(
     "/observations",
     response_model=BatchIngestionResponse,
     status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_role("admin", "service"))],
 )
 def ingest_observations(
     payload: ObservationBatchCreate,
