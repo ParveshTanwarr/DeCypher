@@ -100,15 +100,14 @@ class FeedbackResponse(BaseModel):
 
 
 class FeedbackItemResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     actor_id: str
     verdict: str
     investigator_id: Optional[str] = None
     notes: Optional[str] = None
     timestamp: Optional[datetime] = None
-
-    class Config:
-        from_attributes = True
 
 
 # ------------------------------------------------------------------
