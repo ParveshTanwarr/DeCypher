@@ -138,6 +138,8 @@ class BatchIngestionResponse(BaseModel):
 
 
 class ObservationResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     observation_id: str
     indicator_type: str
@@ -148,9 +150,6 @@ class ObservationResponse(BaseModel):
     timestamp: Optional[datetime] = None
     confidence: Optional[float] = 1.0
     description: Optional[str] = None
-
-    class Config:
-        from_attributes = True
 
 
 class ScanRequest(BaseModel):
