@@ -37,12 +37,51 @@ function App() {
     Promise.all([getActors(), getAllCorrelations()])
       .then(([actorRows, correlationRows]) => {
         const priorities = new Map(correlationRows.results.map((item) => [item.candidate_actor, item.priority?.score ?? 0]));
-        const mergedActors = actorRows.map((actor) => ({ ...actor, priority_score: priorities.get(actor.actor_id) ?? actor.priority_score ?? 0 }));
+        const mergedActors = actorRows
+          .map((actor) => ({
+            ...actor,
+            priority_score: priorities.get(actor.actor_id) ?? actor.priority_score ?? 0,
+          }))
+          .sort(
+            (a, b) =>
+              Number(b.priority_score || 0) - Number(a.priority_score || 0) ||
+              Number(b.confidence_score || 0) - Number(a.confidence_score || 0) ||
+              a.actor_id.localeCompare(b.actor_id),
+          );
+
         setActors(mergedActors);
-        const urgent = mergedActors.filter((actor) => Number(actor.priority_score || 0) >= 70).length;
+
+        const urgent = mergedActors.filter(
+          (actor) => Number(actor.priority_score || 0) >= 70,
+        ).length;
+        const topActors = mergedActors.slice(0, 3);
+
         setNotifications([
-          { id: "feed-ready", title: "Intelligence feed ready", message: `${mergedActors.length} actor records loaded into the investigation workspace.`, time: "Just now", type: "success" },
-          ...(urgent ? [{ id: "priority-update", title: "Priority queue updated", message: `${urgent} actors are currently at high or critical priority.`, time: "Just now", type: "warning" as const }] : []),
+          {
+            id: "feed-ready",
+            title: "Intelligence feed synchronized",
+            message: `${mergedActors.length} actor profiles are indexed and ranked by operational priority.`,
+            time: "Just now",
+            type: "success",
+          },
+          ...(urgent
+            ? [
+                {
+                  id: "priority-update",
+                  title: "Priority queue updated",
+                  message: `${urgent} actors are currently at high or critical priority.`,
+                  time: "Just now",
+                  type: "warning" as const,
+                },
+              ]
+            : []),
+          ...topActors.map((actor, index) => ({
+            id: `priority-actor-${actor.actor_id}`,
+            title: `Priority #${index + 1} · ${actor.actor_id}`,
+            message: `${actor.primary_handle} is ranked at ${Number(actor.priority_score || 0)}/100.`,
+            time: "Just now",
+            type: Number(actor.priority_score || 0) >= 70 ? ("warning" as const) : ("info" as const),
+          })),
         ]);
       })
       .catch((error) => { console.error("Failed to load intelligence data:", error); setLoadError("Unable to load intelligence data."); })
@@ -72,7 +111,7 @@ function App() {
     </aside>
 
     <main className="main-content"><div className="content-frame">
-      {page === "dashboard" && <>
+      {page === "dashboard" && <section className="dashboard-view">
         <header className="page-header dashboard-header"><div><div className="eyebrow">THREAT INTELLIGENCE PLATFORM</div><h2>Investigation Dashboard</h2><p>Prioritize actors by risk, evidence strength, recency and cross-source correlation.</p></div><div className="dashboard-actions"><ExportMenu onExport={handleExport} /><NotificationBell notifications={notifications} onMarkAllRead={markAllRead} /><button className="primary-button" onClick={() => setPage("search")}><Search size={15} /> Start Investigation</button></div></header>
         {loadError && <div className="error">{loadError}</div>}
         {loading ? <div className="loading">Calculating evidence priorities…</div> : <>
@@ -83,13 +122,55 @@ function App() {
             <div className="stat-card stat-purple"><span>Average Confidence</span><strong>{averageConfidence.toFixed(1)}%</strong><small>{highPriorityCount} high/critical priority actors</small><ShieldCheck size={18} /></div>
           </section>
           <section className="dashboard-grid">
-            <div className="panel actors-panel"><div className="panel-header"><div><div className="eyebrow">PRIORITY QUEUE</div><h3>Actors requiring attention</h3></div><button className="secondary-button" onClick={() => setPage("search")}>View all <span aria-hidden="true">→</span></button></div>
-              <div className="table-container"><table><thead><tr><th>Actor</th><th>Primary handle</th><th>Risk</th><th>Priority</th><th>Confidence</th><th>Last active</th></tr></thead><tbody>{actors.slice(0, 10).map((actor) => { const score = Number(actor.priority_score || 0); return <tr key={actor.actor_id} className="clickable-row" onClick={() => openActor(actor.actor_id)}><td className="actor-id">{actor.actor_id}</td><td>{actor.primary_handle}</td><td><span className={`risk-badge ${String(actor.risk_category || "").toLowerCase()}`}>{actor.risk_category}</span></td><td><span className={`priority-pill ${priorityClass(score)}`}><span>{score}</span> / 100</span></td><td>{(Number(actor.confidence_score || 0) * 100).toFixed(1)}%</td><td>{actor.last_active || "—"}</td></tr>; })}</tbody></table></div>
+            <div className="panel actors-panel"><div className="panel-header"><div><div className="eyebrow">PRIORITY QUEUE</div><h3>Actors ranked by operational priority</h3><p className="panel-meta">{actors.length} indexed actors · highest priority first</p></div><button className="secondary-button" onClick={() => setPage("search")}>Open investigation search <span aria-hidden="true">→</span></button></div>
+              <div className="table-container priority-queue-scroll">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Rank</th>
+                      <th>Actor</th>
+                      <th>Primary handle</th>
+                      <th>Risk</th>
+                      <th>Priority</th>
+                      <th>Confidence</th>
+                      <th>Last active</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {actors.map((actor, index) => {
+                      const score = Number(actor.priority_score || 0);
+                      return (
+                        <tr
+                          key={actor.actor_id}
+                          className="clickable-row"
+                          onClick={() => openActor(actor.actor_id)}
+                        >
+                          <td className="queue-rank">{String(index + 1).padStart(3, "0")}</td>
+                          <td className="actor-id">{actor.actor_id}</td>
+                          <td>{actor.primary_handle}</td>
+                          <td>
+                            <span className={`risk-badge ${String(actor.risk_category || "").toLowerCase()}`}>
+                              {actor.risk_category}
+                            </span>
+                          </td>
+                          <td>
+                            <span className={`priority-pill ${priorityClass(score)}`}>
+                              <span>{score}</span> / 100
+                            </span>
+                          </td>
+                          <td>{(Number(actor.confidence_score || 0) * 100).toFixed(1)}%</td>
+                          <td>{actor.last_active || "—"}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
             </div>
             <aside className="priority-panel"><div className="priority-panel-top"><div><div className="eyebrow">TRIAGE MODEL</div><h3>Priority score</h3></div><BarChart3 size={18} /></div><div className="priority-score-big">{priorityStats.average.toFixed(0)}<span>/100</span></div><p>Transparent operational ranking. {highPriorityCount} actors are currently at high or critical priority. This is a triage score, not a probability of identity.</p><div className="priority-legend"><div><span className="legend-swatch critical" />Critical <b>85–100</b></div><div><span className="legend-swatch high" />High <b>70–84</b></div><div><span className="legend-swatch medium" />Medium <b>50–69</b></div><div><span className="legend-swatch low" />Low <b>0–49</b></div></div></aside>
           </section>
         </>}
-      </>}
+      </section>}
       {page === "search" && <SearchPage onSelectActor={openActor} />}
       {page === "actor" && selectedActor && <ActorPage actorId={selectedActor} onBack={() => setPage("search")} onGraph={() => setPage("graph")} />}
       {page === "graph" && selectedActor && <GraphPage actorId={selectedActor} onBack={() => setPage("actor")} />}
