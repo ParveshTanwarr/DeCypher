@@ -9,8 +9,18 @@ from app.config import settings
 import app.models.sql_models
 from app.routers import actors, search, feedback, export, auth, scanner, nlp, correlation, ai
 from app.middleware.audit_log import AuditLogMiddleware
+from app.services.ingestion import ensure_investigation_evidence_for_all_actors
 
 _DEV_DEFAULT_SECRET_KEY = "threat_intel_dev_secret_key_change_in_prod_12345"
+
+
+def _seed_investigation_evidence() -> int:
+    from app.database.postgres import SessionLocal
+    db = SessionLocal()
+    try:
+        return ensure_investigation_evidence_for_all_actors(db)
+    finally:
+        db.close()
 
 
 @asynccontextmanager
@@ -18,6 +28,10 @@ async def lifespan(app: FastAPI):
     print("[*] Creating and verifying database tables...")
     await asyncio.to_thread(Base.metadata.create_all, bind=engine)
     print("[*] Database tables ready.")
+
+    seeded_evidence = await asyncio.to_thread(_seed_investigation_evidence)
+    if seeded_evidence:
+        print(f"[+] Seeded {seeded_evidence} synthetic investigation evidence records.")
 
     if settings.SECRET_KEY == _DEV_DEFAULT_SECRET_KEY:
         print(
