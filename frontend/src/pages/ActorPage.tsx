@@ -339,7 +339,6 @@ export default function ActorPage({
   useEffect(() => {
     let cancelled = false;
 
-    setLoading(true);
     setLoadError("");
     setCorrelation(null);
     setCorrelationLoading(true);
