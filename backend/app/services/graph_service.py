@@ -203,8 +203,11 @@ def sync_pgp_and_trust_graph(
         """
         UNWIND $rows AS row
 
-        MATCH (source:Handle {handle_id: row.source_handle_id})
-        MATCH (target:Handle {handle_id: row.target_handle_id})
+        MERGE (source:Handle {handle_id: row.source_handle_id})
+        SET source.handle = row.source_handle
+
+        MERGE (target:Handle {handle_id: row.target_handle_id})
+        SET target.handle = row.target_handle
 
         MERGE (source)-[t:TRUSTS]->(target)
         SET t.relationship_type = row.relationship_type,
