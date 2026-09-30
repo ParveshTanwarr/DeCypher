@@ -47,6 +47,8 @@ class ScanTargetResponse(BaseModel):
 
 
 class ScanJobResponse(BaseModel):
+    model_config = {"from_attributes": True}
+
     id: int
     target_id: int
     actor_id: Optional[str]
@@ -59,9 +61,6 @@ class ScanJobResponse(BaseModel):
     correlation_score: Optional[float]
     priority_score: Optional[int]
     error: Optional[str]
-
-    class Config:
-        from_attributes = True
 
 
 @router.get(
