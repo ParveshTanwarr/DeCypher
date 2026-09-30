@@ -171,7 +171,7 @@ DeCypher/
 For the **full** stack, use:
 
 - Python **3.11+**
-- Node.js 18+
+- Node.js 20.19+ or 22.12+
 - PostgreSQL
 - Docker Desktop (recommended for PostgreSQL/Neo4j/Redis)
 - Git
@@ -195,7 +195,7 @@ pip install -r requirements.txt
 cp .env.example .env
 ```
 
-Set a unique `SECRET_KEY` before starting the API. The Dockerized Celery worker/beat services also read this `.env`.
+Set a unique `SECRET_KEY` before starting the API. The Dockerized Celery worker/beat services also read this `.env`. The example disables autonomous scanning by default and excludes startup-only synthetic filler evidence from correlation by default.
 
 For the optional Copilot:
 
@@ -458,7 +458,7 @@ The bundled `.joblib` files are trusted project artifacts. Do not load untrusted
 
 The bundled artifacts were serialized with scikit-learn **1.9.0**. Persisted scikit-learn models are not a supported cross-version interface; use the same dependency family as the training environment or retrain/re-export the artifacts.
 
-The repository's current `backend/requirements.txt` uses a lower bound rather than a strict pin, so reproducible deployment should pin the exact ML environment used for the artifacts.
+The repository pins `scikit-learn==1.9.0` to match the bundled model artifacts. Keep that version aligned with the training environment when loading the persisted models.
 
 ---
 
@@ -558,7 +558,7 @@ A repository-wide review was completed for the submission build. The core non-AI
 - Frontend export controls now use non-submit buttons, prevent duplicate export actions, close cleanly on outside click/Escape, and keep browser object URLs alive through the download hand-off.
 - Dashboard priority queue now renders all indexed actors in priority order inside an isolated scroll region; the surrounding dashboard remains fixed.
 - Dashboard notifications now surface the synchronized actor feed, priority updates and the top-ranked actors as active unread items.
-- On backend startup, every actor is guaranteed a four-signal synthetic investigation evidence trail for the controlled demo; existing evidence is preserved and missing signals are added idempotently.
+- On backend startup, every actor is guaranteed a four-signal synthetic investigation evidence trail for the controlled demo; existing evidence is preserved and missing signals are added idempotently. These filler observations are excluded from correlation by default so they cannot silently inflate attribution scores.
 
 ### AI/NLP boundary for the submission build
 
