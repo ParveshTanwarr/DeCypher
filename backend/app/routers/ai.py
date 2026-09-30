@@ -2,12 +2,14 @@ import os
 from typing import List, Optional, Dict, Any
 import requests
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import func
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 from app.database.postgres import get_db
 from app.models.sql_models import Actor, DarkWebHandle, Wallet, Observation, ScanTarget
 from app.routers.auth import get_current_user
 from app.config import settings
+from app.services.observation_scope import build_observation_target_keys
 
 router = APIRouter(prefix="/ai", tags=["AI"], dependencies=[Depends(get_current_user)])
 GEMINI_MODEL = settings.GEMINI_MODEL
@@ -31,11 +33,22 @@ def _actor_context(actor_id: Optional[str], db: Session) -> Dict[str, Any]:
     wallets = db.query(Wallet).filter(Wallet.actor_id == actor.actor_id).all()
     targets = db.query(ScanTarget).filter(ScanTarget.actor_id == actor.actor_id).all()
     handle_names = [h.handle for h in handles]
-    observations = db.query(Observation).filter(Observation.target.ilike(actor.actor_id)).order_by(Observation.timestamp.desc()).limit(40).all()
-    if handle_names:
-        handle_obs = db.query(Observation).filter(Observation.target.in_(handle_names)).order_by(Observation.timestamp.desc()).limit(40).all()
-        seen = {o.observation_id for o in observations}
-        observations.extend(o for o in handle_obs if o.observation_id not in seen)
+    target_keys = build_observation_target_keys(
+        actor.actor_id,
+        actor.primary_handle,
+        handles,
+        targets,
+    )
+    observations = (
+        db.query(Observation)
+        .filter(
+            func.lower(Observation.target).in_(target_keys),
+            Observation.detected.is_(True),
+        )
+        .order_by(Observation.timestamp.desc())
+        .limit(60)
+        .all()
+    )
     return {
         "scope": "actor",
         "actor": {
@@ -48,7 +61,7 @@ def _actor_context(actor_id: Optional[str], db: Session) -> Dict[str, Any]:
             "wallets": [w.address for w in wallets],
             "marketplaces": sorted({h.platform for h in handles if h.platform}),
             "pgp_keys": sorted({key.fingerprint for h in handles for key in getattr(h, "pgp_keys", []) if key.fingerprint}),
-            "scan_targets": [t.url or t.name for t in targets if t.url or t.name],
+            "scan_targets": [t.target_url or t.name for t in targets if t.target_url or t.name],
             "evidence": [{
                 "id": o.observation_id,
                 "indicator_type": o.indicator_type,
@@ -71,17 +84,20 @@ def _call_gemini(prompt: str, history: List[ChatMessage]) -> str:
         role = "model" if item.role == "assistant" else "user"
         contents.append({"role": role, "parts": [{"text": item.content[:4000]}]})
     contents.append({"role": "user", "parts": [{"text": prompt}]})
-    response = requests.post(
-        f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent",
-        params={"key": api_key},
-        headers={"Content-Type": "application/json"},
-        json={
-            "contents": contents,
-            "systemInstruction": {"parts": [{"text": "You are DeCypher Copilot, an investigation assistant inside a dark-web threat-intelligence platform. Use ONLY the supplied DeCypher context. Never invent actors, identifiers, evidence, relationships, sources, or attribution conclusions. Clearly separate documented evidence from inference and unknowns. Treat confidence and priority as platform-derived scores, not proof of identity. Prefer concise investigator-friendly answers with bullets. If the context does not support an answer, say so."}]},
-            "generationConfig": {"temperature": 0.15, "maxOutputTokens": 900},
-        },
-        timeout=60,
-    )
+    try:
+        response = requests.post(
+            f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent",
+            params={"key": api_key},
+            headers={"Content-Type": "application/json"},
+            json={
+                "contents": contents,
+                "systemInstruction": {"parts": [{"text": "You are DeCypher Copilot, an investigation assistant inside a dark-web threat-intelligence platform. Use ONLY the supplied DeCypher context. Never invent actors, identifiers, evidence, relationships, sources, or attribution conclusions. Clearly separate documented evidence from inference and unknowns. Treat confidence and priority as platform-derived scores, not proof of identity. Prefer concise investigator-friendly answers with bullets. If the context does not support an answer, say so."}]},
+                "generationConfig": {"temperature": 0.15, "maxOutputTokens": 900},
+            },
+            timeout=60,
+        )
+    except requests.RequestException as exc:
+        raise HTTPException(status_code=502, detail=f"Gemini request failed: {exc}") from exc
     if not response.ok:
         raise HTTPException(status_code=502, detail=f"Gemini request failed: {response.text[:500]}")
     data = response.json()
