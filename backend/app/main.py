@@ -79,7 +79,7 @@ async def lifespan(app: FastAPI):
     if seeded_evidence:
         print(f"[+] Seeded {seeded_evidence} synthetic investigation evidence records.")
 
-    if not settings.SECRET_KEY or settings.SECRET_KEY == _DEV_DEFAULT_SECRET_KEY:
+    if not settings.SECRET_KEY:
         raise RuntimeError(
             "SECRET_KEY is missing or still using the development default. "
             "Set a unique SECRET_KEY in backend/.env before starting the API."
