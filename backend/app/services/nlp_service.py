@@ -36,6 +36,7 @@ class NLPStylometryService:
         self._posts_df: Optional[pd.DataFrame] = None
         self._name_to_handle_ids: Dict[str, list] = {}
         self._known_handle_ids: set[str] = set()
+        self._handles_df: Optional[pd.DataFrame] = None
 
         self._load_engine()
         self._load_posts_cache()
@@ -81,6 +82,7 @@ class NLPStylometryService:
 
             if os.path.exists(handles_path):
                 handles_df = pd.read_csv(handles_path)
+                self._handles_df = handles_df
                 name_col = "handle_name" if "handle_name" in handles_df.columns else (
                     "handle" if "handle" in handles_df.columns else None
                 )
@@ -94,6 +96,7 @@ class NLPStylometryService:
             self._posts_df = None
             self._name_to_handle_ids = {}
             self._known_handle_ids = set()
+            self._handles_df = None
 
     def _resolve_handle_id(self, handle: str) -> Optional[str]:
         if not handle:
@@ -173,11 +176,21 @@ class NLPStylometryService:
             "engine_warning": "Validated authorship model unavailable; this score is a basic word-overlap heuristic.",
         }
 
-    def check_contradiction(self, handle_id_a: str, handle_id_b: str, handles_df: pd.DataFrame) -> Dict[str, Any]:
-        """De-confliction check, delegated to the engine when available."""
-        if self.engine is not None:
-            return self.engine.check_contradiction(handle_id_a, handle_id_b, handles_df)
-        return {"contradiction_flag": False, "overlap_days": 0, "note": "Engine unavailable -- check skipped."}
+    def check_contradiction(self, handle_a: str, handle_b: str) -> Dict[str, Any]:
+        """Run the model de-confliction check using bundled handle metadata."""
+        if self.engine is None:
+            return {"contradiction_flag": False, "overlap_days": 0, "note": "Engine unavailable -- check skipped."}
+        if self._handles_df is None:
+            return {"contradiction_flag": False, "overlap_days": 0, "note": "Handle metadata unavailable -- check skipped."}
+
+        handle_id_a = self._resolve_handle_id(handle_a)
+        handle_id_b = self._resolve_handle_id(handle_b)
+        if not handle_id_a or not handle_id_b:
+            return {"contradiction_flag": False, "overlap_days": 0, "note": "Could not resolve both handles for de-confliction."}
+
+        try:
+            return self.engine.check_contradiction(handle_id_a, handle_id_b, self._handles_df)
+        except (KeyError, IndexError, ValueError) as exc:
+            return {"contradiction_flag": False, "overlap_days": 0, "note": f"De-confliction check skipped: {exc}"}
 
 
-nlp_service = NLPStylometryService()
