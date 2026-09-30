@@ -283,7 +283,10 @@ def get_actor_subgraph(actor_id: str, db: Session = Depends(get_db)):
     actor_handle_ids = [h.id for h in handles]
     actor_trust_links = (
         db.query(TrustLink)
-        .filter(TrustLink.source_handle_id.in_(actor_handle_ids))
+        .filter(
+            (TrustLink.source_handle_id.in_(actor_handle_ids))
+            | (TrustLink.target_handle_id.in_(actor_handle_ids))
+        )
         .all()
         if actor_handle_ids
         else []
@@ -831,23 +834,37 @@ def get_actor_subgraph(actor_id: str, db: Session = Depends(get_db)):
                 )
             )
 
-    for h in handles:
-        for link in h.trust_links_out:
-            nodes.append(
-                GraphNode(
-                    id=f"handle:{link.target_handle.handle}",
-                    label="Handle",
-                    name=link.target_handle.handle,
-                    category="TrustedHandle",
-                )
+    # Include both inbound and outbound trust edges so the PostgreSQL
+    # fallback matches the richer Neo4j graph semantics.
+    for link in actor_trust_links:
+        source = link.source_handle
+        target = link.target_handle
+        if not source or not target:
+            continue
+
+        nodes.append(
+            GraphNode(
+                id=f"handle:{source.id}",
+                label="Handle",
+                name=source.handle,
+                category="Handle",
             )
-            links.append(
-                GraphEdge(
-                    source=f"handle:{h.handle}",
-                    target=f"handle:{link.target_handle.handle}",
-                    relation="TRUSTS",
-                )
+        )
+        nodes.append(
+            GraphNode(
+                id=f"handle:{target.id}",
+                label="Handle",
+                name=target.handle,
+                category="TrustedHandle",
             )
+        )
+        links.append(
+            GraphEdge(
+                source=f"handle:{source.id}",
+                target=f"handle:{target.id}",
+                relation="TRUSTS",
+            )
+        )
 
     wallet_addresses = {w.address for w in wallets if w.address}
     reused_wallet_rows = (
