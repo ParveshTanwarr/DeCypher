@@ -15,7 +15,6 @@ _DEV_DEFAULT_SECRET_KEY = "threat_intel_dev_secret_key_change_in_prod_12345"
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Setup
     print("[*] Creating and verifying database tables...")
     await asyncio.to_thread(Base.metadata.create_all, bind=engine)
     print("[*] Database tables ready.")
@@ -29,7 +28,6 @@ async def lifespan(app: FastAPI):
 
     yield
 
-    # Teardown / Cleanup
     print("[*] Shutting down services and database connections...")
     engine.dispose()
 
@@ -38,11 +36,12 @@ app = FastAPI(
     title="Dark Web Threat Intel Platform API",
     description="Attribution, Stylometry, and Correlation Graph Engine",
     version="1.0.0",
-    lifespan=lifespan
+    lifespan=lifespan,
 )
 
-# CORS Middleware (must be registered before custom route middlewares).
-# Keep credentialed browser access limited to explicitly configured frontend origins.
+# Keep credentialed browser access limited to explicitly configured frontend
+# origins, and expose the download filename header so the React client can
+# preserve the backend-provided CSV/JSON/PDF filenames across CORS.
 cors_origins = [
     origin.strip()
     for origin in settings.CORS_ALLOWED_ORIGINS.split(",")
@@ -54,15 +53,12 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type"],
+    expose_headers=["Content-Disposition"],
 )
 
-# Attach Audit Log Middleware
 app.add_middleware(AuditLogMiddleware)
-
-# Attach Prometheus Monitoring
 Instrumentator().instrument(app).expose(app)
 
-# Include Routers
 app.include_router(auth.router)
 app.include_router(actors.router)
 app.include_router(search.router)
@@ -72,7 +68,6 @@ app.include_router(scanner.router)
 app.include_router(nlp.router)
 app.include_router(correlation.router)
 app.include_router(ai.router)
-
 
 
 @app.get("/health", tags=["Health"])
