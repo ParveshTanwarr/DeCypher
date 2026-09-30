@@ -45,6 +45,7 @@ interface Evidence {
   description: string;
   detected: boolean;
   value?: string;
+  target?: string;
   timestamp?: string;
   source?: string;
 }
