@@ -1,4 +1,4 @@
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
     DATABASE_URL: str = "postgresql://postgres:postgrespassword@localhost:5432/threat_intel"
@@ -18,6 +18,5 @@ class Settings(BaseSettings):
     GEMINI_MODEL: str = "gemini-3.6-flash"
     # Synthetic filler evidence is excluded from correlation by default. Set true only for a controlled demo.
     CORRELATION_EXCLUDE_SYNTHETIC_DEMO_EVIDENCE: bool = True
-    class Config:
-        env_file = ".env"
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 settings = Settings()
