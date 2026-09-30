@@ -21,14 +21,13 @@ router = APIRouter(
 
 
 class FeedbackItem(BaseModel):
+    model_config = {"from_attributes": True}
+
     id: int
     actor_id: str
     verdict: str
     investigator_id: Optional[str] = None
     notes: Optional[str] = None
-
-    class Config:
-        from_attributes = True
 
 
 @router.get("", response_model=List[FeedbackItem], status_code=status.HTTP_200_OK)
