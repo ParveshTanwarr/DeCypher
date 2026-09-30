@@ -626,7 +626,7 @@ export default function ActorPage({
             >
               <div>
                 <div className="eyebrow">
-                  OVERALL ASSOCIATION
+                  EVIDENCE CORRELATION SCORE
                 </div>
 
                 <div
@@ -639,6 +639,9 @@ export default function ActorPage({
                   {formatPercent(
                     correlation.overall_confidence
                   )}
+                </div>
+                <div style={{ marginTop: "8px", fontSize: "12px", opacity: 0.58, lineHeight: 1.5 }}>
+                  Weighted evidence-agreement score, not a calibrated identity probability. Review it with signal coverage and the underlying observations.
                 </div>
               </div>
 
@@ -1219,23 +1222,19 @@ export default function ActorPage({
 
                       <div
                         style={{
-                          display: "flex",
-                          justifyContent:
-                            "space-between",
-                          gap: "12px",
-                          flexWrap: "wrap",
                           marginTop: "12px",
+                          display: "grid",
+                          gridTemplateColumns:
+                            "repeat(auto-fit, minmax(180px, 1fr))",
+                          gap: "8px 16px",
                           fontSize: "11px",
-                          opacity: 0.45,
                           fontFamily: "monospace",
+                          opacity: 0.58,
                         }}
                       >
-                        <span>
-                          {item.observation_id}
-                        </span>
-                        <span>
-                          Source: {item.source || "unknown"}
-                        </span>
+                        <span>Observation: {item.observation_id}</span>
+                        <span>Source: {item.source || "unknown"}</span>
+                        <span>Target: {item.target || "unknown"}</span>
                       </div>
                     </div>
                   </div>
