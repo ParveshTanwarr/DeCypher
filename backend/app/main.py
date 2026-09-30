@@ -36,6 +36,24 @@ def _bootstrap_demo_data() -> int:
         db.close()
 
 
+def _backfill_graph_if_needed(actor_count: int) -> None:
+    """Rebuild the controlled graph when Postgres is populated but Neo4j is empty/partial."""
+    if actor_count <= 0:
+        return
+    try:
+        rows = neo4j_conn.query("MATCH (a:Actor) RETURN count(a) AS count")
+        graph_actor_count = int(rows[0].get("count") or 0) if rows else 0
+        if graph_actor_count < actor_count:
+            print(
+                f"[*] Neo4j has {graph_actor_count}/{actor_count} actors; "
+                "running a controlled graph backfill."
+            )
+            init_db_and_load_csvs(reset_tables=False, sync_neo4j=True)
+    except Exception as exc:
+        # The API can still use its PostgreSQL graph fallback when Neo4j is down.
+        print(f"[!] Neo4j graph backfill deferred: {exc}")
+
+
 def _seed_investigation_evidence() -> int:
     from app.database.postgres import SessionLocal
     db = SessionLocal()
@@ -54,6 +72,7 @@ async def lifespan(app: FastAPI):
     actor_count = await asyncio.to_thread(_bootstrap_demo_data)
     if actor_count:
         print(f"[+] Intelligence store contains {actor_count} actors.")
+        await asyncio.to_thread(_backfill_graph_if_needed, actor_count)
 
     seeded_evidence = await asyncio.to_thread(_seed_investigation_evidence)
     if seeded_evidence:
