@@ -34,18 +34,44 @@ function App() {
   useEffect(() => {
     if (!token) return;
     setAuthToken(token); setLoading(true); setLoadError("");
-    Promise.all([getActors(), getAllCorrelations()])
-      .then(([actorRows, correlationRows]) => {
-        const priorities = new Map(correlationRows.results.map((item) => [item.candidate_actor, item.priority?.score ?? 0]));
+    Promise.allSettled([getActors(), getAllCorrelations()])
+      .then(([actorsResult, correlationsResult]) => {
+        if (actorsResult.status === "rejected") {
+          console.error("Failed to load actors:", actorsResult.reason);
+          setActors([]);
+          setLoadError("Unable to load actor intelligence from the backend.");
+          return;
+        }
+
+        const actorRows = actorsResult.value;
+        const correlationRows =
+          correlationsResult.status === "fulfilled"
+            ? correlationsResult.value
+            : { results: [] };
+
+        if (correlationsResult.status === "rejected") {
+          console.error("Failed to load correlations; showing actor data without correlation refresh:", correlationsResult.reason);
+          setLoadError("Actor data loaded, but live correlation refresh is unavailable.");
+        }
+
+        const priorities = new Map(
+          correlationRows.results.map((item) => [
+            item.candidate_actor,
+            item.priority?.score ?? 0,
+          ]),
+        );
         const mergedActors = actorRows
           .map((actor) => ({
             ...actor,
-            priority_score: priorities.get(actor.actor_id) ?? actor.priority_score ?? 0,
+            priority_score:
+              priorities.get(actor.actor_id) ?? actor.priority_score ?? 0,
           }))
           .sort(
             (a, b) =>
-              Number(b.priority_score || 0) - Number(a.priority_score || 0) ||
-              Number(b.confidence_score || 0) - Number(a.confidence_score || 0) ||
+              Number(b.priority_score || 0) -
+                Number(a.priority_score || 0) ||
+              Number(b.confidence_score || 0) -
+                Number(a.confidence_score || 0) ||
               a.actor_id.localeCompare(b.actor_id),
           );
 
@@ -80,11 +106,13 @@ function App() {
             title: `Priority #${index + 1} · ${actor.actor_id}`,
             message: `${actor.primary_handle} is ranked at ${Number(actor.priority_score || 0)}/100.`,
             time: "Just now",
-            type: Number(actor.priority_score || 0) >= 70 ? ("warning" as const) : ("info" as const),
+            type:
+              Number(actor.priority_score || 0) >= 70
+                ? ("warning" as const)
+                : ("info" as const),
           })),
         ]);
       })
-      .catch((error) => { console.error("Failed to load intelligence data:", error); setLoadError("Unable to load intelligence data."); })
       .finally(() => setLoading(false));
   }, [token]);
 
