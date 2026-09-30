@@ -51,3 +51,23 @@ def test_login_rate_limit_kicks_in(client):
         r = client.post("/auth/token", data={"username": username, "password": "wrong"})
         statuses.append(r.status_code)
     assert 429 in statuses, "expected the login rate limiter to trigger after repeated attempts"
+
+
+def test_analyst_cannot_ingest_scanner_observations(client, analyst_headers):
+    r = client.post(
+        "/scanner/observations",
+        headers=analyst_headers,
+        json={
+            "observations": [{
+                "observation_id": "AUTHZ-TEST-OBS-001",
+                "indicator_type": "test",
+                "detected": True,
+                "value": "controlled",
+                "target": "A00001",
+                "source": "pytest",
+                "confidence": 0.5,
+                "description": "Authorization regression fixture",
+            }]
+        },
+    )
+    assert r.status_code == 403
