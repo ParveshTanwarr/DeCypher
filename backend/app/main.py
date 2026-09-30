@@ -14,7 +14,6 @@ from app.routers import actors, search, feedback, export, auth, scanner, nlp, co
 from app.middleware.audit_log import AuditLogMiddleware
 from app.services.ingestion import ensure_investigation_evidence_for_all_actors, init_db_and_load_csvs
 
-_DEV_DEFAULT_SECRET_KEY = "threat_intel_dev_secret_key_change_in_prod_12345"
 
 
 def _bootstrap_demo_data() -> int:
