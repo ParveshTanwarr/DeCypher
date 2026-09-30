@@ -6,7 +6,8 @@ from typing import Any, Dict, List, Optional
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from app.models.sql_models import Actor, DarkWebHandle, Wallet, Observation, ScanTarget
+from app.models.sql_models import Actor, DarkWebHandle, Wallet, Observation, ScanTarget, InvestigatorFeedback
+from app.config import settings
 from app.services.observation_scope import build_observation_target_keys
 from app.services.nlp_service import nlp_service
 
@@ -130,6 +131,7 @@ class CorrelationService:
         evidence_confidence = self._evidence_confidence(actor.actor_id, signals)
         recency = self._recency_score(actor.actor_id)
         coverage = self._coverage_score(signals)
+        feedback = self._feedback_adjustment(actor.actor_id)
 
         components = {
             "risk_severity": round(risk, 2),
@@ -138,10 +140,12 @@ class CorrelationService:
             "recency": round(recency, 2),
             "evidence_coverage": round(coverage, 2),
         }
-        score = round(sum(components[k] * w for k, w in PRIORITY_WEIGHTS.items()))
-        score = int(max(0, min(100, score)))
+        base_score = round(sum(components[k] * w for k, w in PRIORITY_WEIGHTS.items()))
+        score = int(max(0, min(100, base_score + feedback["priority_delta"])))
         return {
             "score": score,
+            "base_score": int(max(0, min(100, base_score))),
+            "investigator_feedback": feedback,
             "level": self._priority_level(score),
             "components": components,
             "weights": {k: round(v, 2) for k, v in PRIORITY_WEIGHTS.items()},
@@ -203,6 +207,12 @@ class CorrelationService:
             func.lower(Observation.target).in_(targets),
             Observation.detected.is_(True),
         )
+        # Startup filler observations are for the controlled demo UI only.
+        # They must not silently become attribution evidence.
+        if settings.CORRELATION_EXCLUDE_SYNTHETIC_DEMO_EVIDENCE:
+            query = query.filter(
+                func.lower(Observation.source) != "synthetic_investigation_evidence"
+            )
         if indicator_types:
             query = query.filter(
                 Observation.indicator_type.in_(indicator_types)
@@ -298,6 +308,36 @@ class CorrelationService:
         if age_days <= 90: return 60.0
         if age_days <= 180: return 40.0
         return 20.0
+
+    def _feedback_adjustment(self, actor_id: str) -> Dict[str, Any]:
+        """Keep the latest human verdict as a separate triage adjustment."""
+        latest = (
+            self.db.query(InvestigatorFeedback)
+            .filter(InvestigatorFeedback.actor_id == actor_id)
+            .order_by(InvestigatorFeedback.timestamp.desc(), InvestigatorFeedback.id.desc())
+            .first()
+        )
+        if not latest:
+            return {"priority_delta": 0, "latest_verdict": None, "investigator_id": None}
+
+        verdict = (latest.verdict or "").lower()
+        delta = 0
+        if "confirm" in verdict:
+            delta += 5
+        elif "false" in verdict or "reject" in verdict or "dismiss" in verdict:
+            delta -= 15
+
+        if "high" in verdict and "risk" in verdict:
+            delta += 10
+        elif "low" in verdict and "risk" in verdict:
+            delta -= 10
+
+        return {
+            "priority_delta": delta,
+            "latest_verdict": latest.verdict,
+            "investigator_id": latest.investigator_id,
+            "timestamp": latest.timestamp.isoformat() if latest.timestamp else None,
+        }
 
     @staticmethod
     def _coverage_score(signals: List[Dict[str, Any]]) -> float:
