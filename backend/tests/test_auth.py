@@ -71,3 +71,21 @@ def test_analyst_cannot_ingest_scanner_observations(client, analyst_headers):
         },
     )
     assert r.status_code == 403
+
+
+def test_health_reports_dependency_contract(client):
+    response = client.get("/health")
+
+    assert response.status_code == 200
+    payload = response.json()
+
+    assert payload["service"] == "Threat Intel API"
+    assert payload["status"] in {"healthy", "degraded"}
+
+    checks = payload["checks"]
+    assert set(("postgres", "neo4j", "redis", "nlp")).issubset(checks)
+
+    assert checks["postgres"] == "healthy"
+    assert isinstance(checks["neo4j"], str)
+    assert isinstance(checks["redis"], str)
+    assert isinstance(checks["nlp"], str)
