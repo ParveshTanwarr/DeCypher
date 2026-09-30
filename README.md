@@ -519,148 +519,31 @@ npm run lint
 
 ---
 
-## Repository audit — 29 September 2026
+## Repository audit — 30 September 2026
 
-A repository-wide static review of the tracked source tree identified the following repository-level issues. Local-machine setup problems are intentionally excluded.
+A repository-wide review was completed for the submission build. The core non-AI/NLP issues identified in the previous audit have been remediated.
 
-### Fixed in the current remediation pass
+### Resolved in the submission build
 
-- Scanner evidence is now resolved consistently from actor ID, primary/associated handles, and linked scan-target URL/name across actor detail, evidence, graph, correlation and bulk export paths.
-- Correlation observation queries are scoped to actor evidence instead of repeatedly scanning the entire observation table; wallet-reuse lookups are batched; `correlate_all()` commits once after processing.
-- Bulk export now fetches only detected observations matching the actors and their known evidence targets.
-- Native Neo4j graph query map literals no longer contain duplicate keys.
-- Neo4j actor-graph synchronization now supplies stable `handle_id` values, so live graph sync can populate handle and wallet relationships correctly.
-- The PostgreSQL graph fallback batches wallet-reuse lookup instead of querying once per wallet.
-- Backend and frontend graph contracts now share explicit node `type` and relationship `relation` fields.
-- Credentialed CORS is now restricted to an explicit environment-configured frontend-origin allowlist.
-- The duplicate `backend/app/routers/.env.example` template has been removed; `backend/.env.example` is the canonical configuration template.
+- Scanner evidence resolution is shared across actor detail, evidence, graph, correlation and export paths.
+- Correlation observation queries are scoped to actor evidence; wallet reuse lookups are batched; full correlation commits once after processing.
+- Bulk exports fetch only observations relevant to the exported actors.
+- Native Neo4j graph map construction was cleaned up and graph synchronization uses stable handle IDs.
+- PostgreSQL graph fallback remains available when Neo4j is unavailable.
+- Backend/frontend graph contracts now use explicit node `type` and edge `relation` fields.
+- Credentialed CORS is restricted to the configured frontend-origin allowlist and exposes `Content-Disposition` for browser downloads.
+- Duplicate configuration templates were removed; `backend/.env.example` is canonical.
+- Frontend export controls now use non-submit buttons, prevent duplicate export actions, close cleanly on outside click/Escape, and keep browser object URLs alive through the download hand-off.
 
-### Intentionally deferred for the AI/NLP pass
+### AI/NLP intentionally unchanged
 
-- Actor-scoped Gemini context still contains the known `ScanTarget.url` vs `ScanTarget.target_url` mismatch.
-- The NLP service's fallback heuristic and persisted scikit-learn artifact/runtime compatibility remain unchanged.
-- AI/NLP-specific evidence-scope unification is not part of this remediation pass.
+The AI/NLP implementation has not been modified in this submission pass. That includes the bundled authorship artifacts, fallback heuristic, model/runtime compatibility behavior, and Gemini Copilot implementation.
 
-### Deployment-only concerns retained
+### Deployment-only notes
 
-- Demo bcrypt credentials and development database/Neo4j defaults remain intentionally present for the hackathon/demo environment. They must not be reused as production secrets; the application already warns when the checked-in JWT secret is still active.
-- The synthetic dataset, controlled scanner, optional Neo4j fallback and optional Redis/Celery autoscan infrastructure remain deliberate prototype choices rather than correctness failures.
-
-## Functional issues
-
-#### 1. Actor-scoped Gemini context references a non-existent field
-'backend/app/routers/ai.py' builds scan-target context with 't.url', but the SQLAlchemy model defines the field as 'ScanTarget.target_url'.
-
-**Impact:** an actor-scoped 'POST /ai/chat' request can raise an 'AttributeError' when the actor has scan targets.
-
-**Fix:** replace both 't.url' references with 't.target_url'.
-
-#### 2. Correlation ignores URL/name-based scanner observations
-The actor evidence endpoint correctly expands its observation lookup to include each actor's scan-target URL and name. The correlation service does not: its observation scoring, evidence-confidence and recency paths only match the actor ID/primary/associated handles.
-
-**Impact:** legitimate scanner evidence can appear in the Actor Evidence view but fail to contribute to correlation/priority scoring.
-
-**Fix:** centralize actor observation-target resolution and use it consistently across evidence, correlation, priority and Copilot context.
-
-#### 3. Neo4j graph query contains duplicate map keys
-The native Neo4j query in 'backend/app/services/graph_service.py' contains repeated 'handle_id' keys in returned map literals.
-
-**Impact:** this is invalid/redundant Cypher map construction and can break the native Neo4j graph path. The API may then silently fall back to the PostgreSQL graph.
-
-**Fix:** remove the duplicate keys from 'handle_pgp_keys' and 'handle_marketplaces'.
-
-#### 4. Wallet graph filtering contains a duplicated condition
-'sync_actor_batch()' checks 'w.get("handle_id")' twice when constructing wallet rows.
-
-**Impact:** no current functional change, but it is redundant logic and a maintenance smell.
-
-**Fix:** keep a single 'handle_id' check.
-
-### Performance / scalability issues
-
-#### 5. Correlation performs repeated full-table scans
-'CorrelationService' repeatedly loads large sets of observations and then filters them in Python. Wallet reuse also performs a query for every wallet. 'correlate_all()' then runs the complete correlation flow actor-by-actor and commits each result.
-
-**Impact:** acceptable for the synthetic demo dataset, but it will scale poorly as observation, wallet and actor counts grow.
-
-**Fix:** push filtering/grouping into SQL, batch related records, cache actor evidence targets, and commit priority updates in batches.
-
-#### 6. Bulk export loads all detected observations
-The export service preloads every detected observation before assigning records to actors.
-
-**Impact:** memory and query cost grow with the global observation table even when exporting a subset.
-
-**Fix:** fetch observations scoped to the actor IDs/targets being exported, preferably with a single indexed query.
-
-#### 7. Correlation can fall back to an unvalidated heuristic
-The NLP service intentionally fails soft when the trained model artifacts cannot be loaded and uses a basic word-overlap heuristic.
-
-**Impact:** the API can remain available while producing a score that is materially different from the validated authorship model.
-
-**Fix:** expose the engine mode in the response and clearly distinguish 'trained_model' from 'fallback_heuristic', or fail the stylometry signal explicitly instead of silently substituting it.
-
-### Security / deployment issues
-
-#### 8. CORS is unrestricted
-'backend/app/main.py' currently uses 'allow_origins=["*"]' together with credentials.
-
-**Impact:** appropriate for a local prototype, not an appropriate production policy.
-
-**Fix:** configure an explicit frontend-origin allowlist through environment settings.
-
-#### 9. Development credentials and secrets are embedded in application defaults
-Demo bcrypt credentials are intentionally present in 'auth.py', while database/Neo4j/JWT development defaults exist in configuration/example files.
-
-**Impact:** these values must never be treated as production credentials.
-
-**Fix:** move real credentials to environment/secret management and keep demo credentials clearly isolated from production deployment.
-
-#### 10. A second '.env.example' exists inside 'backend/app/routers/'
-'backend/app/routers/.env.example' duplicates configuration and contains a development JWT secret.
-
-**Impact:** configuration is duplicated and the secret-like material is located inside the application package where it does not belong.
-
-**Fix:** remove the nested file and keep the canonical template at 'backend/.env.example'.
-
-### Maintainability / correctness issues
-
-#### 11. Scan-target lookup logic is duplicated across services
-Actors, exports, AI context, correlation and scanner code each implement slightly different notions of what observations belong to an actor.
-
-**Impact:** different screens can disagree about the evidence attached to the same actor.
-
-**Fix:** create one reusable service/helper that resolves actor ID, primary handle, associated handles, scan-target URLs and scan-target names.
-
-#### 12. Graph response contracts are looser on the frontend than on the backend
-The backend 'GraphNode' schema requires 'id', 'label', 'name' and 'category', while the frontend client treats 'name', 'category' and 'type' as optional and performs runtime normalization.
-
-**Impact:** the UI is compensating for an inconsistent API contract.
-
-**Fix:** define one canonical graph-node contract and use it consistently across backend schema, fallback graph, Neo4j graph mapping and TypeScript types.
-
-### Compatibility / reproducibility issue
-
-#### 13. Persisted ML artifacts need a pinned training/runtime environment
-The authorship '.joblib' artifacts are serialized scikit-learn models. The repository's lower-bound dependency specification is not enough to guarantee that persisted models can be loaded with every allowed scikit-learn release.
-
-**Impact:** fresh installations can load the API successfully while the stylometry/correlation engine fails or emits compatibility warnings.
-
-**Fix:** pin the exact model-training dependency set, or publish a reproducible model-training/export environment alongside the artifacts.
-
-### What is *not* considered an error
-
-- Neo4j being unavailable is **not** a correctness failure because a PostgreSQL graph fallback is intentionally implemented.
-- Redis/Celery being absent is **not** a core-platform failure because autonomous scanning is optional and disabled by default.
-- The synthetic dataset and controlled scanner are deliberate design choices for the prototype.
-- Development credentials in the test suite are expected; they are only a deployment concern if reused outside the demo environment.
-
-### Priority for remediation
-
-1. **Functional:** AI scan-target field, scanner evidence participation in correlation, Neo4j duplicate map keys.
-2. **Correctness/consistency:** centralized actor-evidence target resolution and explicit NLP fallback state.
-3. **Scalability:** correlation queries and export observation loading.
-4. **Security/deployment:** CORS and secret/configuration cleanup.
-5. **Maintainability:** canonical graph contract and removal of duplicated configuration.
+- Development credentials and local database/Neo4j defaults remain intentionally available for the hackathon/demo environment. They must not be reused for production deployment.
+- The synthetic dataset, controlled scanner, Neo4j fallback and optional Redis/Celery autoscan path are deliberate prototype/demo choices rather than core correctness failures.
+- Exact dependency pinning for persisted ML artifacts remains a reproducibility concern for a future deployment-focused pass.
 
 ## Security and ethical boundary
 
