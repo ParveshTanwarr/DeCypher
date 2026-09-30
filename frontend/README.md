@@ -1,32 +1,80 @@
-# React + TypeScript + Vite
+# DeCypher frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+React + TypeScript + Vite frontend for the DeCypher threat-intelligence demonstration platform.
 
-Currently, two official plugins are available:
+## Prerequisites
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+- Node.js 20.19+ or 22.12+
+- npm
+- A running DeCypher backend at the API URL configured by the frontend API client
 
-## React Compiler
+## Install and run
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+From the repository root:
 
-## Expanding the Oxlint configuration
-
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
-
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
+```powershell
+cd frontend
+npm install
+npm run dev
 ```
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+The Vite development server normally starts at:
+
+```
+http://localhost:5173
+```
+
+## Validate the frontend
+
+Run the linter:
+
+```powershell
+npm run lint
+```
+
+Run the production build:
+
+```powershell
+npm run build
+```
+
+Preview the production build locally:
+
+```powershell
+npm run preview
+```
+
+CI uses `npm ci` so the committed `package-lock.json` is the reproducible dependency source for automated builds.
+
+## Typical local workflow
+
+Start the backend first:
+
+```powershell
+cd backend
+python -m uvicorn app.main:app --reload --port 8000
+```
+
+Then, in a second terminal:
+
+```powershell
+cd frontend
+npm run dev
+```
+
+Open `http://localhost:5173` and sign in with the development credentials documented in the root README.
+
+## Project structure
+
+```text
+frontend/
+├── src/
+│   ├── api/           # backend API client
+│   ├── components/    # reusable UI components
+│   └── pages/         # investigation views
+├── public/
+├── package.json
+└── package-lock.json
+```
+
+The frontend is a controlled demonstration UI. It does not contain the Gemini API credential; optional Gemini access is handled by the backend.
