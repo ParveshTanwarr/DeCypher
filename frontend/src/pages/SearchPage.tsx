@@ -73,10 +73,6 @@ export default function SearchPage({ onSelectActor }: SearchPageProps) {
   const [error, setError] = useState("");
   const [frequentActors, setFrequentActors] = useState<FrequentActor[]>(loadFrequentActors);
 
-  useEffect(() => {
-    setFrequentActors(loadFrequentActors());
-  }, []);
-
   async function handleSearch(searchValue = query) {
     const trimmed = searchValue.trim();
     if (trimmed.length < 2) return;
