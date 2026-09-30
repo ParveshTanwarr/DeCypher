@@ -198,7 +198,10 @@ def get_actor_evidence(actor_id: str, db: Session = Depends(get_db)):
     # Query filtered directly in SQL instead of doing full table scan
     matched_observations = (
         db.query(Observation)
-        .filter(func.lower(Observation.target).in_(target_keys))
+        .filter(
+            func.lower(Observation.target).in_(target_keys),
+            Observation.detected.is_(True),
+        )
         .order_by(Observation.timestamp.desc())
         .all()
     )
