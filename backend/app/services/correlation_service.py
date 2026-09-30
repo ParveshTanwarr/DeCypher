@@ -108,9 +108,9 @@ class CorrelationService:
         # pages remain consistent. This is a derived score, not ground truth.
         # Persist the live backend-derived attribution confidence and triage priority.
         # The frontend should consume these stored values rather than a static seed default.
-        actor.confidence_score = round(overall_confidence, 4)
-        actor.priority_score = priority["score"]
         if persist:
+            actor.confidence_score = round(overall_confidence, 4)
+            actor.priority_score = priority["score"]
             self.db.commit()
 
         return {
@@ -151,13 +151,16 @@ class CorrelationService:
         actors = self.db.query(Actor).all()
         results = []
         for actor in actors:
-            results.append(
-                self.correlate_actor(
-                    actor.actor_id,
-                    stylometry_score=stylometry_score,
-                    persist=False,
-                )
+            result = self.correlate_actor(
+                actor.actor_id,
+                stylometry_score=stylometry_score,
+                persist=False,
             )
+            # persist=False is a pure calculation mode; update the actor here
+            # explicitly so bulk correlation performs one transaction.
+            actor.confidence_score = result["overall_confidence"]
+            actor.priority_score = result["priority"]["score"]
+            results.append(result)
         self.db.commit()
         results.sort(
             key=lambda item: (item["priority"]["score"], item["overall_confidence"]),
