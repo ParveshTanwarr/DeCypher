@@ -128,6 +128,7 @@ class ObservationCreate(BaseModel):
 
 
 class ObservationBatchCreate(BaseModel):
+    actor_id: Optional[str] = Field(None, max_length=64, description="Optional actor to synchronize into the Neo4j evidence graph.")
     observations: List[ObservationCreate] = Field(default_factory=list)
 
 
