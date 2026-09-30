@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.database.postgres import get_db
 from app.models.sql_models import Actor, InvestigatorFeedback
+from app.services.correlation_service import CorrelationService
 from app.models.schemas import FeedbackRequest, FeedbackResponse
 from app.routers.auth import get_current_user, TokenData
 
@@ -28,40 +29,6 @@ class FeedbackItem(BaseModel):
 
     class Config:
         from_attributes = True
-
-
-def _apply_feedback_to_score(actor: Actor, verdict: str) -> None:
-    """
-    Nudges confidence_score/priority_score based on investigator feedback.
-
-    Previously feedback was collected and stored but never affected these
-    fields at all -- every actor sat at the same default confidence (0.85)
-    and priority (70) regardless of how much investigator review it had
-    received. This is a simple, clearly-adjustable starter heuristic (verdict
-    is free text -- see FeedbackRequest's docs: "Confirmed", "False
-    Positive", "High Risk", etc. -- so this matches on keywords rather than
-    a fixed enum). Tune the step sizes/keywords to whatever scoring
-    philosophy the team actually wants; the important part is that feedback
-    now affects something instead of going nowhere.
-    """
-    v = (verdict or "").lower()
-    confidence = actor.confidence_score if actor.confidence_score is not None else 0.85
-    priority = actor.priority_score if actor.priority_score is not None else 70
-
-    if "confirm" in v:
-        confidence += 0.05
-        priority += 5
-    elif "false" in v or "reject" in v or "dismiss" in v:
-        confidence -= 0.15
-        priority -= 15
-
-    if "high" in v and "risk" in v:
-        priority += 10
-    elif "low" in v and "risk" in v:
-        priority -= 10
-
-    actor.confidence_score = round(min(0.99, max(0.05, confidence)), 4)
-    actor.priority_score = int(min(100, max(0, priority)))
 
 
 @router.get("", response_model=List[FeedbackItem], status_code=status.HTTP_200_OK)
@@ -110,9 +77,12 @@ def submit_feedback(
         notes=data.notes,
     )
     db.add(feedback_record)
-    _apply_feedback_to_score(actor, data.verdict)
     db.commit()
     db.refresh(feedback_record)
+
+    # Recompute through the same correlation path used by the dashboard.
+    # The latest verdict is kept as a separate human-input triage adjustment.
+    CorrelationService(db).correlate_actor(actor.actor_id, persist=True)
 
     return FeedbackResponse(
         status="success",
