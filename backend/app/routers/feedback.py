@@ -70,6 +70,11 @@ def submit_feedback(
     # anyone with valid credentials could submit feedback "as" any
     # investigator name they typed in, with no link to who was actually
     # logged in.
+    # Preserve the persisted confidence before recalculation so the
+    # investigator verdict remains an adjustment to the actor's current
+    # triage state rather than being lost when evidence is recomputed.
+    previous_confidence = actor.confidence_score if actor.confidence_score is not None else 0.85
+
     feedback_record = InvestigatorFeedback(
         actor_id=actor.actor_id,
         verdict=data.verdict,
@@ -82,7 +87,19 @@ def submit_feedback(
 
     # Recompute through the same correlation path used by the dashboard.
     # The latest verdict is kept as a separate human-input triage adjustment.
-    CorrelationService(db).correlate_actor(actor.actor_id, persist=True)
+    correlation_service = CorrelationService(db)
+    correlation_service.correlate_actor(actor.actor_id, persist=True)
+
+    # Correlation recomputation can legitimately produce a different
+    # evidence-only score. Human feedback is intentionally applied on top
+    # of the persisted pre-feedback confidence so a confirmed verdict
+    # cannot be erased by that recalculation.
+    confidence_adjustment = correlation_service._feedback_confidence_adjustment(actor.actor_id)
+    actor.confidence_score = round(
+        max(0.0, min(1.0, previous_confidence + confidence_adjustment["confidence_delta"])),
+        4,
+    )
+    db.commit()
 
     return FeedbackResponse(
         status="success",
