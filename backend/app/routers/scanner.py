@@ -98,6 +98,11 @@ def ingest_observations(
     if not payload.observations:
         return BatchIngestionResponse(inserted_count=0, message="No observations provided in payload.")
 
+    if payload.actor_id:
+        from app.models.sql_models import Actor
+        if not db.query(Actor).filter(Actor.actor_id == payload.actor_id).first():
+            raise HTTPException(status_code=404, detail=f"Actor '{payload.actor_id}' not found.")
+
     deduped = {}
     for obs in payload.observations:
         deduped[obs.observation_id] = {
@@ -118,11 +123,7 @@ def ingest_observations(
     db.commit()
 
     if payload.actor_id:
-        from app.models.sql_models import Actor
         from app.services import graph_service
-
-        if not db.query(Actor).filter(Actor.actor_id == payload.actor_id).first():
-            raise HTTPException(status_code=404, detail=f"Actor '{payload.actor_id}' not found.")
 
         try:
             graph_service.sync_actor_observations(payload.actor_id, list(deduped.values()))
