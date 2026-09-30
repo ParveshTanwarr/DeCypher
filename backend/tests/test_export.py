@@ -51,3 +51,23 @@ def test_investigator_can_export_actor_formats(client, analyst_headers):
     )
     assert pdf_response.status_code == 200
     assert pdf_response.headers["content-type"].startswith("application/pdf")
+
+
+def test_correlation_persists_live_confidence_and_priority(client, admin_headers):
+    response = client.get(
+        "/correlation/actor/A00001",
+        headers=admin_headers,
+        params={"handle_a": "nyxinhex99", "handle_b": "vexatrace"},
+    )
+    assert response.status_code == 200
+    correlation = response.json()
+
+    actor = client.get("/actors/A00001", headers=admin_headers)
+    assert actor.status_code == 200
+    actor_payload = actor.json()
+
+    assert abs(
+        float(actor_payload["confidence_score"]) -
+        float(correlation["overall_confidence"])
+    ) < 1e-4
+    assert actor_payload["priority_score"] == correlation["priority"]["score"]
