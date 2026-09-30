@@ -71,7 +71,7 @@ export default function SearchPage({ onSelectActor }: SearchPageProps) {
   const [loading, setLoading] = useState(false);
   const [searched, setSearched] = useState(false);
   const [error, setError] = useState("");
-  const [frequentActors, setFrequentActors] = useState<FrequentActor[]>([]);
+  const [frequentActors, setFrequentActors] = useState<FrequentActor[]>(loadFrequentActors);
 
   useEffect(() => {
     setFrequentActors(loadFrequentActors());
