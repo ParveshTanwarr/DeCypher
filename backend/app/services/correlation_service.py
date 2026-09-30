@@ -105,6 +105,15 @@ class CorrelationService:
             signals.append(signal)
 
         overall_confidence = self._weighted_score(signals)
+
+        # Human investigator feedback is a bounded triage adjustment to the
+        # persisted confidence score. Keep it separate from the evidence
+        # signal weights so repeated recalculation remains deterministic.
+        feedback_adjustment = self._feedback_confidence_adjustment(actor.actor_id)
+        overall_confidence = self._clamp(
+            overall_confidence + feedback_adjustment["confidence_delta"]
+        )
+
         if contradiction and contradiction.get("contradiction_flag"):
             # De-confliction is a negative investigative signal, not another positive weight.
             overall_confidence = self._clamp(overall_confidence - 0.15)
@@ -315,6 +324,29 @@ class CorrelationService:
         if age_days <= 90: return 60.0
         if age_days <= 180: return 40.0
         return 20.0
+
+    def _feedback_confidence_adjustment(self, actor_id: str) -> Dict[str, Any]:
+        """Apply the latest human verdict as a bounded confidence adjustment."""
+        latest = (
+            self.db.query(InvestigatorFeedback)
+            .filter(InvestigatorFeedback.actor_id == actor_id)
+            .order_by(InvestigatorFeedback.timestamp.desc(), InvestigatorFeedback.id.desc())
+            .first()
+        )
+        if not latest:
+            return {"confidence_delta": 0.0, "latest_verdict": None}
+
+        verdict = (latest.verdict or "").lower()
+        delta = 0.0
+        if "confirm" in verdict:
+            delta += 0.05
+        elif "false" in verdict or "reject" in verdict or "dismiss" in verdict:
+            delta -= 0.15
+
+        return {
+            "confidence_delta": delta,
+            "latest_verdict": latest.verdict,
+        }
 
     def _feedback_adjustment(self, actor_id: str) -> Dict[str, Any]:
         """Keep the latest human verdict as a separate triage adjustment."""
