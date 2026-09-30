@@ -12,6 +12,22 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   return response.json();
 }
 
+async function triggerBrowserDownload(blob: Blob, filename: string): Promise<void> {
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = filename;
+  anchor.style.display = "none";
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+
+  // Keep the object URL alive through the browser's download hand-off.
+  // Revoking it synchronously can cancel or destabilize some Chromium/WebKit
+  // download flows.
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
 export async function login(username: string, password: string): Promise<string> {
   const body = new URLSearchParams({ username, password });
   const response = await fetch(`${API_BASE}/auth/token`, { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body });
@@ -23,20 +39,17 @@ export async function login(username: string, password: string): Promise<string>
 
 export async function downloadExport(format: "pdf" | "csv" | "json"): Promise<void> {
   const endpoint = format === "pdf" ? "report" : format;
-  const response = await fetch(`${API_BASE}/export/${endpoint}`, { headers: authToken ? { Authorization: `Bearer ${authToken}` } : {} });
+  const response = await fetch(`${API_BASE}/export/${endpoint}`, {
+    headers: authToken ? { Authorization: `Bearer ${authToken}` } : {},
+  });
   if (!response.ok) throw new Error((await response.text()) || `Export failed: ${response.status}`);
+
   const blob = await response.blob();
   const disposition = response.headers.get("Content-Disposition") || "";
   const match = disposition.match(/filename="?([^"]+)"?/i);
   const filename = match?.[1] || `decypher_export.${format}`;
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement("a");
-  anchor.href = url;
-  anchor.download = filename;
-  document.body.appendChild(anchor);
-  anchor.click();
-  anchor.remove();
-  URL.revokeObjectURL(url);
+
+  await triggerBrowserDownload(blob, filename);
 }
 
 export async function downloadActorReport(
@@ -64,6 +77,7 @@ export async function downloadActorReport(
         `Actor PDF export failed: ${response.status}`,
     );
   }
+
   const blob = await response.blob();
   const disposition =
     response.headers.get("Content-Disposition") || "";
@@ -72,14 +86,8 @@ export async function downloadActorReport(
   const filename =
     match?.[1] ||
     `actor_${actorId}_report.pdf`;
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement("a");
-  anchor.href = url;
-  anchor.download = filename;
-  document.body.appendChild(anchor);
-  anchor.click();
-  anchor.remove();
-  URL.revokeObjectURL(url);
+
+  await triggerBrowserDownload(blob, filename);
 }
 
 export async function downloadActorExport(
@@ -101,6 +109,7 @@ export async function downloadActorExport(
         `Actor export failed: ${response.status}`,
     );
   }
+
   const blob = await response.blob();
   const disposition =
     response.headers.get("Content-Disposition") || "";
@@ -108,17 +117,11 @@ export async function downloadActorExport(
   const filename =
     match?.[1] ||
     `actor_${actorId}_export.${format}`;
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement("a");
-  anchor.href = url;
-  anchor.download = filename;
-  document.body.appendChild(anchor);
-  anchor.click();
-  anchor.remove();
-  URL.revokeObjectURL(url);
+
+  await triggerBrowserDownload(blob, filename);
 }
 
-export function getActors(): Promise<Actor[]> { return request<Actor[]>("/actors"); }
+export function getActors(): Promise<Actor[]> { return request<Actor[]>(`/actors`); }
 export function getActor(actorId: string) { return request(`/actors/${encodeURIComponent(actorId)}`); }
 export function getActorEvidence(actorId: string) { return request(`/actors/${encodeURIComponent(actorId)}/evidence`); }
 
@@ -131,7 +134,7 @@ export interface CorrelationSignal { type: string; confidence: number; descripti
 export interface PriorityResult { score: number; level: string; components: { risk_severity: number; correlation: number; evidence_confidence: number; recency: number; evidence_coverage: number; }; weights: Record<string, number>; }
 export interface CorrelationResult { candidate_actor: string; primary_handle: string; overall_confidence: number; risk_level: string; signals: CorrelationSignal[]; signal_count: number; available_weight: number; interpretation: string; priority?: PriorityResult; }
 export function getActorCorrelation(actorId: string, handleA?: string, handleB?: string): Promise<CorrelationResult> { const params = new URLSearchParams(); if (handleA) params.set("handle_a", handleA); if (handleB) params.set("handle_b", handleB); const query = params.toString(); return request<CorrelationResult>(`/correlation/actor/${encodeURIComponent(actorId)}${query ? `?${query}` : ""}`); }
-export function getAllCorrelations(): Promise<{ results: CorrelationResult[] }> { return request<{ results: CorrelationResult[] }>("/correlation/actors"); }
+export function getAllCorrelations(): Promise<{ results: CorrelationResult[] }> { return request<{ results: CorrelationResult[] }>(`/correlation/actors`); }
 export function searchActors(query: string): Promise<SearchResponse> { return request<SearchResponse>(`/search?q=${encodeURIComponent(query)}`); }
 
 
