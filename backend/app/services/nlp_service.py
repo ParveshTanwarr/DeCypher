@@ -35,6 +35,7 @@ class NLPStylometryService:
         self.threshold = 0.65  # fallback default, only used if the real engine fails to load
         self._posts_df: Optional[pd.DataFrame] = None
         self._name_to_handle_ids: Dict[str, list] = {}
+        self._known_handle_ids: set[str] = set()
 
         self._load_engine()
         self._load_posts_cache()
@@ -76,6 +77,7 @@ class NLPStylometryService:
             posts_df["_handle_id"] = posts_df["_handle_id"].astype(str)
             posts_df["_content"] = posts_df["_content"].astype(str)
             self._posts_df = posts_df
+            self._known_handle_ids = set(posts_df["_handle_id"].astype(str))
 
             if os.path.exists(handles_path):
                 handles_df = pd.read_csv(handles_path)
@@ -91,12 +93,13 @@ class NLPStylometryService:
         except Exception:
             self._posts_df = None
             self._name_to_handle_ids = {}
+            self._known_handle_ids = set()
 
     def _resolve_handle_id(self, handle: str) -> Optional[str]:
         if not handle:
             return None
         raw = str(handle).strip()
-        if self._posts_df is not None and raw in set(self._posts_df["_handle_id"].astype(str)):
+        if raw in self._known_handle_ids:
             return raw
         ids = self._name_to_handle_ids.get(raw.lower(), [])
         return ids[0] if len(ids) == 1 else None
