@@ -30,6 +30,8 @@ def _load_engine_class():
 class NLPStylometryService:
     def __init__(self):
         self.engine = None
+        self.engine_status = "unavailable"
+        self.engine_error = None
         self.threshold = 0.65  # fallback default, only used if the real engine fails to load
         self._posts_df: Optional[pd.DataFrame] = None
         self._name_to_handle_ids: Dict[str, list] = {}
@@ -41,6 +43,8 @@ class NLPStylometryService:
         try:
             EngineClass = _load_engine_class()
             self.engine = EngineClass(model_dir=MODEL_DIR)
+            self.engine_status = "validated_model"
+            self.engine_error = None
         except Exception as exc:
             # Fail soft: the service still starts (e.g. in an environment
             # missing the .joblib artifacts), it just falls back to a
@@ -48,6 +52,8 @@ class NLPStylometryService:
             print(f"[nlp_service] WARNING: could not load DeCypherAuthorshipEngine ({exc}). "
                   f"Falling back to a basic word-overlap heuristic -- this is NOT the validated model.")
             self.engine = None
+            self.engine_status = "fallback_heuristic"
+            self.engine_error = str(exc)
 
     def _load_posts_cache(self):
         # posts.csv links posts to a handle via `handle_id` (e.g. "H00887"),
@@ -120,6 +126,8 @@ class NLPStylometryService:
                 "is_same_author": False,
                 "confidence": 0.0,
                 "shared_markers": [],
+                "engine_status": self.engine_status,
+                "fallback_used": self.engine is None,
                 "error": f"Insufficient sample text found for comparison between '{handle_a}' and '{handle_b}'.",
             }
 
@@ -141,6 +149,8 @@ class NLPStylometryService:
                 "threshold_used": result["threshold_used"],
                 "signals": result["signals"],            # evidence trail -- new, additive field
                 "domain_routing": result["domain_routing"],  # new, additive field
+                "engine_status": self.engine_status,
+                "fallback_used": False,
             }
 
         # --- Fallback heuristic, only used if the trained engine failed to load ---
@@ -155,6 +165,9 @@ class NLPStylometryService:
             "confidence": round(confidence, 4),
             "shared_markers": markers,
             "threshold_used": self.threshold,
+            "engine_status": self.engine_status,
+            "fallback_used": True,
+            "engine_warning": "Validated authorship model unavailable; this score is a basic word-overlap heuristic.",
         }
 
     def check_contradiction(self, handle_id_a: str, handle_id_b: str, handles_df: pd.DataFrame) -> Dict[str, Any]:
