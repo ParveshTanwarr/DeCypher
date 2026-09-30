@@ -116,6 +116,22 @@ def ingest_observations(
     stmt = stmt.on_conflict_do_nothing(index_elements=["observation_id"])
     result = db.execute(stmt)
     db.commit()
+
+    if payload.actor_id:
+        from app.models.sql_models import Actor
+        from app.services import graph_service
+
+        if not db.query(Actor).filter(Actor.actor_id == payload.actor_id).first():
+            raise HTTPException(status_code=404, detail=f"Actor '{payload.actor_id}' not found.")
+
+        try:
+            graph_service.sync_actor_observations(payload.actor_id, list(deduped.values()))
+        except Exception as exc:
+            raise HTTPException(
+                status_code=503,
+                detail=f"Observations were stored in PostgreSQL but Neo4j synchronization failed: {exc}",
+            )
+
     return BatchIngestionResponse(
         inserted_count=int(result.rowcount or 0),
         message=f"Successfully ingested {int(result.rowcount or 0)} new scanner observation(s).",
