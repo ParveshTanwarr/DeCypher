@@ -63,7 +63,7 @@ class CorrelationService:
         if wallet_score is not None:
             signals.append(self._signal("wallet_reuse", wallet_score, "Wallet address reuse across correlated handles."))
 
-        infrastructure_score = self._observation_score(actor_id, ["infrastructure_reuse", "infra_reuse", "infrastructure"])
+        infrastructure_score = self._observation_score(actor_id, ["infrastructure_reuse", "infra_reuse", "infrastructure", "exposed_status_page"])
         if infrastructure_score is not None:
             signals.append(self._signal("infrastructure_reuse", infrastructure_score, "Infrastructure indicators overlap with known observations."))
 
@@ -106,6 +106,9 @@ class CorrelationService:
 
         # Persist the current triage value so dashboard ordering and actor
         # pages remain consistent. This is a derived score, not ground truth.
+        # Persist the live backend-derived attribution confidence and triage priority.
+        # The frontend should consume these stored values rather than a static seed default.
+        actor.confidence_score = round(overall_confidence, 4)
         actor.priority_score = priority["score"]
         if persist:
             self.db.commit()
