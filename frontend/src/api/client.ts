@@ -123,7 +123,19 @@ export async function downloadActorExport(
 
 export function getActors(): Promise<Actor[]> { return request<Actor[]>(`/actors`); }
 export function getActor(actorId: string) { return request(`/actors/${encodeURIComponent(actorId)}`); }
-export function getActorEvidence(actorId: string) { return request(`/actors/${encodeURIComponent(actorId)}/evidence`); }
+export function getActorEvidence(
+  actorId: string,
+  start?: string,
+  end?: string,
+) {
+  const params = new URLSearchParams();
+  if (start) params.set("start", start);
+  if (end) params.set("end", end);
+  const query = params.toString();
+  return request(
+    `/actors/${encodeURIComponent(actorId)}/evidence${query ? `?${query}` : ""}`,
+  );
+}
 
 export interface GraphNode { id: string; label: string; name: string; category: string; type: string; properties?: Record<string, unknown>; }
 export interface GraphLink { source: string; target: string; relation: string; }
