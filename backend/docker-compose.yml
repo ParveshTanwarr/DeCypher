@@ -35,7 +35,7 @@ services:
   celery_worker:
     image: python:3.11-slim
     container_name: threat_celery_worker
-    working_dir: /app
+    working_dir: /app/backend
     env_file:
       - .env
     environment:
@@ -44,7 +44,7 @@ services:
       REDIS_URL: redis://redis:6379/0
       CELERY_RESULT_BACKEND: redis://redis:6379/1
     volumes:
-      - .:/app
+      - ..:/app
     depends_on:
       postgres:
         condition: service_healthy
