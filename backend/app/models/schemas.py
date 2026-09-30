@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 # ------------------------------------------------------------------
@@ -100,15 +100,14 @@ class FeedbackResponse(BaseModel):
 
 
 class FeedbackItemResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     actor_id: str
     verdict: str
     investigator_id: Optional[str] = None
     notes: Optional[str] = None
     timestamp: Optional[datetime] = None
-
-    class Config:
-        from_attributes = True
 
 
 # ------------------------------------------------------------------
@@ -139,6 +138,8 @@ class BatchIngestionResponse(BaseModel):
 
 
 class ObservationResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     observation_id: str
     indicator_type: str
@@ -149,9 +150,6 @@ class ObservationResponse(BaseModel):
     timestamp: Optional[datetime] = None
     confidence: Optional[float] = 1.0
     description: Optional[str] = None
-
-    class Config:
-        from_attributes = True
 
 
 class ScanRequest(BaseModel):

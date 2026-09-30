@@ -30,6 +30,8 @@ class ScanTargetCreate(BaseModel):
 
 
 class ScanTargetResponse(BaseModel):
+    model_config = {"from_attributes": True}
+
     id: int
     name: str
     target_url: str
@@ -43,11 +45,10 @@ class ScanTargetResponse(BaseModel):
     last_error: Optional[str]
     consecutive_failures: int
 
-    class Config:
-        from_attributes = True
-
 
 class ScanJobResponse(BaseModel):
+    model_config = {"from_attributes": True}
+
     id: int
     target_id: int
     actor_id: Optional[str]
@@ -60,9 +61,6 @@ class ScanJobResponse(BaseModel):
     correlation_score: Optional[float]
     priority_score: Optional[int]
     error: Optional[str]
-
-    class Config:
-        from_attributes = True
 
 
 @router.get(
