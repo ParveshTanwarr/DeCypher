@@ -333,7 +333,7 @@ def get_actor_subgraph(actor_id: str, db: Session = Depends(get_db)):
             handles=[
                 {
                     "handle_id": h.id,
-                    "actor_id": h.actor_id,
+                    "actor_id": actor.actor_id,
                     "handle": h.handle,
                     "platform": h.platform,
                     "status": h.status,
