@@ -338,7 +338,7 @@ def get_actor_subgraph(actor_id: str, db: Session = Depends(get_db)):
                     "platform": h.platform,
                     "status": h.status,
                 }
-                for h in handles
+                for h in graph_identity_handles
             ],
             wallets=[
                 {
