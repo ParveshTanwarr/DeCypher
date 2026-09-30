@@ -30,6 +30,8 @@ class ScanTargetCreate(BaseModel):
 
 
 class ScanTargetResponse(BaseModel):
+    model_config = {"from_attributes": True}
+
     id: int
     name: str
     target_url: str
@@ -42,9 +44,6 @@ class ScanTargetResponse(BaseModel):
     last_status: str
     last_error: Optional[str]
     consecutive_failures: int
-
-    class Config:
-        from_attributes = True
 
 
 class ScanJobResponse(BaseModel):
