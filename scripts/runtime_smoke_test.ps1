@@ -13,7 +13,7 @@ function Assert-True($condition, $message) { if (-not $condition) { Fail $messag
 
 function Get-HttpStatus($method, $uri, $headers) {
     try {
-        $response = Invoke-WebRequest -Method $method -Uri $uri -Headers $headers -ErrorAction Stop
+        $response = Invoke-WebRequest -Method $method -Uri $uri -Headers $headers -UseBasicParsing -ErrorAction Stop
         return [int]$response.StatusCode
     } catch {
         if ($_.Exception.Response) { return [int]$_.Exception.Response.StatusCode.value__ }
