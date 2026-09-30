@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session, joinedload
@@ -177,7 +178,18 @@ def get_actor_detail(actor_id: str, db: Session = Depends(get_db)):
 
 
 @router.get("/{actor_id}/evidence", response_model=List[EvidenceSignal])
-def get_actor_evidence(actor_id: str, db: Session = Depends(get_db)):
+def get_actor_evidence(
+    actor_id: str,
+    start: Optional[datetime] = Query(
+        None,
+        description="Include observations at or after this timestamp (ISO 8601).",
+    ),
+    end: Optional[datetime] = Query(
+        None,
+        description="Include observations at or before this timestamp (ISO 8601).",
+    ),
+    db: Session = Depends(get_db),
+):
     actor = db.query(Actor).filter(func.lower(Actor.actor_id) == actor_id.lower()).first()
     target_keys = {actor_id.lower()}
 
@@ -195,13 +207,28 @@ def get_actor_evidence(actor_id: str, db: Session = Depends(get_db)):
             scan_targets,
         )
 
-    # Query filtered directly in SQL instead of doing full table scan
-    matched_observations = (
-        db.query(Observation)
-        .filter(
-            func.lower(Observation.target).in_(target_keys),
-            Observation.detected.is_(True),
+    if start and end and start > end:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="The start timestamp must be earlier than or equal to the end timestamp.",
         )
+
+    # Query filtered directly in SQL instead of doing a full table scan.
+    evidence_query = db.query(Observation).filter(
+        func.lower(Observation.target).in_(target_keys),
+        Observation.detected.is_(True),
+    )
+    if start:
+        evidence_query = evidence_query.filter(
+            Observation.timestamp >= start
+        )
+    if end:
+        evidence_query = evidence_query.filter(
+            Observation.timestamp <= end
+        )
+
+    matched_observations = (
+        evidence_query
         .order_by(Observation.timestamp.desc())
         .all()
     )

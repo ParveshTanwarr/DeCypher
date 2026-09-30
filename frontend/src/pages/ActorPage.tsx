@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   getActor,
   getActorEvidence,
@@ -335,6 +335,24 @@ export default function ActorPage({
   const [exporting, setExporting] = useState(false);
   const [exportError, setExportError] = useState("");
   const [loadError, setLoadError] = useState("");
+  const [timelineStart, setTimelineStart] = useState("");
+  const [timelineEnd, setTimelineEnd] = useState("");
+
+
+  const filteredEvidence = useMemo(() => {
+    const start = timelineStart
+      ? new Date(`${timelineStart}T00:00:00`).getTime()
+      : Number.NEGATIVE_INFINITY;
+    const end = timelineEnd
+      ? new Date(`${timelineEnd}T23:59:59.999`).getTime()
+      : Number.POSITIVE_INFINITY;
+
+    return evidence.filter((item) => {
+      if (!item.timestamp) return !timelineStart && !timelineEnd;
+      const time = new Date(item.timestamp).getTime();
+      return time >= start && time <= end;
+    });
+  }, [evidence, timelineStart, timelineEnd]);
 
   useEffect(() => {
     let cancelled = false;
@@ -964,12 +982,57 @@ export default function ActorPage({
               opacity: 0.6,
             }}
           >
-            {evidence.length} observation
-            {evidence.length === 1 ? "" : "s"}
+            {filteredEvidence.length} observation
+            {filteredEvidence.length === 1 ? "" : "s"}
+            {filteredEvidence.length !== evidence.length
+              ? ` · ${evidence.length} total`
+              : ""}
           </div>
         </div>
 
-        {evidence.length === 0 ? (
+          <div
+            style={{
+              display: "flex",
+              gap: "10px",
+              flexWrap: "wrap",
+              marginTop: "16px",
+              alignItems: "center",
+            }}
+          >
+            <label style={{ fontSize: "12px", opacity: 0.7 }}>
+              From{" "}
+              <input
+                type="date"
+                value={timelineStart}
+                max={timelineEnd || undefined}
+                onChange={(event) => setTimelineStart(event.target.value)}
+                aria-label="Evidence timeline start date"
+              />
+            </label>
+            <label style={{ fontSize: "12px", opacity: 0.7 }}>
+              To{" "}
+              <input
+                type="date"
+                value={timelineEnd}
+                min={timelineStart || undefined}
+                onChange={(event) => setTimelineEnd(event.target.value)}
+                aria-label="Evidence timeline end date"
+              />
+            </label>
+            {(timelineStart || timelineEnd) && (
+              <button
+                className="text-button"
+                onClick={() => {
+                  setTimelineStart("");
+                  setTimelineEnd("");
+                }}
+              >
+                Clear dates
+              </button>
+            )}
+          </div>
+
+        {filteredEvidence.length === 0 ? (
           <div
             style={{
               marginTop: "20px",
@@ -983,7 +1046,7 @@ export default function ActorPage({
           </div>
         ) : (
           <div style={{ marginTop: "22px" }}>
-            {[...evidence]
+            {[...filteredEvidence]
               .sort((a, b) => {
                 const timeA = a.timestamp
                   ? new Date(a.timestamp).getTime()
@@ -1004,7 +1067,7 @@ export default function ActorPage({
                       "150px 18px minmax(0, 1fr)",
                     gap: "14px",
                     minHeight:
-                      index === evidence.length - 1
+                      index === filteredEvidence.length - 1
                         ? "auto"
                         : "120px",
                   }}
@@ -1032,7 +1095,7 @@ export default function ActorPage({
                       justifyContent: "center",
                     }}
                   >
-                    {index !== evidence.length - 1 && (
+                    {index !== filteredEvidence.length - 1 && (
                       <div
                         style={{
                           position: "absolute",
@@ -1064,7 +1127,7 @@ export default function ActorPage({
                   <div
                     style={{
                       paddingBottom:
-                        index === evidence.length - 1
+                        index === filteredEvidence.length - 1
                           ? "4px"
                           : "24px",
                     }}

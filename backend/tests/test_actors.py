@@ -111,3 +111,23 @@ def test_actor_evidence_excludes_undetected_scan_errors(client, admin_headers):
     r = client.get(f"/actors/{actor_id}/evidence", headers=admin_headers)
     assert r.status_code == 200
     assert all(item["indicator_type"] != "test_undetected" for item in r.json())
+
+
+def test_actor_evidence_timeline_filters(client, admin_headers):
+    r = client.get("/actors/A00001/evidence", headers=admin_headers)
+    assert r.status_code == 200
+    rows = r.json()
+    timestamps = [item["timestamp"] for item in rows if item.get("timestamp")]
+    assert timestamps
+    filtered = client.get("/actors/A00001/evidence", headers=admin_headers, params={"start": min(timestamps), "end": max(timestamps)})
+    assert filtered.status_code == 200
+    assert len(filtered.json()) == len(rows)
+    empty = client.get("/actors/A00001/evidence", headers=admin_headers, params={"start": "2100-01-01T00:00:00Z"})
+    assert empty.status_code == 200
+    assert empty.json() == []
+
+
+def test_actor_evidence_rejects_reversed_timeline(client, admin_headers):
+    r = client.get("/actors/A00001/evidence", headers=admin_headers, params={"start": "2026-12-31T00:00:00Z", "end": "2026-01-01T00:00:00Z"})
+    assert r.status_code == 400
+    assert "start timestamp" in r.json()["detail"]
