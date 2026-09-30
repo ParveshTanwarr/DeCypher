@@ -73,3 +73,41 @@ def test_actor_detail_includes_typed_evidence_trail(client, admin_headers):
         "descriptor_timing",
         "exposed_status_page",
     }
+
+
+def test_actor_evidence_excludes_undetected_scan_errors(client, admin_headers):
+    """The investigation evidence endpoint should show actual findings, not failed scan attempts."""
+    from app.database.postgres import SessionLocal
+    from app.models.sql_models import Observation
+
+    db = SessionLocal()
+    try:
+        actor_id = "A00001"
+        existing = (
+            db.query(Observation)
+            .filter(
+                Observation.target == actor_id,
+                Observation.indicator_type == "test_undetected",
+            )
+            .first()
+        )
+        if not existing:
+            db.add(
+                Observation(
+                    observation_id="TEST-UNDETECTED-A00001",
+                    indicator_type="test_undetected",
+                    detected=False,
+                    value=None,
+                    target=actor_id,
+                    source="pytest",
+                    confidence=0.0,
+                    description="Synthetic failed scan fixture",
+                )
+            )
+            db.commit()
+    finally:
+        db.close()
+
+    r = client.get(f"/actors/{actor_id}/evidence", headers=admin_headers)
+    assert r.status_code == 200
+    assert all(item["indicator_type"] != "test_undetected" for item in r.json())
