@@ -3,9 +3,10 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from prometheus_fastapi_instrumentator import Instrumentator
-from sqlalchemy import func
+from sqlalchemy import func, text
 
 from app.database.postgres import Base, engine
+from app.database.neo4j_client import neo4j_conn
 from app.config import settings
 import app.models.sql_models
 from app.models.sql_models import Actor
@@ -27,7 +28,7 @@ def _bootstrap_demo_data() -> int:
         db.close()
 
     if actor_count == 0:
-        init_db_and_load_csvs(reset_tables=False, sync_neo4j=False)
+        init_db_and_load_csvs(reset_tables=False, sync_neo4j=True)
 
     db = SessionLocal()
     try:
@@ -59,11 +60,10 @@ async def lifespan(app: FastAPI):
     if seeded_evidence:
         print(f"[+] Seeded {seeded_evidence} synthetic investigation evidence records.")
 
-    if settings.SECRET_KEY == _DEV_DEFAULT_SECRET_KEY:
-        print(
-            "[!] WARNING: SECRET_KEY is still the checked-in development default. "
-            "Every JWT this instance issues can be forged by anyone who has read "
-            "this repo. Set a real SECRET_KEY via .env before this leaves local dev."
+    if not settings.SECRET_KEY or settings.SECRET_KEY == _DEV_DEFAULT_SECRET_KEY:
+        raise RuntimeError(
+            "SECRET_KEY is missing or still using the development default. "
+            "Set a unique SECRET_KEY in backend/.env before starting the API."
         )
 
     yield
@@ -112,7 +112,31 @@ app.include_router(ai.router)
 
 @app.get("/health", tags=["Health"])
 def health_check():
-    return {"status": "healthy", "service": "Threat Intel API"}
+    """Return dependency-aware health without hiding partial outages."""
+    checks = {}
+
+    try:
+        with engine.connect() as connection:
+            connection.execute(text("SELECT 1"))
+        checks["postgres"] = "healthy"
+    except Exception as exc:
+        checks["postgres"] = f"unavailable: {type(exc).__name__}"
+
+    try:
+        neo4j_conn.query("RETURN 1 AS ok")
+        checks["neo4j"] = "healthy"
+    except Exception as exc:
+        checks["neo4j"] = f"unavailable: {type(exc).__name__}"
+
+    try:
+        import redis
+        redis.Redis.from_url(settings.REDIS_URL, socket_connect_timeout=1, socket_timeout=1).ping()
+        checks["redis"] = "healthy"
+    except Exception as exc:
+        checks["redis"] = f"unavailable: {type(exc).__name__}"
+
+    status = "healthy" if all(v == "healthy" for v in checks.values()) else "degraded"
+    return {"status": status, "service": "Threat Intel API", "checks": checks}
 
 
 if __name__ == "__main__":
