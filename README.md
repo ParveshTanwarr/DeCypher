@@ -223,29 +223,6 @@ This starts:
 
 If you already run PostgreSQL locally, you can keep using it and start only the services you need.
 
-### 4. Start the backend
-
-```bash
-cd backend
-python3.11 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-cp .env.example .env
-```
-
-At minimum, set a non-default `SECRET_KEY`.
-
-For the optional Copilot:
-
-```env
-GEMINI_API_KEY=your_gemini_api_key
-GEMINI_MODEL=gemini-3.6-flash
-```
-
-**Never commit `.env` or expose the Gemini key to the frontend.** The key belongs only on the backend.
-
-`gemini-3.6-flash` is a stable Gemini API model. See Google's current model documentation for the supported model IDs.
-
 ### 4. Start FastAPI
 
 ```bash
@@ -258,6 +235,20 @@ API:
 - http://127.0.0.1:8000
 - Swagger: http://127.0.0.1:8000/docs
 - Health: http://127.0.0.1:8000/health
+
+### Windows PowerShell note
+
+The commands above use POSIX-style virtual-environment activation. On Windows PowerShell, use:
+
+```powershell
+cd backend
+py -3.11 -m venv .venv
+.\\.venv\\Scripts\\Activate.ps1
+python -m pip install -r requirements.txt
+Copy-Item .env.example .env
+```
+
+If PowerShell blocks the activation script, you can either activate the environment from a Command Prompt with `\\.venv\\Scripts\\activate.bat` or run the Python commands through `\\.venv\\Scripts\\python.exe` directly.
 
 ### 5. Start the frontend
 
