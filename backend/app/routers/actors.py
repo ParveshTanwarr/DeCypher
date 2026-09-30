@@ -531,6 +531,62 @@ def get_actor_subgraph(actor_id: str, db: Session = Depends(get_db)):
                 )
             )
 
+        # Trust links are authoritative evidence from PostgreSQL. If the
+        # Neo4j projection is missing one, enrich the response from the
+        # normalized SQL relationship instead of silently dropping it.
+        neo4j_trust_edges = {
+            (
+                link.source_handle_id,
+                link.target_handle_id,
+                link.relationship_type,
+            )
+            for link in actor_trust_links
+        }
+        rendered_trust_edges = {
+            (link.source, link.target, link.relation)
+            for link in links
+            if link.relation == "TRUSTS"
+        }
+        for trust in actor_trust_links:
+            source = trust.source_handle
+            target = trust.target_handle
+            if not source or not target:
+                continue
+
+            edge_key = (source.id, target.id, "trust")
+            rendered_key = (
+                f"handle:{source.id}",
+                f"handle:{target.id}",
+                "TRUSTS",
+            )
+            if edge_key not in neo4j_trust_edges or rendered_key in rendered_trust_edges:
+                continue
+
+            nodes.append(
+                GraphNode(
+                    id=f"handle:{source.id}",
+                    label="Handle",
+                    name=source.handle,
+                    category="Handle",
+                )
+            )
+            nodes.append(
+                GraphNode(
+                    id=f"handle:{target.id}",
+                    label="Handle",
+                    name=target.handle,
+                    category="TrustedHandle",
+                )
+            )
+            links.append(
+                GraphEdge(
+                    source=f"handle:{source.id}",
+                    target=f"handle:{target.id}",
+                    relation="TRUSTS",
+                )
+            )
+            rendered_trust_edges.add(rendered_key)
+
         # Wallets
         for wallet in neo4j_graph.get("wallets", []):
             nodes.append(
