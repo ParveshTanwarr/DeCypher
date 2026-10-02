@@ -27,6 +27,35 @@ def correlate_actor(
         raise HTTPException(status_code=404, detail=str(exc))
 
 
+
+@router.get("/actor/{actor_id}/counterfactual")
+def correlate_actor_counterfactual(
+    actor_id: str,
+    handle_a: Optional[str] = Query(default=None),
+    handle_b: Optional[str] = Query(default=None),
+    db: Session = Depends(get_db),
+):
+    service = CorrelationService(db)
+    try:
+        result = service.correlate_actor(
+            actor_id,
+            handle_a=handle_a,
+            handle_b=handle_b,
+            persist=False,
+        )
+        return {
+            "candidate_actor": result["candidate_actor"],
+            "counterfactual": result["counterfactual"],
+            "source_reliability": result.get("source_reliability", {}),
+            "interpretation": (
+                "Counterfactual output is leave-one-signal-out sensitivity "
+                "analysis of the current weighted evidence set. It is not a "
+                "causal effect or identity determination."
+            ),
+        }
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+
 @router.get("/actors")
 def correlate_all_actors(db: Session = Depends(get_db)):
     service = CorrelationService(db)

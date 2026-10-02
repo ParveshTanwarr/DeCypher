@@ -1103,6 +1103,97 @@ export default function ActorPage({
                 correlation signals.
               </div>
             </div>
+
+            {correlation.counterfactual?.available && (
+              <div
+                style={{
+                  marginTop: "20px",
+                  paddingTop: "18px",
+                  borderTop: "1px solid rgba(255,255,255,0.08)",
+                }}
+              >
+                <div className="eyebrow">COUNTERFACTUAL SENSITIVITY</div>
+                <div style={{ fontSize: "12px", opacity: 0.62, marginTop: "6px", lineHeight: 1.5 }}>
+                  Leave-one-signal-out analysis shows how sensitive the current weighted score is to each available signal. This is sensitivity analysis, not a causal effect.
+                </div>
+
+                <div style={{ marginTop: "12px" }}>
+                  {correlation.counterfactual.scenarios.map((scenario) => (
+                    <div
+                      key={scenario.removed_signal}
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns: "minmax(150px, 1fr) 90px 90px",
+                        gap: "10px",
+                        alignItems: "center",
+                        padding: "9px 0",
+                        borderBottom: "1px solid rgba(255,255,255,0.05)",
+                      }}
+                    >
+                      <div>
+                        <div style={{ fontWeight: 600 }}>
+                          {signalLabel(scenario.removed_signal)}
+                        </div>
+                        <div style={{ fontSize: "10px", opacity: 0.5, marginTop: "2px" }}>
+                          Without: {formatPercent(scenario.without_score)}
+                        </div>
+                      </div>
+                      <div style={{ fontFamily: "monospace", textAlign: "right" }}>
+                        Δ {scenario.delta >= 0 ? "+" : ""}{formatPercent(scenario.delta)}
+                      </div>
+                      <div style={{ fontFamily: "monospace", textAlign: "right", opacity: 0.7 }}>
+                        {formatPercent(scenario.absolute_impact)}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <div style={{ fontSize: "10px", opacity: 0.48, marginTop: "9px" }}>
+                  {correlation.counterfactual.note}
+                </div>
+              </div>
+            )}
+
+            {correlation.source_reliability &&
+              Object.keys(correlation.source_reliability).length > 0 && (
+                <div
+                  style={{
+                    marginTop: "20px",
+                    paddingTop: "18px",
+                    borderTop: "1px solid rgba(255,255,255,0.08)",
+                  }}
+                >
+                  <div className="eyebrow">SOURCE RELIABILITY</div>
+                  <div style={{ fontSize: "12px", opacity: 0.62, marginTop: "6px", lineHeight: 1.5 }}>
+                    Review-conditioned source estimates are updated from investigator verdicts on other actors and leave the current actor out of the estimate.
+                  </div>
+
+                  {Object.values(correlation.source_reliability).map((source) => (
+                    <div
+                      key={source.source}
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns: "minmax(140px, 1fr) 90px 90px",
+                        gap: "10px",
+                        alignItems: "center",
+                        padding: "9px 0",
+                      }}
+                    >
+                      <div>
+                        <div style={{ fontWeight: 600, fontSize: "12px" }}>{source.source}</div>
+                        <div style={{ fontSize: "10px", opacity: 0.48, marginTop: "2px" }}>
+                          {source.review_count} reviewed actor{source.review_count === 1 ? "" : "s"} · coverage {formatPercent(source.review_coverage)}
+                        </div>
+                      </div>
+                      <div style={{ fontFamily: "monospace", textAlign: "right" }}>
+                        {formatPercent(source.posterior)}
+                      </div>
+                      <div style={{ fontFamily: "monospace", textAlign: "right", opacity: 0.65 }}>
+                        ×{source.multiplier.toFixed(2)}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
           </>
         ) : (
           <div
