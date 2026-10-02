@@ -345,6 +345,8 @@ export default function ActorPage({
   const [timelineEnd, setTimelineEnd] = useState("");
 
 
+  const behavioralDrift = behavioralProfile?.behavioral_drift;
+
   const filteredEvidence = useMemo(() => {
     const start = timelineStart
       ? new Date(`${timelineStart}T00:00:00`).getTime()
@@ -726,18 +728,18 @@ export default function ActorPage({
                 ))}
               </div>
             )}
-            {behavioralProfile.behavioral_drift && (
+            {behavioralDrift && (
               <div style={{ marginTop: "18px", padding: "14px", borderRadius: "9px", background: "rgba(255,255,255,0.025)", border: "1px solid rgba(255,255,255,0.07)" }}>
                 <div className="eyebrow">PROFILE CHANGE ANALYSIS</div>
                 <strong style={{ display: "block", marginTop: "6px" }}>Behavioural drift</strong>
-                {!behavioralProfile.behavioral_drift.available ? (
-                  <div style={{ fontSize: "12px", opacity: 0.65, marginTop: "7px" }}>{behavioralProfile.behavioral_drift.note}</div>
+                {!behavioralDrift.available ? (
+                  <div style={{ fontSize: "12px", opacity: 0.65, marginTop: "7px" }}>{behavioralDrift.note}</div>
                 ) : (
                   <>
                     <div style={{ fontSize: "12px", opacity: 0.65, marginTop: "7px" }}>
-                      Compared with {behavioralProfile.behavioral_drift.baseline_generated_at ? new Date(behavioralProfile.behavioral_drift.baseline_generated_at).toLocaleString() : "the previous snapshot"}.
+                      Compared with {behavioralDrift.baseline_generated_at ? new Date(behavioralProfile.behavioral_drift.baseline_generated_at).toLocaleString() : "the previous snapshot"}.
                     </div>
-                    {behavioralProfile.behavioral_drift.linguistic_feature_deltas.length > 0 && (
+                    {behavioralDrift.linguistic_feature_deltas.length > 0 && (
                       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: "8px", marginTop: "10px" }}>
                         {behavioralProfile.behavioral_drift.linguistic_feature_deltas.slice(0, 4).map((item) => (
                           <div key={item.feature} style={{ padding: "9px", background: "rgba(255,255,255,0.035)", borderRadius: "7px", fontSize: "11px" }}>
@@ -747,7 +749,7 @@ export default function ActorPage({
                         ))}
                       </div>
                     )}
-                    {Object.entries(behavioralProfile.behavioral_drift.operational_changes).map(([name, change]) => (
+                    {Object.entries(behavioralDrift.operational_changes).map(([name, change]) => (
                       <div key={name} style={{ display: "flex", justifyContent: "space-between", gap: "12px", marginTop: "7px", fontSize: "11px" }}>
                         <span>{name.replace(/_/g, " ")}</span><strong>{change.delta > 0 ? "+" : ""}{change.delta}</strong>
                       </div>
