@@ -726,6 +726,37 @@ export default function ActorPage({
                 ))}
               </div>
             )}
+            {behavioralProfile.behavioral_drift && (
+              <div style={{ marginTop: "18px", padding: "14px", borderRadius: "9px", background: "rgba(255,255,255,0.025)", border: "1px solid rgba(255,255,255,0.07)" }}>
+                <div className="eyebrow">PROFILE CHANGE ANALYSIS</div>
+                <strong style={{ display: "block", marginTop: "6px" }}>Behavioural drift</strong>
+                {!behavioralProfile.behavioral_drift.available ? (
+                  <div style={{ fontSize: "12px", opacity: 0.65, marginTop: "7px" }}>{behavioralProfile.behavioral_drift.note}</div>
+                ) : (
+                  <>
+                    <div style={{ fontSize: "12px", opacity: 0.65, marginTop: "7px" }}>
+                      Compared with {behavioralProfile.behavioral_drift.baseline_generated_at ? new Date(behavioralProfile.behavioral_drift.baseline_generated_at).toLocaleString() : "the previous snapshot"}.
+                    </div>
+                    {behavioralProfile.behavioral_drift.linguistic_feature_deltas.length > 0 && (
+                      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: "8px", marginTop: "10px" }}>
+                        {behavioralProfile.behavioral_drift.linguistic_feature_deltas.slice(0, 4).map((item) => (
+                          <div key={item.feature} style={{ padding: "9px", background: "rgba(255,255,255,0.035)", borderRadius: "7px", fontSize: "11px" }}>
+                            <div style={{ opacity: 0.65 }}>{item.feature.replace(/_/g, " ")}</div>
+                            <strong>{item.delta > 0 ? "+" : ""}{item.delta.toFixed(4)}</strong>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {Object.entries(behavioralProfile.behavioral_drift.operational_changes).map(([name, change]) => (
+                      <div key={name} style={{ display: "flex", justifyContent: "space-between", gap: "12px", marginTop: "7px", fontSize: "11px" }}>
+                        <span>{name.replace(/_/g, " ")}</span><strong>{change.delta > 0 ? "+" : ""}{change.delta}</strong>
+                      </div>
+                    ))}
+                    <div style={{ fontSize: "11px", opacity: 0.55, marginTop: "10px" }}>{behavioralProfile.behavioral_drift.note}</div>
+                  </>
+                )}
+              </div>
+            )}
             <details style={{ marginTop: "16px", fontSize: "12px", opacity: 0.75 }}>
               <summary style={{ cursor: "pointer" }}>Data limitations & interpretation</summary>
               <ul style={{ paddingLeft: "20px", lineHeight: 1.6 }}>
