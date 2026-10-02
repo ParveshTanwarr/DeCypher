@@ -6,6 +6,8 @@ import {
   getActorGraph,
   getActorBehavioralProfile,
   refreshActorBehavioralProfile,
+  getEvidenceIntegrityStatus,
+  verifyEvidenceIntegrity,
   downloadActorExport,
   downloadActorReport,
 } from "../api/client";
