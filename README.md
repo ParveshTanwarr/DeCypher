@@ -22,6 +22,7 @@ The platform correlates actor identities across handles, wallets, PGP fingerprin
 - PostgreSQL as the structured evidence store.
 - Authorized scanner ingestion for controlled infrastructure.
 - Optional asynchronous scanning through Celery + Redis.
+- Tamper-evident SHA-256 evidence ledger with append-only chain verification.
 - Actual scan timestamps surfaced as actor last-scan dates.
 
 ### Investigation and correlation
@@ -41,6 +42,12 @@ The platform correlates actor identities across handles, wallets, PGP fingerprin
 - Neo4j relationship graph with a PostgreSQL fallback when Neo4j is unavailable.
 - Evidence-oriented links for wallets, PGP keys, trust relationships, marketplaces, observations and infrastructure.
 - Transparent correlation scoring using wallet reuse, infrastructure reuse, TLS/certificate reuse, banner matches, descriptor timing and stylometric similarity.
+
+### Evidence integrity
+- SHA-256 hash-chained observation ledger stored in PostgreSQL.
+- PostgreSQL advisory locking for serialized ledger appends.
+- Full-chain verification endpoint and actor-facing integrity status.
+- Optional external blockchain anchoring is not configured in the bundled prototype.
 
 ### AI / NLP
 - Domain-aware authorship attribution using the bundled PAN20 and DeCypher model artifacts.
@@ -93,8 +100,9 @@ The platform correlates actor identities across handles, wallets, PGP fingerprin
 3. Correlation combines independent signals into an interpretable confidence and priority result.
 4. Neo4j stores relationship-oriented graph data when available.
 5. The React frontend queries actor, evidence and graph endpoints.
-6. Exports materialize the current result set as CSV, JSON or PDF.
-7. DeCypher Copilot receives only the selected DeCypher context plus the user's question and sends it to Gemini from the backend.
+6. Observations are written to PostgreSQL and the tamper-evident evidence ledger in the same transaction.
+7. Exports materialize the current result set as CSV, JSON or PDF.
+8. DeCypher Copilot receives only the selected DeCypher context plus the user's question and sends it to Gemini from the backend.
 
 ---
 
@@ -151,7 +159,9 @@ DeCypher/
 ├── data/                        # synthetic demo dataset
 ├── docs/
 │   ├── architecture.md
-│   └── autonomous-scanning.md
+│   ├── autonomous-scanning.md
+│   ├── behavioral-profiling.md
+│   └── evidence-integrity.md
 ├── frontend/
 │   └── src/
 │       ├── components/
@@ -301,6 +311,9 @@ GET /actors
 GET /actors/{actor_id}
 GET /actors/{actor_id}/evidence
 GET /actors/{actor_id}/graph
+GET /integrity/status
+GET /integrity/verify
+GET /integrity/ledger
 ```
 
 ### Search
@@ -584,6 +597,8 @@ Never use the scanner against infrastructure without authorization.
 
 - [Architecture](docs/architecture.md)
 - [Autonomous scanning](docs/autonomous-scanning.md)
+- [Behavioural profiling](docs/behavioral-profiling.md)
+- [Evidence integrity](docs/evidence-integrity.md)
 - [Synthetic dataset](data/README.md)
 - [Backend tests](backend/tests/README.md)
 
