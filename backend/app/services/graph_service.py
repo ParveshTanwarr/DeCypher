@@ -364,6 +364,7 @@ def sync_temporal_events(events: List[Dict[str, Any]]) -> None:
         """
         UNWIND $rows AS row
         MATCH (a:Actor {actor_id: row.actor_id})
+
         MERGE (e:Event {event_id: row.event_id})
         SET e.event_type = row.event_type,
             e.entity_type = row.entity_type,
@@ -371,7 +372,44 @@ def sync_temporal_events(events: List[Dict[str, Any]]) -> None:
             e.timestamp = row.timestamp,
             e.source = row.source,
             e.payload = row.payload
+
         MERGE (a)-[:HAS_EVENT]->(e)
+
+        FOREACH (
+            ignored IN CASE
+                WHEN row.entity_type = "handle" THEN [1]
+                ELSE []
+            END |
+            MERGE (h:Handle {handle_id: toInteger(row.entity_id)})
+            MERGE (e)-[:DESCRIBES]->(h)
+        )
+
+        FOREACH (
+            ignored IN CASE
+                WHEN row.entity_type = "wallet" AND row.payload.address IS NOT NULL THEN [1]
+                ELSE []
+            END |
+            MERGE (w:Wallet {address: row.payload.address})
+            MERGE (e)-[:DESCRIBES]->(w)
+        )
+
+        FOREACH (
+            ignored IN CASE
+                WHEN row.entity_type = "pgp_key" AND row.payload.fingerprint IS NOT NULL THEN [1]
+                ELSE []
+            END |
+            MERGE (p:PGPKey {fingerprint: toUpper(row.payload.fingerprint)})
+            MERGE (e)-[:DESCRIBES]->(p)
+        )
+
+        FOREACH (
+            ignored IN CASE
+                WHEN row.entity_type = "observation" THEN [1]
+                ELSE []
+            END |
+            MERGE (o:Observation {observation_id: row.entity_id})
+            MERGE (e)-[:DESCRIBES]->(o)
+        )
         """,
         {"rows": events},
     )
