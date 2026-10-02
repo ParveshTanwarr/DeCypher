@@ -212,7 +212,7 @@ export function getActorCorrelation(actorId: string, handleA?: string, handleB?:
   if (handleA) params.set("handle_a", handleA);
   if (handleB) params.set("handle_b", handleB);
   const query = params.toString();
-  return request<CorrelationResult>(\`/correlation/actor/\${encodeURIComponent(actorId)}\${query ? \`?\${query}\` : ""}\`);
+  return request<CorrelationResult>(`/correlation/actor/${encodeURIComponent(actorId)}${query ? `?${query}` : ""}`);
 }
 export function getActorCounterfactual(actorId: string, handleA?: string, handleB?: string) {
   const params = new URLSearchParams();
@@ -220,7 +220,7 @@ export function getActorCounterfactual(actorId: string, handleA?: string, handle
   if (handleB) params.set("handle_b", handleB);
   const query = params.toString();
   return request<Pick<CorrelationResult, "candidate_actor" | "counterfactual" | "source_reliability">>(
-    \`/correlation/actor/\${encodeURIComponent(actorId)}/counterfactual\${query ? \`?\${query}\` : ""}\`,
+    `/correlation/actor/${encodeURIComponent(actorId)}/counterfactual${query ? `?${query}` : ""}`,
   );
 }
 export function getAllCorrelations(): Promise<{ results: CorrelationResult[] }> { return request<{ results: CorrelationResult[] }>(`/correlation/actors`); }
