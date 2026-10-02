@@ -737,11 +737,11 @@ export default function ActorPage({
                 ) : (
                   <>
                     <div style={{ fontSize: "12px", opacity: 0.65, marginTop: "7px" }}>
-                      Compared with {behavioralDrift.baseline_generated_at ? new Date(behavioralProfile.behavioral_drift.baseline_generated_at).toLocaleString() : "the previous snapshot"}.
+                      Compared with {behavioralDrift.baseline_generated_at ? new Date(behavioralDrift.baseline_generated_at).toLocaleString() : "the previous snapshot"}.
                     </div>
                     {behavioralDrift.linguistic_feature_deltas.length > 0 && (
                       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: "8px", marginTop: "10px" }}>
-                        {behavioralProfile.behavioral_drift.linguistic_feature_deltas.slice(0, 4).map((item) => (
+                        {behavioralDrift.linguistic_feature_deltas.slice(0, 4).map((item) => (
                           <div key={item.feature} style={{ padding: "9px", background: "rgba(255,255,255,0.035)", borderRadius: "7px", fontSize: "11px" }}>
                             <div style={{ opacity: 0.65 }}>{item.feature.replace(/_/g, " ")}</div>
                             <strong>{item.delta > 0 ? "+" : ""}{item.delta.toFixed(4)}</strong>
@@ -754,7 +754,7 @@ export default function ActorPage({
                         <span>{name.replace(/_/g, " ")}</span><strong>{change.delta > 0 ? "+" : ""}{change.delta}</strong>
                       </div>
                     ))}
-                    <div style={{ fontSize: "11px", opacity: 0.55, marginTop: "10px" }}>{behavioralProfile.behavioral_drift.note}</div>
+                    <div style={{ fontSize: "11px", opacity: 0.55, marginTop: "10px" }}>{behavioralDrift.note}</div>
                   </>
                 )}
               </div>
