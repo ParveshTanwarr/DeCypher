@@ -10,6 +10,7 @@ Graph schema:
     (:Infrastructure)
     (:Observation)
     (:PGPKey)
+    (:Event)
 
 Relationships:
 
@@ -23,6 +24,8 @@ Relationships:
     Actor -[:HAS_OBSERVATION]-> Observation
     Handle -[:HAS_OBSERVATION]-> Observation
     Observation -[:EVIDENCE_OF]-> Infrastructure
+    Actor -[:HAS_EVENT]-> Event
+    Event -[:DESCRIBES]-> evidence entity
 
 The graph is intentionally evidence-oriented. It does not claim that
 two handles belong to the same person simply because they are connected.
