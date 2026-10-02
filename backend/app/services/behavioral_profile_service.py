@@ -188,7 +188,7 @@ class BehavioralProfileService:
         limitations = [
             "The bundled dataset is synthetic; this profile demonstrates prototype behaviour and is not real-world intelligence.",
             "The current post records do not provide usable per-post timestamps, so posting hours, weekday routines, and posting cadence are not inferred.",
-            "Account creation and last-active dates describe account lifecycle windows, not continuous observed activity.",
+            "Account creation and last-active dates describe account lifecycle windows, not continuous observed activity; future-dated synthetic records are not treated as current activity.",
             "Behavioural similarity and shared operational indicators are investigative leads, not proof of common identity.",
             "If the authorship model is unavailable, any fallback similarity is explicitly labelled and must not be treated as validated model output.",
         ]
@@ -344,7 +344,13 @@ class BehavioralProfileService:
             "last_observed": _iso(last),
             "account_age_days": max(0, (today - first).days) if first else None,
             "observed_span_days": max(0, (last - first).days) if first and last else None,
-            "days_since_last_seen": max(0, (today - last).days) if last else None,
+            "days_since_last_seen": (
+                (today - last).days if last and last <= today else None
+            ),
+            "future_dated_handle_count": sum(
+                1 for handle in handles
+                if _as_date(handle.last_seen) and _as_date(handle.last_seen) > today
+            ),
             "handle_timeline": timeline,
             "status_distribution": status_counts,
             "overlapping_handle_windows": overlaps,
@@ -384,7 +390,7 @@ class BehavioralProfileService:
             "cross_actor_shared_wallet_count": len(external_wallet_addresses),
             "pgp_key_count": len(pgp_keys),
             "pgp_reuse_across_other_handles_count": len(
-                {(row.pgp_key_id, row.id) for row in external_pgp_links}
+                {row[0] for row in external_pgp_links}
             ),
         }
 
