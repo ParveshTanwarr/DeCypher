@@ -60,22 +60,28 @@ def scan_target(url: str) -> list[dict]:
     scan_date = datetime.now(timezone.utc).isoformat()
 
     try:
-        response = requests.get(url, timeout=int(os.getenv("SCANNER_CONNECT_TIMEOUT_SECONDS", "10")), verify=_tls_verify(), allow_redirects=False, stream=True)
-        banner = detect_banner(response)
+        with requests.get(
+            url,
+            timeout=int(os.getenv("SCANNER_CONNECT_TIMEOUT_SECONDS", "10")),
+            verify=_tls_verify(),
+            allow_redirects=False,
+            stream=True,
+        ) as response:
+            banner = detect_banner(response)
 
-        if banner:
-            observations.append({
-                "observation_id": _observation_id(),
-                "indicator_type": "default_banner",
-                "target": url,
-                "detected": True,
-                "observed_value": banner,
-                "clearnet_match_domain": None,
-                "confidence": 0.85,
-                "scan_date": scan_date,
-                "source": "authorized-test-service",
-                "evidence": "Test server banner detected."
-            })
+            if banner:
+                observations.append({
+                    "observation_id": _observation_id(),
+                    "indicator_type": "default_banner",
+                    "target": url,
+                    "detected": True,
+                    "observed_value": banner,
+                    "clearnet_match_domain": None,
+                    "confidence": 0.85,
+                    "scan_date": scan_date,
+                    "source": "authorized-test-service",
+                    "evidence": "Test server banner detected."
+                })
 
     except requests.RequestException as error:
         observations.append({
