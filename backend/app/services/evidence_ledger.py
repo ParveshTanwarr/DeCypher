@@ -150,6 +150,11 @@ class EvidenceLedgerService:
                 created_by=created_by,
                 payload=payload,
                 previous_hash=previous_hash,
+                # Temporary unique value allows the database to assign the
+                # sequence id before the final hash is calculated.
+                record_hash=hashlib.sha256(
+                    f"pending:{observation_id}".encode("utf-8")
+                ).hexdigest(),
             )
             self.db.add(entry)
             self.db.flush()
