@@ -20,7 +20,6 @@ def test_evidence_integrity_ledger_is_present_and_valid(client, admin_headers):
 def test_new_observations_are_chained_into_the_ledger(client, admin_headers):
     observation_id = f"LEDGER-TEST-{uuid.uuid4().hex[:10]}"
     payload = {
-        "actor_id": "A00001",
         "observations": [
             {
                 "observation_id": observation_id,
@@ -44,7 +43,7 @@ def test_new_observations_are_chained_into_the_ledger(client, admin_headers):
     assert response.json()["inserted_count"] == 1
 
     ledger = client.get(
-        "/integrity/ledger?actor_id=A00001&limit=200",
+        "/integrity/ledger?limit=500",
         headers=admin_headers,
     )
     assert ledger.status_code == 200, ledger.text
