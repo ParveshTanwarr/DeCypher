@@ -146,6 +146,49 @@ export interface GraphLink { source: string; target: string; relation: string; }
 export interface GraphPayload { nodes: GraphNode[]; links: GraphLink[]; }
 export function getActorGraph(actorId: string): Promise<GraphPayload> { return request<GraphPayload>(`/actors/${encodeURIComponent(actorId)}/graph`); }
 
+export interface TemporalEvent {
+  id: number;
+  event_key: string;
+  event_type: string;
+  entity_type: string;
+  entity_id: string;
+  timestamp: string;
+  source: string;
+  payload: Record<string, unknown>;
+}
+export interface ActorTimeline {
+  actor_id: string;
+  total_events: number;
+  event_types: Record<string, number>;
+  events: TemporalEvent[];
+  methodology: string;
+}
+export interface GraphAnomalyResult {
+  actor_id: string;
+  anomaly_score: number;
+  level: string;
+  features: Record<string, number>;
+  feature_percentiles: Record<string, number>;
+  feature_tail_scores: Record<string, number>;
+  contributing_features: Array<{
+    feature: string;
+    feature_value: number;
+    population_percentile: number;
+    tail_score: number;
+  }>;
+  feature_weights: Record<string, number>;
+  methodology: string;
+}
+export function getActorTimeline(actorId: string, limit = 250): Promise<ActorTimeline> {
+  return request<ActorTimeline>(`/analytics/actors/${encodeURIComponent(actorId)}/timeline?limit=${limit}`);
+}
+export function getActorGraphAnomaly(actorId: string): Promise<GraphAnomalyResult> {
+  return request<GraphAnomalyResult>(`/analytics/actors/${encodeURIComponent(actorId)}/graph-anomaly`);
+}
+export function getGraphAnomalyLeaderboard(limit = 25): Promise<{ total_actors: number; results: GraphAnomalyResult[]; limit: number }> {
+  return request(`/analytics/graph-anomalies?limit=${limit}`);
+}
+
 export interface SourceReliability {
   source: string;
   prior: number;
