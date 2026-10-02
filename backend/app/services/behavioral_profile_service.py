@@ -525,22 +525,30 @@ class BehavioralProfileService:
                 "available": False,
                 "mean_similarity": None,
                 "comparisons": 0,
+                "failed_comparisons": 0,
                 "engine_status": nlp_service.engine_status,
                 "fallback_used": nlp_service.engine is None,
             }
         scores = []
         fallback_used = False
+        failed_comparisons = 0
         for index, handle_a in enumerate(handles):
             for handle_b in handles[index + 1:]:
-                result = nlp_service.compare(handle_a, handle_b)
-                if result.get("error"):
-                    continue
-                scores.append(float(result.get("similarity_score", 0.0)))
-                fallback_used = fallback_used or bool(result.get("fallback_used"))
+                try:
+                    result = nlp_service.compare(handle_a, handle_b)
+                    if result.get("error"):
+                        failed_comparisons += 1
+                        continue
+                    scores.append(float(result.get("similarity_score", 0.0)))
+                    fallback_used = fallback_used or bool(result.get("fallback_used"))
+                except Exception:
+                    # A failed pair must not take down the actor's other profile dimensions.
+                    failed_comparisons += 1
         return {
             "available": bool(scores),
             "mean_similarity": round(sum(scores) / len(scores), 4) if scores else None,
             "comparisons": len(scores),
+            "failed_comparisons": failed_comparisons,
             "engine_status": nlp_service.engine_status,
             "fallback_used": fallback_used,
             "interpretation": "Model similarity across linked handles; not a calibrated probability of common identity.",
