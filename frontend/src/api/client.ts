@@ -269,6 +269,9 @@ export interface BehavioralProfile {
       delta: number;
     }>;
     operational_changes: Record<string, { previous: number; current: number; delta: number }>;
+    lifecycle_changes: Record<string, { previous: number; current: number; delta: number }>;
+    interaction_changes: Record<string, { previous: number; current: number; delta: number }>;
+    infrastructure_changes: Record<string, { previous: number; current: number; delta: number }>;
     note: string;
   };
   limitations: string[];
