@@ -254,8 +254,6 @@ class NLPStylometryService:
             weighted_post_total += len(texts)
             total_posts += len(texts)
 
-        if not all_vectors:
-            return empty
 
         if weighted_feature_sum is None or not handle_mean_vectors:
             return empty
