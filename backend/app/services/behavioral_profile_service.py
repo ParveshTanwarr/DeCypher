@@ -242,6 +242,17 @@ class BehavioralProfileService:
             .first()
         )
         if snapshot is None:
+            previous = (
+                self.db.query(BehavioralProfileSnapshot)
+                .filter(BehavioralProfileSnapshot.actor_id == actor.actor_id)
+                .order_by(BehavioralProfileSnapshot.generated_at.desc())
+                .first()
+            )
+            profile["behavioral_drift"] = self._compare_profiles(
+                previous.profile_data if previous else None,
+                profile,
+                previous.generated_at.isoformat() if previous and previous.generated_at else None,
+            )
             snapshot = BehavioralProfileSnapshot(
                 actor_id=actor.actor_id,
                 profile_version=PROFILE_VERSION,
@@ -254,6 +265,70 @@ class BehavioralProfileService:
             self.db.refresh(snapshot)
 
         return self._with_history(snapshot)
+
+    @staticmethod
+    def _compare_profiles(
+        previous: Optional[Dict[str, Any]],
+        current: Dict[str, Any],
+        baseline_time: Optional[str],
+    ) -> Dict[str, Any]:
+        if not previous:
+            return {
+                "available": False,
+                "baseline_generated_at": None,
+                "linguistic_feature_deltas": [],
+                "operational_changes": {},
+                "note": "A second profile snapshot is required before profile changes can be compared.",
+            }
+
+        previous_features = (
+            previous.get("dimensions", {}).get("linguistic", {}).get("features", {})
+        )
+        current_features = (
+            current.get("dimensions", {}).get("linguistic", {}).get("features", {})
+        )
+        deltas = []
+        for name in set(previous_features) & set(current_features):
+            before = float(previous_features[name])
+            after = float(current_features[name])
+            delta = after - before
+            if abs(delta) > 1e-9:
+                deltas.append({
+                    "feature": name,
+                    "previous": round(before, 5),
+                    "current": round(after, 5),
+                    "delta": round(delta, 5),
+                })
+        deltas.sort(key=lambda item: abs(item["delta"]), reverse=True)
+
+        previous_ops = previous.get("dimensions", {}).get("operational", {})
+        current_ops = current.get("dimensions", {}).get("operational", {})
+        operational_changes = {}
+        for name in (
+            "marketplace_count",
+            "wallet_count",
+            "unique_wallet_count",
+            "within_actor_wallet_reuse_count",
+            "cross_actor_shared_wallet_count",
+            "pgp_key_count",
+            "pgp_reuse_across_other_handles_count",
+        ):
+            before = int(previous_ops.get(name) or 0)
+            after = int(current_ops.get(name) or 0)
+            if before != after:
+                operational_changes[name] = {
+                    "previous": before,
+                    "current": after,
+                    "delta": after - before,
+                }
+
+        return {
+            "available": True,
+            "baseline_generated_at": baseline_time,
+            "linguistic_feature_deltas": deltas[:8],
+            "operational_changes": operational_changes,
+            "note": "Descriptive changes between stored snapshots; not an anomaly verdict or proof of actor change.",
+        }
 
     def latest(self, actor_id: str) -> Optional[Dict[str, Any]]:
         snapshot = (
