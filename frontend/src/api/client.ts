@@ -8,7 +8,11 @@ export function setAuthToken(token: string) { authToken = token; }
 
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const response = await fetch(`${API_BASE}${path}`, { ...options, headers: { ...(options.headers || {}), ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}) } });
-  if (!response.ok) throw new Error((await response.text()) || `API error: ${response.status}`);
+  if (!response.ok) {
+    const error = new Error((await response.text()) || `API error: ${response.status}`) as Error & { status: number };
+    error.status = response.status;
+    throw error;
+  }
   return response.json();
 }
 
