@@ -285,3 +285,29 @@ export function refreshActorBehavioralProfile(actorId: string): Promise<Behavior
 export function getActorBehavioralProfile(actorId: string): Promise<BehavioralProfile> {
   return request<BehavioralProfile>(`/actors/${encodeURIComponent(actorId)}/behavioral-profile`);
 }
+
+
+export interface EvidenceIntegrityStatus {
+  mode: "internal_hash_chain" | string;
+  blockchain_anchor_configured: boolean;
+  entry_count: number;
+  head_hash: string;
+  genesis_hash: string;
+}
+
+export interface EvidenceIntegrityVerification {
+  valid: boolean;
+  entry_count: number;
+  verified_entries: number;
+  head_hash: string;
+  broken_sequence_id?: number | null;
+  reason: string;
+}
+
+export function getEvidenceIntegrityStatus(): Promise<EvidenceIntegrityStatus> {
+  return request<EvidenceIntegrityStatus>("/integrity/status");
+}
+
+export function verifyEvidenceIntegrity(): Promise<EvidenceIntegrityVerification> {
+  return request<EvidenceIntegrityVerification>("/integrity/verify");
+}
