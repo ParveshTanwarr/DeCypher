@@ -1,4 +1,5 @@
 import json
+import os
 import uuid
 from pathlib import Path
 from datetime import datetime, timezone
@@ -24,14 +25,42 @@ def _observation_id() -> str:
     return f"scanobs_{uuid.uuid4().hex[:12]}"
 
 
-def scan_target(url: str) -> list[dict]:
-    """Scan an authorized target for infrastructure indicators."""
+def _allowed_hosts() -> set[str]:
+    return {
+        item.strip().lower()
+        for item in os.getenv("AUTOSCAN_ALLOWED_HOSTS", "127.0.0.1,localhost").split(",")
+        if item.strip()
+    }
 
+
+def validate_scan_target(url: str) -> None:
+    parsed = urlparse(url)
+    if parsed.scheme not in {"http", "https"} or not parsed.hostname:
+        raise ValueError("Scan target must be an http:// or https:// URL with a hostname.")
+    if parsed.username or parsed.password:
+        raise ValueError("Credentials embedded in scan URLs are not allowed.")
+    host = parsed.hostname.lower()
+    if host not in _allowed_hosts():
+        allowed = ", ".join(sorted(_allowed_hosts())) or "(none)"
+        raise ValueError(
+            f"Target host '{host}' is not in AUTOSCAN_ALLOWED_HOSTS. Allowed hosts: {allowed}"
+        )
+
+
+def _tls_verify() -> bool:
+    value = os.getenv("SCANNER_TLS_VERIFY", "true").strip().lower()
+    return value not in {"0", "false", "no", "off"}
+
+
+def scan_target(url: str) -> list[dict]:
+    """Scan an allowlisted, authorized target for infrastructure indicators."""
+
+    validate_scan_target(url)
     observations = []
     scan_date = datetime.now(timezone.utc).isoformat()
 
     try:
-        response = requests.get(url, timeout=10, verify=False)
+        response = requests.get(url, timeout=int(os.getenv("SCANNER_CONNECT_TIMEOUT_SECONDS", "10")), verify=_tls_verify(), allow_redirects=False, stream=True)
         banner = detect_banner(response)
 
         if banner:
