@@ -45,6 +45,8 @@ class CorrelationService:
     def __init__(self, db: Session):
         self.db = db
         self._actor_target_cache: Dict[str, set[str]] = {}
+        self._all_actor_target_map_cache: Optional[Dict[str, str]] = None
+        self._source_review_stats_cache: Optional[Dict[str, Dict[str, set[str]]]] = None
 
     def correlate_actor(
         self,
@@ -347,6 +349,9 @@ class CorrelationService:
         }
 
     def _build_actor_target_map(self) -> Dict[str, str]:
+        if self._all_actor_target_map_cache is not None:
+            return self._all_actor_target_map_cache
+
         actors = self.db.query(Actor).all()
         handles = self.db.query(DarkWebHandle).all()
         scan_targets = self.db.query(ScanTarget).all()
@@ -369,6 +374,8 @@ class CorrelationService:
             )
             for key in keys:
                 mapping[key.lower()] = actor.actor_id
+
+        self._all_actor_target_map_cache = mapping
         return mapping
 
     @staticmethod
@@ -385,18 +392,10 @@ class CorrelationService:
             "basis": "neutral_prior",
         }
 
-    def _source_reliability(self, actor_id: str) -> Dict[str, Dict[str, Any]]:
-        """Estimate source reliability from reviewed actors excluding the target actor.
-
-        This is a leave-one-actor-out, review-conditioned reliability estimate.
-        It is not a causal source-quality measurement and should not be treated
-        as ground truth.
-        """
-        actor = self.db.query(Actor).filter(Actor.actor_id == actor_id).first()
-        actor_sources = {
-            (observation.source or "unknown").strip() or "unknown"
-            for observation in self._actor_observations(actor)
-        } if actor else set()
+    def _build_source_review_stats(self) -> Dict[str, Dict[str, set[str]]]:
+        """Build source-to-reviewed-actor sets once per correlation service."""
+        if self._source_review_stats_cache is not None:
+            return self._source_review_stats_cache
 
         target_map = self._build_actor_target_map()
         observations = self.db.query(
@@ -415,15 +414,13 @@ class CorrelationService:
             ]
 
         source_actors: Dict[str, set[str]] = {}
-        target_actor_ids_by_source: Dict[str, set[str]] = {}
         for source, target, detected in observations:
             if not detected:
                 continue
             normalized_source = (source or "unknown").strip() or "unknown"
             linked_actor = target_map.get((target or "").lower())
-            if not linked_actor or linked_actor == actor_id:
-                continue
-            source_actors.setdefault(normalized_source, set()).add(linked_actor)
+            if linked_actor:
+                source_actors.setdefault(normalized_source, set()).add(linked_actor)
 
         feedback_records = (
             self.db.query(InvestigatorFeedback)
@@ -435,31 +432,65 @@ class CorrelationService:
         )
         latest_review_by_actor: Dict[str, InvestigatorFeedback] = {}
         for record in feedback_records:
-            if record.actor_id == actor_id:
-                continue
             if record.actor_id in latest_review_by_actor:
                 continue
             verdict = (record.verdict or "").lower()
-            if "confirm" in verdict:
-                latest_review_by_actor[record.actor_id] = record
-            elif any(term in verdict for term in ("false", "reject", "dismiss")):
+            if "confirm" in verdict or any(
+                term in verdict for term in ("false", "reject", "dismiss")
+            ):
                 latest_review_by_actor[record.actor_id] = record
 
-        result: Dict[str, Dict[str, Any]] = {}
+        stats: Dict[str, Dict[str, set[str]]] = {}
         for source, actor_ids in source_actors.items():
-            if actor_sources and source not in actor_sources:
-                continue
-            confirmed = 0
-            false_positive = 0
+            confirmed: set[str] = set()
+            false_positive: set[str] = set()
             for linked_actor in actor_ids:
                 review = latest_review_by_actor.get(linked_actor)
                 if not review:
                     continue
                 verdict = (review.verdict or "").lower()
                 if "confirm" in verdict:
-                    confirmed += 1
-                elif any(term in verdict for term in ("false", "reject", "dismiss")):
-                    false_positive += 1
+                    confirmed.add(linked_actor)
+                elif any(
+                    term in verdict for term in ("false", "reject", "dismiss")
+                ):
+                    false_positive.add(linked_actor)
+
+            stats[source] = {
+                "confirmed_actor_ids": confirmed,
+                "false_positive_actor_ids": false_positive,
+            }
+
+        self._source_review_stats_cache = stats
+        return stats
+
+    def _source_reliability(self, actor_id: str) -> Dict[str, Dict[str, Any]]:
+        """Estimate source reliability from reviewed actors excluding the target actor.
+
+        This is a leave-one-actor-out, review-conditioned reliability estimate.
+        It is not a causal source-quality measurement and should not be treated
+        as ground truth.
+        """
+        actor = self.db.query(Actor).filter(Actor.actor_id == actor_id).first()
+        actor_sources = {
+            (observation.source or "unknown").strip() or "unknown"
+            for observation in self._actor_observations(actor)
+        } if actor else set()
+
+        stats = self._build_source_review_stats()
+        result: Dict[str, Dict[str, Any]] = {}
+
+        for source in actor_sources:
+            source_stats = stats.get(
+                source,
+                {"confirmed_actor_ids": set(), "false_positive_actor_ids": set()},
+            )
+            confirmed = len(
+                source_stats["confirmed_actor_ids"] - {actor_id}
+            )
+            false_positive = len(
+                source_stats["false_positive_actor_ids"] - {actor_id}
+            )
 
             review_count = confirmed + false_positive
             prior = 0.50
@@ -472,8 +503,7 @@ class CorrelationService:
             )
             posterior = max(0.25, min(0.90, posterior))
             coverage = review_count / (review_count + prior_strength)
-            multiplier = self._clamp(0.5 + posterior)
-            multiplier = max(0.75, min(1.20, multiplier))
+            multiplier = max(0.75, min(1.20, 0.5 + posterior))
 
             result[source] = {
                 "source": source,
