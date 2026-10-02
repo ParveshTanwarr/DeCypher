@@ -6,10 +6,19 @@ import {
   getActorGraph,
   getActorBehavioralProfile,
   refreshActorBehavioralProfile,
+  getEvidenceIntegrityStatus,
+  verifyEvidenceIntegrity,
   downloadActorExport,
   downloadActorReport,
 } from "../api/client";
-import type { BehavioralProfile, CorrelationResult, GraphNode, GraphLink } from "../api/client";
+import type {
+  BehavioralProfile,
+  CorrelationResult,
+  EvidenceIntegrityStatus,
+  EvidenceIntegrityVerification,
+  GraphNode,
+  GraphLink,
+} from "../api/client";
 
 interface ActorDetail {
   actor_id: string;
@@ -336,6 +345,11 @@ export default function ActorPage({
     useState<BehavioralProfile | null>(null);
   const [behavioralLoading, setBehavioralLoading] = useState(true);
   const [behavioralError, setBehavioralError] = useState("");
+  const [integrityStatus, setIntegrityStatus] =
+    useState<EvidenceIntegrityStatus | null>(null);
+  const [integrityVerification, setIntegrityVerification] =
+    useState<EvidenceIntegrityVerification | null>(null);
+  const [integrityChecking, setIntegrityChecking] = useState(false);
 
   const [loading, setLoading] = useState(true);
   const [correlationLoading, setCorrelationLoading] = useState(true);
@@ -458,6 +472,15 @@ export default function ActorPage({
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
+      });
+
+    getEvidenceIntegrityStatus()
+      .then((status) => {
+        if (!cancelled) setIntegrityStatus(status);
+      })
+      .catch((error) => {
+        console.error("Failed to load evidence integrity status:", error);
+        if (!cancelled) setIntegrityStatus(null);
       });
 
     // Evidence is supplementary to the actor record. A failure here
@@ -808,6 +831,91 @@ export default function ActorPage({
               <div style={{ fontFamily: "monospace", fontSize: "10px", wordBreak: "break-all" }}>Profile fingerprint: {behavioralProfile.source_fingerprint}</div>
             </details>
           </>
+        )}
+      </div>
+
+      {/* Evidence integrity */}
+      <div className="card" style={{ marginTop: "20px" }}>
+        <div className="eyebrow">EVIDENCE INTEGRITY</div>
+        <h2 style={{ marginTop: "8px" }}>Tamper-Evident Ledger</h2>
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            gap: "16px",
+            flexWrap: "wrap",
+            marginTop: "16px",
+          }}
+        >
+          <div>
+            <strong>
+              {integrityStatus
+                ? `${integrityStatus.entry_count.toLocaleString()} chained evidence records`
+                : "Integrity status unavailable"}
+            </strong>
+            {integrityStatus && (
+              <>
+                <div style={{ fontSize: "11px", opacity: 0.55, marginTop: "6px" }}>
+                  Mode: {integrityStatus.mode.replace(/_/g, " ")} · external blockchain anchor:{" "}
+                  {integrityStatus.blockchain_anchor_configured ? "configured" : "not configured"}
+                </div>
+                <div
+                  style={{
+                    fontFamily: "monospace",
+                    fontSize: "10px",
+                    opacity: 0.55,
+                    marginTop: "7px",
+                    wordBreak: "break-all",
+                  }}
+                >
+                  Head hash: {integrityStatus.head_hash}
+                </div>
+              </>
+            )}
+          </div>
+          <button
+            className="secondary-button"
+            disabled={integrityChecking || !integrityStatus}
+            onClick={async () => {
+              setIntegrityChecking(true);
+              try {
+                setIntegrityVerification(await verifyEvidenceIntegrity());
+              } catch (error) {
+                console.error("Evidence integrity verification failed:", error);
+                setIntegrityVerification({
+                  valid: false,
+                  entry_count: integrityStatus?.entry_count || 0,
+                  verified_entries: 0,
+                  head_hash: integrityStatus?.head_hash || "",
+                  broken_sequence_id: null,
+                  reason: "Verification request failed.",
+                });
+              } finally {
+                setIntegrityChecking(false);
+              }
+            }}
+          >
+            {integrityChecking ? "Verifying..." : "Verify Chain"}
+          </button>
+        </div>
+        {integrityVerification && (
+          <div
+            style={{
+              marginTop: "14px",
+              padding: "11px 12px",
+              borderRadius: "8px",
+              background: "rgba(255,255,255,0.025)",
+              fontSize: "11px",
+            }}
+          >
+            <strong>
+              {integrityVerification.valid ? "Chain verified" : "Integrity check failed"}
+            </strong>
+            <div style={{ opacity: 0.62, marginTop: "5px" }}>
+              {integrityVerification.reason}
+            </div>
+          </div>
         )}
       </div>
 
