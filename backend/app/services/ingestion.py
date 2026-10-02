@@ -87,6 +87,7 @@ def _upsert_actors(session: Session, df: pd.DataFrame, primary_handles: pd.DataF
 
 def _upsert_darkweb_handles(session: Session, prepared_handles: pd.DataFrame):
     valid_cols = [
+        "handle_id",
         "handle",
         "platform",
         "actor_id",
