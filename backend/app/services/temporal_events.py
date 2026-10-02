@@ -175,12 +175,11 @@ def _collect_actor_events(db: Session, actor_ids: Iterable[str]) -> list[dict[st
             if item:
                 events.append(item)
 
-    observations = (
-        db.query(Observation)
-        .filter(Observation.target.in_(actor_ids))
-        .all()
-    )
+    observations = db.query(Observation).all()
     actor_by_target = {actor_id.lower(): actor_id for actor_id in actor_ids}
+    for handle in handles:
+        if handle.handle and handle.actor_id:
+            actor_by_target[handle.handle.strip().lower()] = str(handle.actor_id)
     for observation in observations:
         actor_id = actor_by_target.get((observation.target or "").strip().lower())
         if not actor_id:
@@ -304,18 +303,17 @@ def get_actor_timeline(
     end: datetime | None = None,
     limit: int = 250,
 ) -> dict[str, Any]:
-    query = (
-        db.query(TemporalEvent)
-        .filter(TemporalEvent.actor_id == actor_id)
-        .order_by(TemporalEvent.timestamp.desc(), TemporalEvent.id.desc())
-        .limit(limit)
-    )
+    query = db.query(TemporalEvent).filter(TemporalEvent.actor_id == actor_id)
     if start:
         query = query.filter(TemporalEvent.timestamp >= start)
     if end:
         query = query.filter(TemporalEvent.timestamp <= end)
-
-    events = query.all()
+    events = (
+        query
+        .order_by(TemporalEvent.timestamp.desc(), TemporalEvent.id.desc())
+        .limit(limit)
+        .all()
+    )
     grouped: dict[str, int] = defaultdict(int)
     for event in events:
         grouped[event.event_type] += 1
