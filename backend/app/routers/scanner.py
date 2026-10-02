@@ -118,6 +118,14 @@ def ingest_observations(
     stmt = insert(Observation).values(list(deduped.values()))
     stmt = stmt.on_conflict_do_nothing(index_elements=["observation_id"])
     result = db.execute(stmt)
+
+    # Keep observation storage and its integrity record in one transaction.
+    from app.services.evidence_ledger import EvidenceLedgerService
+    EvidenceLedgerService(db).append_missing_for_observations(
+        deduped.values(),
+        actor_id=payload.actor_id,
+        created_by="scanner_api",
+    )
     db.commit()
 
     if payload.actor_id:
