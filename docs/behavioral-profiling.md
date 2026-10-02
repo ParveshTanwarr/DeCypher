@@ -4,6 +4,7 @@ DeCypher's behavioural profile is a descriptive, evidence-backed view of an acto
 
 ## Dimensions
 
+- **Profile version:** `1.1` for the current aggregation/drift semantics.
 - **Linguistic:** per-post style features from the same `style_features` implementation used by the trained authorship engine. Per-handle features are post means; actor-level `features` are post-weighted across profiled handles, while `handle_mean_features` preserves an equal-weighted mean across handles. Raw post text is not included in the API response or profile snapshots.
 - **Temporal lifecycle:** handle registration/first-seen and last-seen windows, account status distribution, overlapping handle windows, and inter-handle gaps.
 - **Operational:** marketplace footprint, wallet reuse within an actor, wallet addresses shared with other actor records, and PGP-key associations beyond the actor's handles.
