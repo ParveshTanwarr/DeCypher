@@ -4,6 +4,8 @@ import {
   getActorEvidence,
   getActorCorrelation,
   getActorGraph,
+  getActorTimeline,
+  getActorGraphAnomaly,
   getActorBehavioralProfile,
   refreshActorBehavioralProfile,
   getEvidenceIntegrityStatus,
@@ -18,6 +20,8 @@ import type {
   EvidenceIntegrityVerification,
   GraphNode,
   GraphLink,
+  ActorTimeline,
+  GraphAnomalyResult,
 } from "../api/client";
 
 interface ActorDetail {
@@ -350,6 +354,10 @@ export default function ActorPage({
   const [integrityVerification, setIntegrityVerification] =
     useState<EvidenceIntegrityVerification | null>(null);
   const [integrityChecking, setIntegrityChecking] = useState(false);
+  const [timelineData, setTimelineData] = useState<ActorTimeline | null>(null);
+  const [graphAnomaly, setGraphAnomaly] = useState<GraphAnomalyResult | null>(null);
+  const [analyticsLoading, setAnalyticsLoading] = useState(true);
+  const [analyticsError, setAnalyticsError] = useState("");
 
   const [loading, setLoading] = useState(true);
   const [correlationLoading, setCorrelationLoading] = useState(true);
@@ -492,6 +500,41 @@ export default function ActorPage({
       .catch((error) => {
         console.error("Failed to load actor evidence:", error);
         if (!cancelled) setEvidence([]);
+      });
+
+    setAnalyticsLoading(true);
+    setAnalyticsError("");
+    Promise.allSettled([
+      getActorTimeline(actorId, 50),
+      getActorGraphAnomaly(actorId),
+    ])
+      .then(([timelineResult, anomalyResult]) => {
+        if (cancelled) return;
+
+        let failed = false;
+
+        if (timelineResult.status === "fulfilled") {
+          setTimelineData(timelineResult.value);
+        } else {
+          failed = true;
+          setTimelineData(null);
+          console.error("Failed to load actor timeline:", timelineResult.reason);
+        }
+
+        if (anomalyResult.status === "fulfilled") {
+          setGraphAnomaly(anomalyResult.value);
+        } else {
+          failed = true;
+          setGraphAnomaly(null);
+          console.error("Failed to load graph anomaly analysis:", anomalyResult.reason);
+        }
+
+        if (failed) {
+          setAnalyticsError("One or more advanced analytics views could not be loaded.");
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setAnalyticsLoading(false);
       });
 
     return () => {
@@ -831,6 +874,151 @@ export default function ActorPage({
               <div style={{ fontFamily: "monospace", fontSize: "10px", wordBreak: "break-all" }}>Profile fingerprint: {behavioralProfile.source_fingerprint}</div>
             </details>
           </>
+        )}
+      </div>
+
+      {/* Temporal / structural analytics */}
+      <div className="card" style={{ marginTop: "20px" }}>
+        <div className="eyebrow">ADVANCED EVIDENCE ANALYTICS</div>
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "minmax(260px, 0.85fr) minmax(320px, 1.15fr)",
+            gap: "24px",
+            marginTop: "14px",
+          }}
+        >
+          <div
+            style={{
+              padding: "16px",
+              borderRadius: "10px",
+              background: "rgba(255,255,255,0.025)",
+              border: "1px solid rgba(255,255,255,0.07)",
+            }}
+          >
+            <div style={{ fontSize: "11px", opacity: 0.55, letterSpacing: "0.08em" }}>
+              STRUCTURAL GRAPH ANALYSIS
+            </div>
+            {analyticsLoading ? (
+              <div style={{ marginTop: "14px", opacity: 0.65 }}>Computing graph structure...</div>
+            ) : graphAnomaly ? (
+              <>
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "baseline",
+                    gap: "10px",
+                    marginTop: "10px",
+                  }}
+                >
+                  <div style={{ fontSize: "34px", fontWeight: 800, fontFamily: "monospace" }}>
+                    {graphAnomaly.anomaly_score.toFixed(1)}
+                  </div>
+                  <span style={{ fontSize: "12px", opacity: 0.55 }}>/ 100</span>
+                </div>
+                <div style={{ fontSize: "12px", opacity: 0.68, marginTop: "4px" }}>
+                  {graphAnomaly.level.replace(/_/g, " ")}
+                </div>
+                <div style={{ marginTop: "16px" }}>
+                  {graphAnomaly.contributing_features.length > 0 ? (
+                    graphAnomaly.contributing_features.slice(0, 4).map((item) => (
+                      <div
+                        key={item.feature}
+                        style={{
+                          padding: "8px 0",
+                          borderBottom: "1px solid rgba(255,255,255,0.05)",
+                          fontSize: "11px",
+                        }}
+                      >
+                        <div style={{ fontWeight: 700 }}>
+                          {item.feature.replace(/_/g, " ")}
+                        </div>
+                        <div style={{ opacity: 0.52, marginTop: "3px" }}>
+                          Population percentile {item.population_percentile.toFixed(1)} · tail score {item.tail_score.toFixed(1)}
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <div style={{ fontSize: "11px", opacity: 0.5 }}>
+                      No strong structural outlier features detected.
+                    </div>
+                  )}
+                </div>
+                <div style={{ fontSize: "10px", opacity: 0.42, marginTop: "12px", lineHeight: 1.5 }}>
+                  Population-relative graph triage signal. It is not an identity verdict or a causal model.
+                </div>
+              </>
+            ) : (
+              <div style={{ marginTop: "14px", opacity: 0.55 }}>
+                Graph anomaly analysis unavailable.
+              </div>
+            )}
+          </div>
+
+          <div
+            style={{
+              padding: "16px",
+              borderRadius: "10px",
+              background: "rgba(255,255,255,0.025)",
+              border: "1px solid rgba(255,255,255,0.07)",
+            }}
+          >
+            <div style={{ fontSize: "11px", opacity: 0.55, letterSpacing: "0.08em" }}>
+              TEMPORAL EVIDENCE GRAPH
+            </div>
+            {analyticsLoading ? (
+              <div style={{ marginTop: "14px", opacity: 0.65 }}>Materializing evidence timeline...</div>
+            ) : timelineData ? (
+              <>
+                <div style={{ display: "flex", gap: "14px", marginTop: "10px", marginBottom: "10px", flexWrap: "wrap" }}>
+                  <strong>{timelineData.total_events.toLocaleString()} events</strong>
+                  {Object.entries(timelineData.event_types).slice(0, 4).map(([name, count]) => (
+                    <span key={name} style={{ fontSize: "10px", opacity: 0.52 }}>
+                      {name.replace(/_/g, " ")} · {count}
+                    </span>
+                  ))}
+                </div>
+                <div style={{ maxHeight: "255px", overflowY: "auto", paddingRight: "4px" }}>
+                  {timelineData.events.slice(0, 10).map((event) => (
+                    <div
+                      key={event.event_key}
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns: "132px minmax(120px, 1fr)",
+                        gap: "12px",
+                        padding: "9px 0",
+                        borderBottom: "1px solid rgba(255,255,255,0.05)",
+                      }}
+                    >
+                      <div style={{ fontSize: "10px", opacity: 0.46 }}>
+                        {formatDate(event.timestamp)}
+                      </div>
+                      <div>
+                        <div style={{ fontSize: "11px", fontWeight: 700 }}>
+                          {event.event_type.replace(/_/g, " ")}
+                        </div>
+                        <div style={{ fontSize: "10px", opacity: 0.48, marginTop: "3px" }}>
+                          {event.entity_type} · {event.source}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <div style={{ fontSize: "10px", opacity: 0.42, marginTop: "10px", lineHeight: 1.5 }}>
+                  Normalized from observed timestamps only; missing activity is not inferred.
+                </div>
+              </>
+            ) : (
+              <div style={{ marginTop: "14px", opacity: 0.55 }}>
+                Temporal analytics unavailable.
+              </div>
+            )}
+          </div>
+        </div>
+        {analyticsError && (
+          <div style={{ marginTop: "12px", fontSize: "11px", opacity: 0.55 }}>
+            {analyticsError}
+          </div>
         )}
       </div>
 

@@ -54,6 +54,19 @@ The platform correlates actor identities across handles, wallets, PGP fingerprin
 - Review-conditioned source reliability using leave-one-actor-out investigator feedback.
 - Reliability bounds and explicit interpretation notes prevent these estimates from being treated as source truth or causal effects.
 
+### Temporal and structural analytics
+- Normalized temporal evidence events stored in PostgreSQL and projected to Neo4j.
+- Actor timeline API built only from observed timestamps; unknown periods are left unknown.
+- Population-relative graph anomaly analysis across wallet reuse, PGP reuse, trust degree, infrastructure reuse, marketplace switching, temporal overlap and source diversity.
+- Actor UI surfaces the latest temporal events and structural anomaly contributors.
+- These analytics are investigator triage signals, not identity verdicts or causal models.
+
+### Observability and deployment hardening
+- Prometheus metrics exposed at `/metrics`.
+- Optional local Prometheus + Grafana stack in Docker Compose.
+- Production-style backend Docker image with separate API, Celery worker and Celery Beat services.
+- Scanner defaults to TLS verification, redirect blocking, allowlisted hosts, credential-free URLs and bounded detector responses.
+
 ### AI / NLP
 - Domain-aware authorship attribution using the bundled PAN20 and DeCypher model artifacts.
 - Explainable stylometric signals.
@@ -153,11 +166,12 @@ DeCypher/
 ├── backend/
 │   ├── app/
 │   │   ├── routers/             # auth, actors, search, AI, NLP, export, scanner...
-│   │   ├── services/            # correlation, graph, ingestion, NLP
+│   │   ├── services/            # correlation, graph, temporal analytics, ingestion, NLP
 │   │   ├── models/              # SQLAlchemy + Pydantic models
 │   │   ├── database/            # PostgreSQL + Neo4j clients
 │   │   └── workers/             # Celery tasks
 │   ├── tests/
+│   ├── Dockerfile
 │   ├── docker-compose.yml
 │   ├── requirements.txt
 │   └── .env.example
@@ -380,6 +394,17 @@ POST /export/actor/{actor_id}/report
 
 The actor PDF endpoint can accept an optional browser-generated graph snapshot.
 
+### Advanced analytics
+
+```text
+GET /analytics/actors/{actor_id}/timeline
+GET /analytics/actors/{actor_id}/graph-anomaly
+GET /analytics/graph-anomalies
+```
+
+The temporal endpoint materializes deterministic events from existing evidence timestamps.
+The graph-anomaly endpoints return population-relative structural outlier features.
+
 ### Scanner / autonomous scanning
 
 ```text
@@ -472,6 +497,19 @@ The bundled artifacts were serialized with scikit-learn **1.9.0**. Persisted sci
 The repository pins `scikit-learn==1.9.0` to match the bundled model artifacts. Keep that version aligned with the training environment when loading the persisted models.
 
 ---
+
+## Synthetic validation
+
+The repository includes an offline authorship evaluation harness that samples same-actor and
+cross-actor handle pairs from the synthetic dataset and reports accuracy, precision, recall, F1
+and ROC-AUC where both classes are present:
+
+```bash
+python scripts/evaluate_synthetic_attribution.py --pairs 100 --seed 42
+```
+
+The script uses the synthetic dataset's ground-truth actor labels only as an evaluation answer key.
+Those measurements do not establish real-world attribution accuracy.
 
 ## Scoring model
 

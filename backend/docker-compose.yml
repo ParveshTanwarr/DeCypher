@@ -1,3 +1,25 @@
+x-backend-common: &backend-common
+  build:
+    context: ..
+    dockerfile: backend/Dockerfile
+  env_file:
+    - path: .env
+      required: false
+  environment:
+    DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-postgrespassword}@postgres:5432/threat_intel
+    NEO4J_URI: bolt://neo4j:7687
+    NEO4J_USER: neo4j
+    NEO4J_PASSWORD: ${NEO4J_PASSWORD:-threatpassword}
+    REDIS_URL: redis://redis:6379/0
+    CELERY_RESULT_BACKEND: redis://redis:6379/1
+  depends_on:
+    postgres:
+      condition: service_healthy
+    neo4j:
+      condition: service_healthy
+    redis:
+      condition: service_healthy
+
 services:
   postgres:
     image: postgres:15-alpine
@@ -32,54 +54,6 @@ services:
       timeout: 5s
       retries: 10
 
-  celery_worker:
-    image: python:3.11-slim
-    container_name: threat_celery_worker
-    working_dir: /app/backend
-    env_file:
-      - .env
-    environment:
-      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-postgrespassword}@postgres:5432/threat_intel
-      NEO4J_URI: bolt://neo4j:7687
-      REDIS_URL: redis://redis:6379/0
-      CELERY_RESULT_BACKEND: redis://redis:6379/1
-    volumes:
-      - ..:/app
-    depends_on:
-      postgres:
-        condition: service_healthy
-      neo4j:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    command: >
-      sh -c "pip install --no-cache-dir -r requirements.txt &&
-      celery -A app.workers.celery_app.celery_app worker --loglevel=info"
-
-  celery_beat:
-    image: python:3.11-slim
-    container_name: threat_celery_beat
-    working_dir: /app
-    env_file:
-      - .env
-    environment:
-      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-postgrespassword}@postgres:5432/threat_intel
-      NEO4J_URI: bolt://neo4j:7687
-      REDIS_URL: redis://redis:6379/0
-      CELERY_RESULT_BACKEND: redis://redis:6379/1
-    volumes:
-      - .:/app
-    depends_on:
-      postgres:
-        condition: service_healthy
-      neo4j:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    command: >
-      sh -c "pip install --no-cache-dir -r requirements.txt &&
-      celery -A app.workers.celery_app.celery_app beat --loglevel=info"
-
   redis:
     image: redis:7-alpine
     container_name: threat_redis
@@ -91,6 +65,69 @@ services:
       timeout: 5s
       retries: 5
 
+  api:
+    <<: *backend-common
+    container_name: threat_api
+    restart: unless-stopped
+    ports: ["8000:8000"]
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3).read()"
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+
+  celery_worker:
+    <<: *backend-common
+    container_name: threat_celery_worker
+    restart: unless-stopped
+    command: ["celery", "-A", "app.workers.celery_app.celery_app", "worker", "--loglevel=info"]
+
+  celery_beat:
+    <<: *backend-common
+    container_name: threat_celery_beat
+    restart: unless-stopped
+    command: ["celery", "-A", "app.workers.celery_app.celery_app", "beat", "--loglevel=info"]
+
+  prometheus:
+    image: prom/prometheus:v3.5.0
+    container_name: threat_prometheus
+    restart: unless-stopped
+    ports: ["9090:9090"]
+    volumes:
+      - ../infra/monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheusdata:/prometheus
+    depends_on:
+      api:
+        condition: service_healthy
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --web.enable-lifecycle
+
+  grafana:
+    image: grafana/grafana:12.1.1
+    container_name: threat_grafana
+    restart: unless-stopped
+    ports: ["3000:3000"]
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin-change-me}
+    volumes:
+      - grafanadata:/var/lib/grafana
+      - ../infra/monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ../infra/monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    depends_on:
+      prometheus:
+        condition: service_started
+
 volumes:
   pgdata:
   neo4jdata:
+  prometheusdata:
+  grafanadata:

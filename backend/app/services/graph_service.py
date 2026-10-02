@@ -10,6 +10,7 @@ Graph schema:
     (:Infrastructure)
     (:Observation)
     (:PGPKey)
+    (:Event)
 
 Relationships:
 
@@ -23,6 +24,8 @@ Relationships:
     Actor -[:HAS_OBSERVATION]-> Observation
     Handle -[:HAS_OBSERVATION]-> Observation
     Observation -[:EVIDENCE_OF]-> Infrastructure
+    Actor -[:HAS_EVENT]-> Event
+    Event -[:DESCRIBES]-> evidence entity
 
 The graph is intentionally evidence-oriented. It does not claim that
 two handles belong to the same person simply because they are connected.
@@ -351,6 +354,67 @@ def sync_actor_observations(
         )
         """,
         {"rows": rows},
+    )
+
+
+
+def sync_temporal_events(events: List[Dict[str, Any]]) -> None:
+    """Project normalized temporal evidence events into Neo4j."""
+    if not events:
+        return
+
+    neo4j_conn.write(
+        """
+        UNWIND $rows AS row
+        MATCH (a:Actor {actor_id: row.actor_id})
+
+        MERGE (e:Event {event_id: row.event_id})
+        SET e.event_type = row.event_type,
+            e.entity_type = row.entity_type,
+            e.entity_id = row.entity_id,
+            e.timestamp = row.timestamp,
+            e.source = row.source,
+            e.payload = row.payload
+
+        MERGE (a)-[:HAS_EVENT]->(e)
+
+        FOREACH (
+            ignored IN CASE
+                WHEN row.entity_type = "handle" THEN [1]
+                ELSE []
+            END |
+            MERGE (h:Handle {handle_id: toString(row.entity_id)})
+            MERGE (e)-[:DESCRIBES]->(h)
+        )
+
+        FOREACH (
+            ignored IN CASE
+                WHEN row.entity_type = "wallet" AND row.payload.address IS NOT NULL THEN [1]
+                ELSE []
+            END |
+            MERGE (w:Wallet {address: row.payload.address})
+            MERGE (e)-[:DESCRIBES]->(w)
+        )
+
+        FOREACH (
+            ignored IN CASE
+                WHEN row.entity_type = "pgp_key" AND row.payload.fingerprint IS NOT NULL THEN [1]
+                ELSE []
+            END |
+            MERGE (p:PGPKey {fingerprint: toUpper(row.payload.fingerprint)})
+            MERGE (e)-[:DESCRIBES]->(p)
+        )
+
+        FOREACH (
+            ignored IN CASE
+                WHEN row.entity_type = "observation" THEN [1]
+                ELSE []
+            END |
+            MERGE (o:Observation {observation_id: row.entity_id})
+            MERGE (e)-[:DESCRIBES]->(o)
+        )
+        """,
+        {"rows": events},
     )
 
 

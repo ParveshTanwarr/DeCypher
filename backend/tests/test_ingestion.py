@@ -22,6 +22,20 @@ def test_actors_loaded_with_primary_handle():
         db.close()
 
 
+def test_ingested_handle_ids_are_preserved_for_graph_sync():
+    db = SessionLocal()
+    try:
+        rows = (
+            db.query(DarkWebHandle.id)
+            .filter(DarkWebHandle.actor_id.isnot(None))
+            .all()
+        )
+        assert rows, "ingested handles should have database IDs"
+        assert all(row[0] > 0 for row in rows)
+    finally:
+        db.close()
+
+
 def test_handles_linked_to_actors():
     db = SessionLocal()
     try:

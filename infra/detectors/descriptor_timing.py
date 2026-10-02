@@ -1,3 +1,5 @@
+import os
+
 import requests
 
 
@@ -21,14 +23,14 @@ def detect_descriptor_timing(base_url: str):
     try:
         response = requests.get(
             timing_url,
-            timeout=10,
-            verify=False
+            timeout=int(os.getenv("SCANNER_CONNECT_TIMEOUT_SECONDS", "10")),
+            verify=os.getenv("SCANNER_TLS_VERIFY", "true").strip().lower() not in {"0", "false", "no", "off"},
+            allow_redirects=False,
         )
 
         if (
             response.status_code == 200
-            and DESCRIPTOR_TIMING_MARKER
-            in response.text
+            and DESCRIPTOR_TIMING_MARKER in response.content[: int(os.getenv("SCANNER_MAX_RESPONSE_BYTES", "1000000"))].decode("utf-8", errors="ignore")
         ):
             return DESCRIPTOR_TIMING_MARKER
 

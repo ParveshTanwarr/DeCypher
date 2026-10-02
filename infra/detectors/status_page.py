@@ -1,3 +1,5 @@
+import os
+
 import requests
 
 
@@ -15,13 +17,14 @@ def detect_status_page(base_url: str):
     try:
         response = requests.get(
             status_url,
-            timeout=10
+            timeout=int(os.getenv("SCANNER_CONNECT_TIMEOUT_SECONDS", "10")),
+            verify=os.getenv("SCANNER_TLS_VERIFY", "true").strip().lower() not in {"0", "false", "no", "off"},
+            allow_redirects=False,
         )
 
         if (
             response.status_code == 200
-            and "EXPOSED_STATUS_PAGE_TEST"
-            in response.text
+            and "EXPOSED_STATUS_PAGE_TEST" in response.content[: int(os.getenv("SCANNER_MAX_RESPONSE_BYTES", "1000000"))].decode("utf-8", errors="ignore")
         ):
             return "EXPOSED_STATUS_PAGE_TEST"
 

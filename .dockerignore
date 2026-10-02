@@ -1,0 +1,10 @@
+.git
+.github
+frontend
+submission
+assets
+**/__pycache__
+**/*.pyc
+backend/.env
+*.log
+.DS_Store
