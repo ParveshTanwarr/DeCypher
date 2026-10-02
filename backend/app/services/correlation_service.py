@@ -59,26 +59,67 @@ class CorrelationService:
             raise ValueError(f"Actor {actor_id} not found")
 
         signals: List[Dict[str, Any]] = []
+        source_reliability = self._source_reliability(actor_id)
 
         wallet_score = self._wallet_reuse_score(actor_id)
         if wallet_score is not None:
             signals.append(self._signal("wallet_reuse", wallet_score, "Wallet address reuse across correlated handles."))
 
-        infrastructure_score = self._observation_score(actor_id, ["infrastructure_reuse", "infra_reuse", "infrastructure", "exposed_status_page"])
-        if infrastructure_score is not None:
-            signals.append(self._signal("infrastructure_reuse", infrastructure_score, "Infrastructure indicators overlap with known observations."))
+        infrastructure_result = self._observation_score(
+            actor_id,
+            ["infrastructure_reuse", "infra_reuse", "infrastructure", "exposed_status_page"],
+            source_reliability,
+        )
+        if infrastructure_result is not None:
+            signal = self._signal(
+                "infrastructure_reuse",
+                infrastructure_result["score"],
+                "Infrastructure indicators overlap with known observations.",
+            )
+            signal["details"] = {"source_reliability": infrastructure_result["source_reliability"]}
+            signals.append(signal)
 
-        tls_score = self._observation_score(actor_id, ["ssl_cert_reuse", "tls_reuse", "tls", "certificate"])
-        if tls_score is not None:
-            signals.append(self._signal("tls_reuse", tls_score, "TLS/certificate indicators show reuse."))
+        tls_result = self._observation_score(
+            actor_id,
+            ["ssl_cert_reuse", "tls_reuse", "tls", "certificate"],
+            source_reliability,
+        )
+        if tls_result is not None:
+            signal = self._signal(
+                "tls_reuse",
+                tls_result["score"],
+                "TLS/certificate indicators show reuse.",
+            )
+            signal["details"] = {"source_reliability": tls_result["source_reliability"]}
+            signals.append(signal)
 
-        banner_score = self._observation_score(actor_id, ["banner_match", "default_banner", "banner"])
-        if banner_score is not None:
-            signals.append(self._signal("banner_match", banner_score, "Service/banner characteristics overlap."))
+        banner_result = self._observation_score(
+            actor_id,
+            ["banner_match", "default_banner", "banner"],
+            source_reliability,
+        )
+        if banner_result is not None:
+            signal = self._signal(
+                "banner_match",
+                banner_result["score"],
+                "Service/banner characteristics overlap.",
+            )
+            signal["details"] = {"source_reliability": banner_result["source_reliability"]}
+            signals.append(signal)
 
-        timing_score = self._observation_score(actor_id, ["descriptor_timing", "timing", "descriptor"])
-        if timing_score is not None:
-            signals.append(self._signal("descriptor_timing", timing_score, "Descriptor timing observations overlap."))
+        timing_result = self._observation_score(
+            actor_id,
+            ["descriptor_timing", "timing", "descriptor"],
+            source_reliability,
+        )
+        if timing_result is not None:
+            signal = self._signal(
+                "descriptor_timing",
+                timing_result["score"],
+                "Descriptor timing observations overlap.",
+            )
+            signal["details"] = {"source_reliability": timing_result["source_reliability"]}
+            signals.append(signal)
 
         nlp_result = None
         contradiction = None
@@ -140,6 +181,8 @@ class CorrelationService:
             "interpretation": self._interpretation(overall_confidence, len(signals)),
             "deconfliction": contradiction,
             "priority": priority,
+            "counterfactual": self._counterfactual_analysis(signals),
+            "source_reliability": source_reliability,
         }
 
     def calculate_priority(self, actor: Actor, correlation_score: float, signals: List[Dict[str, Any]]) -> Dict[str, Any]:
@@ -264,7 +307,12 @@ class CorrelationService:
 
         return self._clamp(max(reuse_scores)) if reuse_scores else None
 
-    def _observation_score(self, actor_id: str, indicator_types: List[str]) -> Optional[float]:
+    def _observation_score(
+        self,
+        actor_id: str,
+        indicator_types: List[str],
+        source_reliability: Optional[Dict[str, Dict[str, Any]]] = None,
+    ) -> Optional[Dict[str, Any]]:
         actor = self.db.query(Actor).filter(Actor.actor_id == actor_id).first()
         if not actor:
             return None
@@ -272,14 +320,215 @@ class CorrelationService:
         matching = self._actor_observations(actor, indicator_types)
         if not matching:
             return None
-        return max(
-            self._clamp(
+
+        reliability = source_reliability or self._source_reliability(actor_id)
+        source_details: Dict[str, Dict[str, Any]] = {}
+        candidates = []
+        for observation in matching:
+            source = (observation.source or "unknown").strip() or "unknown"
+            raw_confidence = self._clamp(
                 observation.confidence
                 if observation.confidence is not None
                 else 1.0
             )
-            for observation in matching
+            metadata = reliability.get(
+                source,
+                self._default_source_reliability(source),
+            )
+            adjusted_confidence = self._clamp(
+                raw_confidence * metadata["multiplier"]
+            )
+            candidates.append(adjusted_confidence)
+            source_details[source] = metadata
+
+        return {
+            "score": max(candidates) if candidates else None,
+            "source_reliability": source_details,
+        }
+
+    def _build_actor_target_map(self) -> Dict[str, str]:
+        actors = self.db.query(Actor).all()
+        handles = self.db.query(DarkWebHandle).all()
+        scan_targets = self.db.query(ScanTarget).all()
+
+        handles_by_actor: Dict[str, List[DarkWebHandle]] = {}
+        for handle in handles:
+            handles_by_actor.setdefault(handle.actor_id or "", []).append(handle)
+
+        scan_targets_by_actor: Dict[str, List[ScanTarget]] = {}
+        for target in scan_targets:
+            scan_targets_by_actor.setdefault(target.actor_id or "", []).append(target)
+
+        mapping: Dict[str, str] = {}
+        for actor in actors:
+            keys = build_observation_target_keys(
+                actor.actor_id,
+                actor.primary_handle,
+                handles_by_actor.get(actor.actor_id, []),
+                scan_targets_by_actor.get(actor.actor_id, []),
+            )
+            for key in keys:
+                mapping[key.lower()] = actor.actor_id
+        return mapping
+
+    @staticmethod
+    def _default_source_reliability(source: str) -> Dict[str, Any]:
+        return {
+            "source": source,
+            "prior": 0.50,
+            "posterior": 0.50,
+            "review_count": 0,
+            "confirmed_reviews": 0,
+            "false_positive_reviews": 0,
+            "review_coverage": 0.0,
+            "multiplier": 1.0,
+            "basis": "neutral_prior",
+        }
+
+    def _source_reliability(self, actor_id: str) -> Dict[str, Dict[str, Any]]:
+        """Estimate source reliability from reviewed actors excluding the target actor.
+
+        This is a leave-one-actor-out, review-conditioned reliability estimate.
+        It is not a causal source-quality measurement and should not be treated
+        as ground truth.
+        """
+        target_map = self._build_actor_target_map()
+        observations = self.db.query(
+            Observation.source,
+            Observation.target,
+            Observation.detected,
+        ).filter(
+            Observation.detected.is_(True),
+        ).all()
+
+        if settings.CORRELATION_EXCLUDE_SYNTHETIC_DEMO_EVIDENCE:
+            observations = [
+                row for row in observations
+                if (row[0] or "").strip().lower()
+                != "synthetic_investigation_evidence"
+            ]
+
+        source_actors: Dict[str, set[str]] = {}
+        target_actor_ids_by_source: Dict[str, set[str]] = {}
+        for source, target, detected in observations:
+            if not detected:
+                continue
+            normalized_source = (source or "unknown").strip() or "unknown"
+            linked_actor = target_map.get((target or "").lower())
+            if not linked_actor or linked_actor == actor_id:
+                continue
+            source_actors.setdefault(normalized_source, set()).add(linked_actor)
+
+        feedback_records = (
+            self.db.query(InvestigatorFeedback)
+            .order_by(
+                InvestigatorFeedback.timestamp.desc(),
+                InvestigatorFeedback.id.desc(),
+            )
+            .all()
         )
+        latest_review_by_actor: Dict[str, InvestigatorFeedback] = {}
+        for record in feedback_records:
+            if record.actor_id == actor_id:
+                continue
+            if record.actor_id in latest_review_by_actor:
+                continue
+            verdict = (record.verdict or "").lower()
+            if "confirm" in verdict:
+                latest_review_by_actor[record.actor_id] = record
+            elif any(term in verdict for term in ("false", "reject", "dismiss")):
+                latest_review_by_actor[record.actor_id] = record
+
+        result: Dict[str, Dict[str, Any]] = {}
+        for source, actor_ids in source_actors.items():
+            confirmed = 0
+            false_positive = 0
+            for linked_actor in actor_ids:
+                review = latest_review_by_actor.get(linked_actor)
+                if not review:
+                    continue
+                verdict = (review.verdict or "").lower()
+                if "confirm" in verdict:
+                    confirmed += 1
+                elif any(term in verdict for term in ("false", "reject", "dismiss")):
+                    false_positive += 1
+
+            review_count = confirmed + false_positive
+            prior = 0.50
+            prior_strength = 4.0
+            posterior = (
+                (prior_strength * prior + confirmed)
+                / (prior_strength + review_count)
+                if review_count
+                else prior
+            )
+            posterior = max(0.25, min(0.90, posterior))
+            coverage = review_count / (review_count + prior_strength)
+            multiplier = self._clamp(0.5 + posterior)
+            multiplier = max(0.75, min(1.20, multiplier))
+
+            result[source] = {
+                "source": source,
+                "prior": prior,
+                "posterior": round(posterior, 4),
+                "review_count": review_count,
+                "confirmed_reviews": confirmed,
+                "false_positive_reviews": false_positive,
+                "review_coverage": round(coverage, 4),
+                "multiplier": round(multiplier, 4),
+                "basis": "leave_one_actor_out_review_rate",
+            }
+
+        return result
+
+    def _counterfactual_analysis(
+        self,
+        signals: List[Dict[str, Any]],
+    ) -> Dict[str, Any]:
+        """Measure score sensitivity by removing one available signal at a time."""
+        baseline = self._weighted_score(signals)
+        scenarios = []
+        for signal in signals:
+            remaining = [
+                other
+                for other in signals
+                if other["type"] != signal["type"]
+            ]
+            without = self._weighted_score(remaining)
+            delta = baseline - without
+            scenarios.append(
+                {
+                    "removed_signal": signal["type"],
+                    "baseline_score": round(baseline, 4),
+                    "without_score": round(without, 4),
+                    "delta": round(delta, 4),
+                    "absolute_impact": round(abs(delta), 4),
+                    "remaining_signal_count": len(remaining),
+                    "remaining_weight": round(
+                        sum(SIGNAL_WEIGHTS.get(item["type"], 0.0) for item in remaining),
+                        4,
+                    ),
+                    "interpretation": (
+                        "Removing this signal lowers the evidence score."
+                        if delta > 0
+                        else "Removing this signal raises the evidence score."
+                        if delta < 0
+                        else "Removing this signal leaves the evidence score unchanged."
+                    ),
+                }
+            )
+
+        scenarios.sort(key=lambda item: item["absolute_impact"], reverse=True)
+        return {
+            "available": bool(signals),
+            "baseline_evidence_score": round(baseline, 4),
+            "scenarios": scenarios,
+            "note": (
+                "Leave-one-signal-out sensitivity analysis. The delta describes "
+                "score sensitivity to the model's current weighted evidence set; "
+                "it is not a causal effect or proof that a signal caused the score."
+            ),
+        }
 
     def _evidence_confidence(self, actor_id: str, signals: List[Dict[str, Any]]) -> float:
         if not signals:
