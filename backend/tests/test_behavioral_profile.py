@@ -7,7 +7,7 @@ def test_behavioral_profile_refresh_returns_evidence_backed_dimensions(client, a
     body = response.json()
 
     assert body["actor_id"] == "A00001"
-    assert body["profile_version"] == "1.0"
+    assert body["profile_version"] == "1.1"
     assert body["coverage"]["total_dimensions"] == 5
     assert set(body["dimensions"]) == {
         "linguistic",
