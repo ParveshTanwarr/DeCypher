@@ -87,10 +87,18 @@ def _build_population(db: Session) -> dict[str, dict[str, float]]:
             actors_by_wallet[wallet.address].add(str(wallet.actor_id))
 
     observations = db.query(Observation).all()
+    target_to_actor = {actor_id.lower(): actor_id for actor_id in actors}
+    target_to_actor.update({
+        handle.handle.strip().lower(): str(handle.actor_id)
+        for handle in handles
+        if handle.actor_id and handle.handle
+    })
     for observation in observations:
-        actor_id = (observation.target or "").strip()
-        if actor_id in actor_set and (observation.value or observation.target):
-            actors_by_infra[(observation.indicator_type, observation.value or observation.target)].add(actor_id)
+        actor_id = target_to_actor.get((observation.target or "").strip().lower())
+        if actor_id and (observation.value or observation.target):
+            actors_by_infra[
+                (observation.indicator_type, observation.value or observation.target)
+            ].add(actor_id)
 
     counterparties_by_actor: dict[str, set[str]] = defaultdict(set)
     for link in db.query(TrustLink).all():
