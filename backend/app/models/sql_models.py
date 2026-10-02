@@ -1,5 +1,5 @@
 from datetime import datetime, timezone
-from sqlalchemy import Boolean, Column, DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint, Table, func
+from sqlalchemy import Boolean, Column, DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint, Table, func, JSON
 from sqlalchemy.orm import relationship
 from app.database.postgres import Base
 
@@ -177,3 +177,17 @@ class ScanJob(Base):
     priority_score = Column(Integer, nullable=True)
     error = Column(Text, nullable=True)
     target = relationship("ScanTarget", back_populates="jobs")
+
+
+class BehavioralProfileSnapshot(Base):
+    __tablename__ = "behavioral_profile_snapshots"
+    id = Column(Integer, primary_key=True, index=True)
+    actor_id = Column(String(64), ForeignKey("actors.actor_id", ondelete="CASCADE"), index=True, nullable=False)
+    profile_version = Column(String(32), nullable=False)
+    source_fingerprint = Column(String(64), index=True, nullable=False)
+    coverage_score = Column(Float, nullable=False, default=0.0)
+    profile_data = Column(JSON, nullable=False)
+    generated_at = Column(DateTime(timezone=True), default=utc_now, server_default=func.now(), index=True)
+    __table_args__ = (
+        UniqueConstraint("actor_id", "source_fingerprint", name="uq_behavioral_profile_source"),
+    )
