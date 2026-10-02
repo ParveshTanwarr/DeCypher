@@ -383,7 +383,14 @@ export default function ActorPage({
           try {
             // Profile snapshots are persisted by the backend. Read the latest
             // snapshot first so opening an actor page does not rerun NLP.
-            return await getActorBehavioralProfile(actorId);
+            const profile = await getActorBehavioralProfile(actorId);
+            // Older persisted snapshots are still readable, but refresh once
+            // after a profile-version change so the new aggregation/drift
+            // semantics become active without recomputing on every page load.
+            if (profile.profile_version !== "1.1") {
+              return await refreshActorBehavioralProfile(actorId);
+            }
+            return profile;
           } catch (error) {
             // Generate only when this actor has never had a profile created.
             // Do not silently turn API/network failures into expensive refreshes.
@@ -770,7 +777,22 @@ export default function ActorPage({
                     )}
                     {Object.entries(behavioralDrift.operational_changes).map(([name, change]) => (
                       <div key={name} style={{ display: "flex", justifyContent: "space-between", gap: "12px", marginTop: "7px", fontSize: "11px" }}>
-                        <span>{name.replace(/_/g, " ")}</span><strong>{change.delta > 0 ? "+" : ""}{change.delta}</strong>
+                        <span>Operational · {name.replace(/_/g, " ")}</span><strong>{change.delta > 0 ? "+" : ""}{change.delta}</strong>
+                      </div>
+                    ))}
+                    {Object.entries(behavioralDrift.lifecycle_changes).map(([name, change]) => (
+                      <div key={`lifecycle-${name}`} style={{ display: "flex", justifyContent: "space-between", gap: "12px", marginTop: "7px", fontSize: "11px" }}>
+                        <span>Lifecycle · {name.replace(/_/g, " ")}</span><strong>{change.delta > 0 ? "+" : ""}{change.delta}</strong>
+                      </div>
+                    ))}
+                    {Object.entries(behavioralDrift.interaction_changes).map(([name, change]) => (
+                      <div key={`interaction-${name}`} style={{ display: "flex", justifyContent: "space-between", gap: "12px", marginTop: "7px", fontSize: "11px" }}>
+                        <span>Interaction · {name.replace(/_/g, " ")}</span><strong>{change.delta > 0 ? "+" : ""}{change.delta}</strong>
+                      </div>
+                    ))}
+                    {Object.entries(behavioralDrift.infrastructure_changes).map(([name, change]) => (
+                      <div key={`infra-${name}`} style={{ display: "flex", justifyContent: "space-between", gap: "12px", marginTop: "7px", fontSize: "11px" }}>
+                        <span>Infrastructure · {name.replace(/_/g, " ")}</span><strong>{change.delta > 0 ? "+" : ""}{change.delta}</strong>
                       </div>
                     ))}
                     <div style={{ fontSize: "11px", opacity: 0.55, marginTop: "10px" }}>{behavioralDrift.note}</div>

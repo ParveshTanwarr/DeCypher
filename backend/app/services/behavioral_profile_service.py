@@ -7,6 +7,7 @@ from datetime import date, datetime, timezone
 from typing import Any, Dict, Iterable, Optional
 
 from sqlalchemy import func, or_
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
 
 from app.models.sql_models import (
@@ -24,7 +25,7 @@ from app.services.nlp_service import nlp_service
 from app.services.observation_scope import build_observation_target_keys
 
 
-PROFILE_VERSION = "1.0"
+PROFILE_VERSION = "1.1"
 
 
 def _as_date(value: Optional[datetime]) -> Optional[date]:
@@ -272,8 +273,24 @@ class BehavioralProfileService:
                 profile_data=profile,
             )
             self.db.add(snapshot)
-            self.db.commit()
-            self.db.refresh(snapshot)
+            try:
+                self.db.commit()
+                self.db.refresh(snapshot)
+            except IntegrityError:
+                # A concurrent refresh may have inserted the same fingerprint
+                # between our lookup and commit. Treat the uniqueness conflict
+                # as a successful idempotent refresh and return the committed row.
+                self.db.rollback()
+                snapshot = (
+                    self.db.query(BehavioralProfileSnapshot)
+                    .filter(
+                        BehavioralProfileSnapshot.actor_id == actor.actor_id,
+                        BehavioralProfileSnapshot.source_fingerprint == fingerprint,
+                    )
+                    .first()
+                )
+                if snapshot is None:
+                    raise
 
         return self._with_history(snapshot)
 
@@ -312,32 +329,88 @@ class BehavioralProfileService:
                 })
         deltas.sort(key=lambda item: abs(item["delta"]), reverse=True)
 
+        def metric_changes(
+            previous_dimension: Dict[str, Any],
+            current_dimension: Dict[str, Any],
+            names: Iterable[str],
+        ) -> Dict[str, Dict[str, Any]]:
+            changes = {}
+            for name in names:
+                before_value = previous_dimension.get(name)
+                after_value = current_dimension.get(name)
+                if before_value is None and after_value is None:
+                    continue
+                before = float(before_value or 0)
+                after = float(after_value or 0)
+                if before != after:
+                    changes[name] = {
+                        "previous": int(before) if before.is_integer() else round(before, 4),
+                        "current": int(after) if after.is_integer() else round(after, 4),
+                        "delta": int(after - before) if (after - before).is_integer() else round(after - before, 4),
+                    }
+            return changes
+
         previous_ops = previous.get("dimensions", {}).get("operational", {})
         current_ops = current.get("dimensions", {}).get("operational", {})
-        operational_changes = {}
-        for name in (
-            "marketplace_count",
-            "wallet_count",
-            "unique_wallet_count",
-            "within_actor_wallet_reuse_count",
-            "cross_actor_shared_wallet_count",
-            "pgp_key_count",
-            "pgp_reuse_across_other_handles_count",
-        ):
-            before = int(previous_ops.get(name) or 0)
-            after = int(current_ops.get(name) or 0)
-            if before != after:
-                operational_changes[name] = {
-                    "previous": before,
-                    "current": after,
-                    "delta": after - before,
-                }
+        operational_changes = metric_changes(
+            previous_ops,
+            current_ops,
+            (
+                "marketplace_count",
+                "wallet_count",
+                "unique_wallet_count",
+                "within_actor_wallet_reuse_count",
+                "cross_actor_shared_wallet_count",
+                "pgp_key_count",
+                "pgp_reuse_across_other_handles_count",
+            ),
+        )
+
+        previous_lifecycle = previous.get("dimensions", {}).get("temporal_lifecycle", {})
+        current_lifecycle = current.get("dimensions", {}).get("temporal_lifecycle", {})
+        lifecycle_changes = metric_changes(
+            previous_lifecycle,
+            current_lifecycle,
+            (
+                "observed_span_days",
+                "overlapping_handle_windows",
+                "future_dated_handle_count",
+            ),
+        )
+
+        previous_interaction = previous.get("dimensions", {}).get("interaction", {})
+        current_interaction = current.get("dimensions", {}).get("interaction", {})
+        interaction_changes = metric_changes(
+            previous_interaction,
+            current_interaction,
+            (
+                "trust_link_count",
+                "outgoing_count",
+                "incoming_count",
+                "distinct_counterparty_handles",
+                "average_confidence",
+            ),
+        )
+
+        previous_infrastructure = previous.get("dimensions", {}).get("infrastructure", {})
+        current_infrastructure = current.get("dimensions", {}).get("infrastructure", {})
+        infrastructure_changes = metric_changes(
+            previous_infrastructure,
+            current_infrastructure,
+            (
+                "observation_count",
+                "mean_observation_confidence",
+            ),
+        )
 
         return {
             "available": True,
             "baseline_generated_at": baseline_time,
             "linguistic_feature_deltas": deltas[:8],
             "operational_changes": operational_changes,
+            "lifecycle_changes": lifecycle_changes,
+            "interaction_changes": interaction_changes,
+            "infrastructure_changes": infrastructure_changes,
             "note": "Descriptive changes between stored snapshots; not an anomaly verdict or proof of actor change.",
         }
 
@@ -359,6 +432,11 @@ class BehavioralProfileService:
             .all()
         )
         result = dict(snapshot.profile_data or {})
+        drift = result.get("behavioral_drift")
+        if isinstance(drift, dict):
+            drift.setdefault("lifecycle_changes", {})
+            drift.setdefault("interaction_changes", {})
+            drift.setdefault("infrastructure_changes", {})
         lifecycle = result.get("dimensions", {}).get("temporal_lifecycle", {})
         today = datetime.now(timezone.utc).date()
         first_seen = date.fromisoformat(lifecycle["first_observed"]) if lifecycle.get("first_observed") else None

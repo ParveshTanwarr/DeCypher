@@ -7,7 +7,7 @@ def test_behavioral_profile_refresh_returns_evidence_backed_dimensions(client, a
     body = response.json()
 
     assert body["actor_id"] == "A00001"
-    assert body["profile_version"] == "1.0"
+    assert body["profile_version"] == "1.1"
     assert body["coverage"]["total_dimensions"] == 5
     assert set(body["dimensions"]) == {
         "linguistic",
@@ -19,6 +19,8 @@ def test_behavioral_profile_refresh_returns_evidence_backed_dimensions(client, a
     assert body["dimensions"]["temporal_lifecycle"]["has_post_timestamps"] is False
     assert any("synthetic" in item.lower() for item in body["limitations"])
     assert body["summary"]["linked_handle_count"] >= 1
+    assert body["dimensions"]["linguistic"]["aggregation_method"] == "post_weighted"
+    assert "handle_mean_features" in body["dimensions"]["linguistic"]
     assert body["generated_at"]
     assert body["source_fingerprint"]
     assert body["behavioral_drift"]["available"] is False
@@ -55,12 +57,18 @@ def test_profile_snapshot_comparison_reports_descriptive_changes():
         "dimensions": {
             "linguistic": {"features": {"type_token_ratio": 0.42, "average_word_length": 4.1}},
             "operational": {"marketplace_count": 2, "wallet_count": 3},
+            "temporal_lifecycle": {"observed_span_days": 14, "overlapping_handle_windows": 1, "future_dated_handle_count": 0},
+            "interaction": {"trust_link_count": 2, "outgoing_count": 1, "incoming_count": 1, "distinct_counterparty_handles": 2, "average_confidence": 0.70},
+            "infrastructure": {"observation_count": 4, "mean_observation_confidence": 0.80},
         }
     }
     current = {
         "dimensions": {
             "linguistic": {"features": {"type_token_ratio": 0.51, "average_word_length": 4.1}},
             "operational": {"marketplace_count": 3, "wallet_count": 3},
+            "temporal_lifecycle": {"observed_span_days": 21, "overlapping_handle_windows": 2, "future_dated_handle_count": 0},
+            "interaction": {"trust_link_count": 3, "outgoing_count": 2, "incoming_count": 1, "distinct_counterparty_handles": 3, "average_confidence": 0.75},
+            "infrastructure": {"observation_count": 5, "mean_observation_confidence": 0.82},
         }
     }
     result = BehavioralProfileService._compare_profiles(
@@ -79,4 +87,7 @@ def test_profile_snapshot_comparison_reports_descriptive_changes():
         }
     ]
     assert result["operational_changes"]["marketplace_count"]["delta"] == 1
+    assert result["lifecycle_changes"]["observed_span_days"]["delta"] == 7
+    assert result["interaction_changes"]["trust_link_count"]["delta"] == 1
+    assert result["infrastructure_changes"]["observation_count"]["delta"] == 1
     assert "not an anomaly verdict" in result["note"]
