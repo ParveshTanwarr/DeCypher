@@ -3,7 +3,8 @@ x-backend-common: &backend-common
     context: ..
     dockerfile: backend/Dockerfile
   env_file:
-    - .env
+    - path: .env
+      required: false
   environment:
     DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-postgrespassword}@postgres:5432/threat_intel
     NEO4J_URI: bolt://neo4j:7687
