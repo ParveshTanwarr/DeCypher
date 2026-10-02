@@ -22,6 +22,7 @@ The platform correlates actor identities across handles, wallets, PGP fingerprin
 - PostgreSQL as the structured evidence store.
 - Authorized scanner ingestion for controlled infrastructure.
 - Optional asynchronous scanning through Celery + Redis.
+- Tamper-evident SHA-256 evidence ledger with append-only chain verification.
 - Actual scan timestamps surfaced as actor last-scan dates.
 
 ### Investigation and correlation
@@ -41,6 +42,12 @@ The platform correlates actor identities across handles, wallets, PGP fingerprin
 - Neo4j relationship graph with a PostgreSQL fallback when Neo4j is unavailable.
 - Evidence-oriented links for wallets, PGP keys, trust relationships, marketplaces, observations and infrastructure.
 - Transparent correlation scoring using wallet reuse, infrastructure reuse, TLS/certificate reuse, banner matches, descriptor timing and stylometric similarity.
+
+### Evidence integrity
+- SHA-256 hash-chained observation ledger stored in PostgreSQL.
+- PostgreSQL advisory locking for serialized ledger appends.
+- Full-chain verification endpoint and actor-facing integrity status.
+- Optional external blockchain anchoring is not configured in the bundled prototype.
 
 ### AI / NLP
 - Domain-aware authorship attribution using the bundled PAN20 and DeCypher model artifacts.
@@ -94,7 +101,8 @@ The platform correlates actor identities across handles, wallets, PGP fingerprin
 4. Neo4j stores relationship-oriented graph data when available.
 5. The React frontend queries actor, evidence and graph endpoints.
 6. Exports materialize the current result set as CSV, JSON or PDF.
-7. DeCypher Copilot receives only the selected DeCypher context plus the user's question and sends it to Gemini from the backend.
+7. Evidence observations are written to PostgreSQL and the append-only evidence ledger in the same transaction.
+8. DeCypher Copilot receives only the selected DeCypher context plus the user's question and sends it to Gemini from the backend.
 
 ---
 
