@@ -4,10 +4,11 @@ import {
   getActorEvidence,
   getActorCorrelation,
   getActorGraph,
+  refreshActorBehavioralProfile,
   downloadActorExport,
   downloadActorReport,
 } from "../api/client";
-import type { CorrelationResult, GraphNode, GraphLink } from "../api/client";
+import type { BehavioralProfile, CorrelationResult, GraphNode, GraphLink } from "../api/client";
 
 interface ActorDetail {
   actor_id: string;
@@ -330,6 +331,10 @@ export default function ActorPage({
   const [evidence, setEvidence] = useState<Evidence[]>([]);
   const [correlation, setCorrelation] =
     useState<CorrelationResult | null>(null);
+  const [behavioralProfile, setBehavioralProfile] =
+    useState<BehavioralProfile | null>(null);
+  const [behavioralLoading, setBehavioralLoading] = useState(true);
+  const [behavioralError, setBehavioralError] = useState("");
 
   const [loading, setLoading] = useState(true);
   const [correlationLoading, setCorrelationLoading] = useState(true);
@@ -368,6 +373,23 @@ export default function ActorPage({
 
         const actorResult = actorData as ActorDetail;
         setActor(actorResult);
+
+        setBehavioralLoading(true);
+        setBehavioralError("");
+        refreshActorBehavioralProfile(actorId)
+          .then((profile) => {
+            if (!cancelled) setBehavioralProfile(profile);
+          })
+          .catch((error) => {
+            console.error("Failed to generate behavioural profile:", error);
+            if (!cancelled) {
+              setBehavioralProfile(null);
+              setBehavioralError("Behavioural profile could not be generated from the available evidence.");
+            }
+          })
+          .finally(() => {
+            if (!cancelled) setBehavioralLoading(false);
+          });
 
         const handles = actorResult.handles || [];
         const handleA =
@@ -591,6 +613,128 @@ export default function ActorPage({
             <strong>{formatDate(actor.last_scan_date)}</strong>
           </div>
         </div>
+      </div>
+
+      {/* Evidence-backed behavioural profile */}
+      <div className="card" style={{ marginTop: "20px" }}>
+        <div className="eyebrow">BEHAVIOURAL INTELLIGENCE · PROFILE v1.0</div>
+        <h2 style={{ marginTop: "8px" }}>Behavioural Profile</h2>
+        {behavioralLoading ? (
+          <div style={{ marginTop: "18px", opacity: 0.7 }}>Extracting linguistic, lifecycle and operational patterns…</div>
+        ) : behavioralError || !behavioralProfile ? (
+          <div style={{ marginTop: "18px", color: "#ff8787", fontSize: "13px" }}>
+            {behavioralError || "No behavioural profile is available."}
+          </div>
+        ) : (
+          <>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "16px", flexWrap: "wrap", marginTop: "18px" }}>
+              <div>
+                <div className="eyebrow">DATA COVERAGE</div>
+                <strong style={{ fontSize: "26px" }}>{Math.round(behavioralProfile.coverage.score * 100)}%</strong>
+                <div style={{ fontSize: "12px", opacity: 0.65 }}>{behavioralProfile.coverage.available_dimensions}/{behavioralProfile.coverage.total_dimensions} dimensions supported by available data</div>
+              </div>
+              <div style={{ fontSize: "11px", opacity: 0.55, fontFamily: "monospace" }}>
+                {behavioralProfile.generated_at ? new Date(behavioralProfile.generated_at).toLocaleString() : "Generated on refresh"}
+              </div>
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(145px, 1fr))", gap: "12px", marginTop: "20px" }}>
+              {[
+                ["Linked handles", behavioralProfile.summary.linked_handle_count],
+                ["Marketplace footprint", behavioralProfile.summary.marketplace_count],
+                ["Posts analysed", behavioralProfile.summary.post_count],
+                ["Wallet records", behavioralProfile.summary.wallet_count],
+                ["Trust links", behavioralProfile.summary.trust_link_count],
+                ["Infrastructure findings", behavioralProfile.summary.infrastructure_observation_count],
+              ].map(([label, value]) => (
+                <div key={label} style={{ padding: "13px", borderRadius: "9px", background: "rgba(255,255,255,0.035)", border: "1px solid rgba(255,255,255,0.07)" }}>
+                  <div className="eyebrow">{label}</div>
+                  <strong style={{ display: "block", marginTop: "7px", fontSize: "21px" }}>{value}</strong>
+                </div>
+              ))}
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(230px, 1fr))", gap: "16px", marginTop: "20px" }}>
+              <div style={{ padding: "15px", borderRadius: "9px", background: "rgba(255,255,255,0.025)" }}>
+                <strong>Linguistic behaviour</strong>
+                <div style={{ fontSize: "12px", opacity: 0.7, marginTop: "7px" }}>
+                  {behavioralProfile.dimensions.linguistic.available
+                    ? `${behavioralProfile.dimensions.linguistic.profiled_handle_count} handles profiled · ${behavioralProfile.dimensions.linguistic.sample_post_count.toLocaleString()} posts analysed`
+                    : "No usable post text is available for this actor."}
+                </div>
+                <div style={{ fontSize: "12px", marginTop: "8px" }}>
+                  Cross-handle similarity: {behavioralProfile.dimensions.linguistic.cross_handle_consistency.mean_similarity == null
+                    ? "Not available"
+                    : `${(behavioralProfile.dimensions.linguistic.cross_handle_consistency.mean_similarity * 100).toFixed(1)}%`}
+                </div>
+                <div style={{ fontSize: "11px", opacity: 0.55, marginTop: "5px" }}>
+                  NLP engine: {behavioralProfile.dimensions.linguistic.engine_status}
+                  {behavioralProfile.dimensions.linguistic.fallback_used ? " · fallback active" : ""}
+                </div>
+                {behavioralProfile.dimensions.linguistic.per_handle.slice(0, 3).map((item) => (
+                  <div key={item.handle} style={{ display: "flex", justifyContent: "space-between", gap: "10px", marginTop: "8px", fontSize: "11px" }}>
+                    <span>{item.handle}</span><span style={{ opacity: 0.65 }}>{item.post_count.toLocaleString()} posts</span>
+                  </div>
+                ))}
+              </div>
+              <div style={{ padding: "15px", borderRadius: "9px", background: "rgba(255,255,255,0.025)" }}>
+                <strong>Temporal lifecycle</strong>
+                <div style={{ fontSize: "12px", opacity: 0.7, marginTop: "7px" }}>
+                  First seen: {behavioralProfile.dimensions.temporal_lifecycle.first_observed || "Unknown"}
+                </div>
+                <div style={{ fontSize: "12px", opacity: 0.7, marginTop: "5px" }}>
+                  Last seen: {behavioralProfile.dimensions.temporal_lifecycle.last_observed || "Unknown"}
+                </div>
+                <div style={{ fontSize: "12px", opacity: 0.7, marginTop: "5px" }}>
+                  Account lifecycle span: {behavioralProfile.dimensions.temporal_lifecycle.observed_span_days == null ? "Unknown" : `${behavioralProfile.dimensions.temporal_lifecycle.observed_span_days.toLocaleString()} days`}
+                </div>
+                <div style={{ fontSize: "11px", opacity: 0.55, marginTop: "8px" }}>Posting cadence unavailable: source posts have no usable event timestamps.</div>
+              </div>
+              <div style={{ padding: "15px", borderRadius: "9px", background: "rgba(255,255,255,0.025)" }}>
+                <strong>Operational footprint</strong>
+                <div style={{ fontSize: "12px", opacity: 0.7, marginTop: "7px" }}>
+                  Wallet reuse within actor: {behavioralProfile.dimensions.operational.within_actor_wallet_reuse_count}
+                </div>
+                <div style={{ fontSize: "12px", opacity: 0.7, marginTop: "5px" }}>
+                  Wallets shared across actor records: {behavioralProfile.dimensions.operational.cross_actor_shared_wallet_count}
+                </div>
+                <div style={{ fontSize: "12px", opacity: 0.7, marginTop: "5px" }}>
+                  PGP key associations outside profile: {behavioralProfile.dimensions.operational.pgp_reuse_across_other_handles_count}
+                </div>
+                {behavioralProfile.dimensions.operational.marketplaces.map((item) => (
+                  <div key={item.name} style={{ display: "flex", justifyContent: "space-between", marginTop: "7px", fontSize: "11px" }}>
+                    <span>{item.name}</span><span style={{ opacity: 0.65 }}>{item.handle_count} handles</span>
+                  </div>
+                ))}
+              </div>
+              <div style={{ padding: "15px", borderRadius: "9px", background: "rgba(255,255,255,0.025)" }}>
+                <strong>Interaction & infrastructure</strong>
+                <div style={{ fontSize: "12px", opacity: 0.7, marginTop: "7px" }}>
+                  Trust links: {behavioralProfile.dimensions.interaction.trust_link_count} · counterparties: {behavioralProfile.dimensions.interaction.distinct_counterparty_handles}
+                </div>
+                <div style={{ fontSize: "12px", opacity: 0.7, marginTop: "5px" }}>
+                  Detected infrastructure observations: {behavioralProfile.dimensions.infrastructure.observation_count}
+                </div>
+                <div style={{ fontSize: "11px", opacity: 0.55, marginTop: "8px" }}>
+                  {behavioralProfile.dimensions.interaction.scope_note}
+                </div>
+              </div>
+            </div>
+            {behavioralProfile.patterns.length > 0 && (
+              <div style={{ marginTop: "18px" }}>
+                <div className="eyebrow">OBSERVED PATTERNS</div>
+                {behavioralProfile.patterns.map((pattern, index) => (
+                  <div key={index} style={{ marginTop: "8px", padding: "10px 12px", borderRadius: "7px", background: "rgba(255,255,255,0.025)", fontSize: "12px" }}>{pattern}</div>
+                ))}
+              </div>
+            )}
+            <details style={{ marginTop: "16px", fontSize: "12px", opacity: 0.75 }}>
+              <summary style={{ cursor: "pointer" }}>Data limitations & interpretation</summary>
+              <ul style={{ paddingLeft: "20px", lineHeight: 1.6 }}>
+                {behavioralProfile.limitations.map((item, index) => <li key={index}>{item}</li>)}
+              </ul>
+              <div style={{ fontFamily: "monospace", fontSize: "10px", wordBreak: "break-all" }}>Profile fingerprint: {behavioralProfile.source_fingerprint}</div>
+            </details>
+          </>
+        )}
       </div>
 
       {/* Correlation analysis */}
