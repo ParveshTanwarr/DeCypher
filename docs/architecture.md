@@ -76,3 +76,48 @@ Celery Beat -> Redis -> Celery Worker
 Autonomous scanning is disabled by default and accepts only hosts explicitly listed in
 `AUTOSCAN_ALLOWED_HOSTS`. The repository default is loopback-only for the controlled SIH
 demo environment.
+
+## Temporal evidence graph
+
+The temporal layer materializes normalized point-in-time events from timestamps already present in
+the controlled evidence store. Each event records an actor, event type, entity reference, source
+and timestamp in PostgreSQL as a TemporalEvent record. The same events are projected into Neo4j
+as:
+
+```
+(:Actor)-[:HAS_EVENT]->(:Event)
+```
+
+This creates a queryable temporal evidence layer without inventing activity that the source data
+does not contain. The actor timeline API is available at
+`GET /analytics/actors/{actor_id}/timeline`.
+
+## Structural graph anomaly analysis
+
+The analytics service computes population-relative structural outlier signals from graph and
+evidence relationships. Current features include cross-actor wallet reuse, PGP reuse, trust
+degree, infrastructure reuse, marketplace switching, overlapping handle windows, and observation
+source diversity. Each feature is converted to an upper-tail percentile score and combined using
+transparent weights.
+
+The result is a triage signal for investigator review. It is not a person-identity classifier,
+a causal model, or proof of attribution.
+
+Endpoints:
+
+- `GET /analytics/actors/{actor_id}/graph-anomaly`
+- `GET /analytics/graph-anomalies`
+- `GET /analytics/actors/{actor_id}/timeline`
+
+## Observability
+
+The backend exposes Prometheus metrics at `/metrics`. The local Docker Compose environment now
+includes Prometheus and Grafana provisioning for API throughput, latency, status rates and other
+FastAPI instrumentation.
+
+## Validation boundary
+
+The repository remains a controlled demonstration system. Its datasets are synthetic or
+explicitly authorized test data. Real-world attribution accuracy, live dark-web collection,
+external blockchain anchoring, and production-scale streaming infrastructure are not claimed by
+these components.
