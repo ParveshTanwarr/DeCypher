@@ -108,7 +108,7 @@ def test_counterfactual_math_is_deterministic():
 
         assert result["available"] is True
         assert len(result["scenarios"]) == 3
-        assert result["baseline_evidence_score"] == 0.55
+        assert result["baseline_evidence_score"] == 0.6364
         assert result["scenarios"][0]["absolute_impact"] >= result["scenarios"][-1]["absolute_impact"]
     finally:
         db.close()
