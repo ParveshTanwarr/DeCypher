@@ -354,6 +354,29 @@ def sync_actor_observations(
     )
 
 
+
+def sync_temporal_events(events: List[Dict[str, Any]]) -> None:
+    """Project normalized temporal evidence events into Neo4j."""
+    if not events:
+        return
+
+    neo4j_conn.write(
+        """
+        UNWIND $rows AS row
+        MATCH (a:Actor {actor_id: row.actor_id})
+        MERGE (e:Event {event_id: row.event_id})
+        SET e.event_type = row.event_type,
+            e.entity_type = row.entity_type,
+            e.entity_id = row.entity_id,
+            e.timestamp = row.timestamp,
+            e.source = row.source,
+            e.payload = row.payload
+        MERGE (a)-[:HAS_EVENT]->(e)
+        """,
+        {"rows": events},
+    )
+
+
 def get_actor_subgraph(
     actor_id: str,
 ) -> Optional[Dict[str, Any]]:
