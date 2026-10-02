@@ -87,7 +87,6 @@ def _upsert_actors(session: Session, df: pd.DataFrame, primary_handles: pd.DataF
 
 def _upsert_darkweb_handles(session: Session, prepared_handles: pd.DataFrame):
     valid_cols = [
-        "handle_id",
         "handle",
         "platform",
         "actor_id",
@@ -116,7 +115,21 @@ def _upsert_darkweb_handles(session: Session, prepared_handles: pd.DataFrame):
         },
     )
     session.execute(stmt)
-    return len(records), records
+
+    # The relational model uses an auto-increment integer primary key (id),
+    # while the graph schema uses the stable CSV handle_id (for example H00887).
+    # Return a separate graph payload so the stable identifier is preserved
+    # without inserting an unknown handle_id column into PostgreSQL.
+    graph_cols = [
+        column for column in ["handle_id", "handle", "platform", "actor_id", "status"]
+        if column in prepared_handles.columns
+    ]
+    graph_df = prepared_handles[graph_cols].dropna(
+        subset=["handle_id", "handle", "actor_id"]
+    ).drop_duplicates(subset=["handle_id"], keep="last")
+    graph_records = graph_df.where(pd.notnull(graph_df), None).to_dict(orient="records")
+
+    return len(records), graph_records
 
 
 def _upsert_pgp_keys_and_trust_links(
