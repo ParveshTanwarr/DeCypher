@@ -10,10 +10,11 @@ from app.database.neo4j_client import neo4j_conn
 from app.config import settings
 import app.models.sql_models
 from app.models.sql_models import Actor
-from app.routers import actors, search, feedback, export, auth, scanner, nlp, correlation, ai, behavioral, integrity
+from app.routers import actors, search, feedback, export, auth, scanner, nlp, correlation, ai, behavioral, integrity, analytics
 from app.middleware.audit_log import AuditLogMiddleware
 from app.services.ingestion import ensure_investigation_evidence_for_all_actors, init_db_and_load_csvs
 from app.services.nlp_service import nlp_service
+from app.services.temporal_events import materialize_temporal_events
 
 
 
@@ -64,6 +65,17 @@ def _seed_investigation_evidence() -> int:
         db.close()
 
 
+def _backfill_temporal_events() -> int:
+    from app.database.postgres import SessionLocal
+    db = SessionLocal()
+    try:
+        added = materialize_temporal_events(db)
+        db.commit()
+        return added
+    finally:
+        db.close()
+
+
 def _backfill_evidence_ledger() -> int:
     from app.database.postgres import SessionLocal
     from app.services.evidence_ledger import EvidenceLedgerService
@@ -95,6 +107,10 @@ async def lifespan(app: FastAPI):
     ledger_backfill = await asyncio.to_thread(_backfill_evidence_ledger)
     if ledger_backfill:
         print(f"[+] Added {ledger_backfill} missing evidence integrity ledger entries.")
+
+    temporal_event_backfill = await asyncio.to_thread(_backfill_temporal_events)
+    if temporal_event_backfill:
+        print(f"[+] Added {temporal_event_backfill} temporal evidence events.")
 
     if not settings.SECRET_KEY:
         raise RuntimeError(
@@ -146,6 +162,7 @@ app.include_router(nlp.router)
 app.include_router(correlation.router)
 app.include_router(ai.router)
 app.include_router(integrity.router)
+app.include_router(analytics.router)
 
 
 @app.get("/health", tags=["Health"])
