@@ -25,6 +25,7 @@ class Actor(Base):
     wallets = relationship("Wallet", back_populates="actor", cascade="all, delete-orphan")
     feedback = relationship("InvestigatorFeedback", back_populates="actor", cascade="all, delete-orphan")
     scan_targets = relationship("ScanTarget", back_populates="actor")
+    temporal_events = relationship("TemporalEvent", back_populates="actor", cascade="all, delete-orphan")
 
 class DarkWebHandle(Base):
     __tablename__ = "darkweb_handles"
@@ -143,6 +144,23 @@ class Observation(Base):
     confidence = Column(Float, default=1.0)
     description = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), default=utc_now, server_default=func.now())
+
+
+class TemporalEvent(Base):
+    """Normalized point-in-time event used by the temporal evidence graph."""
+
+    __tablename__ = "temporal_events"
+    id = Column(Integer, primary_key=True, index=True)
+    event_key = Column(String(192), unique=True, index=True, nullable=False)
+    actor_id = Column(String(64), ForeignKey("actors.actor_id", ondelete="CASCADE"), index=True, nullable=False)
+    event_type = Column(String(64), index=True, nullable=False)
+    entity_type = Column(String(64), index=True, nullable=False)
+    entity_id = Column(String(192), index=True, nullable=False)
+    timestamp = Column(DateTime(timezone=True), index=True, nullable=False)
+    source = Column(String(128), nullable=False, default="system")
+    payload = Column(JSON, nullable=False, default=dict)
+    created_at = Column(DateTime(timezone=True), default=utc_now, server_default=func.now(), index=True)
+    actor = relationship("Actor", back_populates="temporal_events")
 
 class EvidenceLedgerEntry(Base):
     __tablename__ = "evidence_ledger_entries"
