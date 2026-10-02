@@ -4,6 +4,7 @@ import {
   getActorEvidence,
   getActorCorrelation,
   getActorGraph,
+  getActorBehavioralProfile,
   refreshActorBehavioralProfile,
   downloadActorExport,
   downloadActorReport,
@@ -378,15 +379,33 @@ export default function ActorPage({
 
         setBehavioralLoading(true);
         setBehavioralError("");
-        refreshActorBehavioralProfile(actorId)
+        const loadBehavioralProfile = async () => {
+          try {
+            // Profile snapshots are persisted by the backend. Read the latest
+            // snapshot first so opening an actor page does not rerun NLP.
+            return await getActorBehavioralProfile(actorId);
+          } catch (error) {
+            // Generate only when this actor has never had a profile created.
+            // Do not silently turn API/network failures into expensive refreshes.
+            if (
+              error instanceof Error &&
+              (error as Error & { status?: number }).status === 404
+            ) {
+              return refreshActorBehavioralProfile(actorId);
+            }
+            throw error;
+          }
+        };
+
+        loadBehavioralProfile()
           .then((profile) => {
             if (!cancelled) setBehavioralProfile(profile);
           })
           .catch((error) => {
-            console.error("Failed to generate behavioural profile:", error);
+            console.error("Failed to load behavioural profile:", error);
             if (!cancelled) {
               setBehavioralProfile(null);
-              setBehavioralError("Behavioural profile could not be generated from the available evidence.");
+              setBehavioralError("Behavioural profile could not be loaded from the available evidence.");
             }
           })
           .finally(() => {
