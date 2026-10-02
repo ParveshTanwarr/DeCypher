@@ -1,0 +1,82 @@
+def test_behavioral_profile_refresh_returns_evidence_backed_dimensions(client, admin_headers):
+    response = client.post(
+        "/actors/A00001/behavioral-profile/refresh",
+        headers=admin_headers,
+    )
+    assert response.status_code == 200, response.text
+    body = response.json()
+
+    assert body["actor_id"] == "A00001"
+    assert body["profile_version"] == "1.0"
+    assert body["coverage"]["total_dimensions"] == 5
+    assert set(body["dimensions"]) == {
+        "linguistic",
+        "temporal_lifecycle",
+        "operational",
+        "interaction",
+        "infrastructure",
+    }
+    assert body["dimensions"]["temporal_lifecycle"]["has_post_timestamps"] is False
+    assert any("synthetic" in item.lower() for item in body["limitations"])
+    assert body["summary"]["linked_handle_count"] >= 1
+    assert body["generated_at"]
+    assert body["source_fingerprint"]
+    assert body["behavioral_drift"]["available"] is False
+
+    latest = client.get("/actors/A00001/behavioral-profile", headers=admin_headers)
+    assert latest.status_code == 200
+    assert latest.json()["source_fingerprint"] == body["source_fingerprint"]
+
+
+def test_behavioral_profile_refresh_is_idempotent_without_source_changes(client, admin_headers):
+    first = client.post(
+        "/actors/A00001/behavioral-profile/refresh",
+        headers=admin_headers,
+    )
+    second = client.post(
+        "/actors/A00001/behavioral-profile/refresh",
+        headers=admin_headers,
+    )
+    assert first.status_code == 200
+    assert second.status_code == 200
+    assert first.json()["source_fingerprint"] == second.json()["source_fingerprint"]
+    assert len(second.json()["history"]) == 1
+
+
+def test_behavioral_profile_requires_authentication(client):
+    response = client.post("/actors/A00001/behavioral-profile/refresh")
+    assert response.status_code == 401
+
+
+def test_profile_snapshot_comparison_reports_descriptive_changes():
+    from app.services.behavioral_profile_service import BehavioralProfileService
+
+    previous = {
+        "dimensions": {
+            "linguistic": {"features": {"type_token_ratio": 0.42, "average_word_length": 4.1}},
+            "operational": {"marketplace_count": 2, "wallet_count": 3},
+        }
+    }
+    current = {
+        "dimensions": {
+            "linguistic": {"features": {"type_token_ratio": 0.51, "average_word_length": 4.1}},
+            "operational": {"marketplace_count": 3, "wallet_count": 3},
+        }
+    }
+    result = BehavioralProfileService._compare_profiles(
+        previous,
+        current,
+        "2026-10-01T12:00:00+00:00",
+    )
+
+    assert result["available"] is True
+    assert result["linguistic_feature_deltas"] == [
+        {
+            "feature": "type_token_ratio",
+            "previous": 0.42,
+            "current": 0.51,
+            "delta": 0.09,
+        }
+    ]
+    assert result["operational_changes"]["marketplace_count"]["delta"] == 1
+    assert "not an anomaly verdict" in result["note"]

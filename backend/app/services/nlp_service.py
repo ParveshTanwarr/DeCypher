@@ -15,21 +15,24 @@ DATA_DIR = os.path.join(BASE_DIR, "data")
 ENGINE_MODULE_PATH = os.path.join(BASE_DIR, "ai", "nlp", "compare_handles.py")
 
 
-def _load_engine_class():
-    """
-    ai/nlp/ has no __init__.py, so it isn't an importable package --
-    load compare_handles.py directly by file path instead of relying on
-    sys.path/package structure.
-    """
+def _load_engine_module():
+    """Load the shared feature implementation without changing its model contract."""
     spec = importlib.util.spec_from_file_location("decypher_compare_handles", ENGINE_MODULE_PATH)
+    if spec is None or spec.loader is None:
+        raise ImportError(f"Unable to load NLP feature module: {ENGINE_MODULE_PATH}")
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
-    return module.DeCypherAuthorshipEngine
+    return module
+
+
+def _load_engine_class():
+    return _load_engine_module().DeCypherAuthorshipEngine
 
 
 class NLPStylometryService:
     def __init__(self):
         self.engine = None
+        self.feature_module = None
         self.engine_status = "unavailable"
         self.engine_error = None
         self.threshold = 0.65  # fallback default, only used if the real engine fails to load
@@ -43,7 +46,8 @@ class NLPStylometryService:
 
     def _load_engine(self):
         try:
-            EngineClass = _load_engine_class()
+            self.feature_module = _load_engine_module()
+            EngineClass = self.feature_module.DeCypherAuthorshipEngine
             self.engine = EngineClass(model_dir=MODEL_DIR)
             self.engine_status = "validated_model"
             self.engine_error = None
@@ -174,6 +178,92 @@ class NLPStylometryService:
             "engine_status": self.engine_status,
             "fallback_used": True,
             "engine_warning": "Validated authorship model unavailable; this score is a basic word-overlap heuristic.",
+        }
+
+    def profile_handles(self, handles: list[str]) -> Dict[str, Any]:
+        """Aggregate the repository's trained stylometry feature schema by handle.
+
+        Raw post text is never returned or persisted in the behavioural profile.
+        """
+        empty = {
+            "available": False,
+            "sample_post_count": 0,
+            "profiled_handle_count": 0,
+            "engine_status": self.engine_status,
+            "fallback_used": self.engine is None,
+            "features": {},
+            "per_handle": [],
+        }
+        if self._posts_df is None or not handles or self.feature_module is None:
+            return empty
+
+        feature_names = [
+            "word_count", "character_count", "average_word_length",
+            "word_length_std", "unique_words", "type_token_ratio", "hapax_ratio",
+            "long_word_ratio", "short_word_ratio", "average_sentence_length",
+            "sentence_length_std", "median_sentence_length", "max_sentence_length",
+            "period_rate", "comma_rate", "exclamation_rate", "question_rate",
+            "semicolon_rate", "colon_rate", "dash_rate", "quote_rate",
+            "repeated_punctuation", "repeated_character_runs", "capitalization_ratio",
+            "digit_rate", "function_word_rate", "emoji_rate", "typo_pattern_rate",
+        ]
+        rows = []
+        all_vectors = []
+        total_posts = 0
+        function_words = getattr(self.feature_module, "FUNCTION_WORDS", set())
+
+        for handle in handles:
+            handle_id = self._resolve_handle_id(handle)
+            if not handle_id:
+                continue
+            matched = self._posts_df[self._posts_df["_handle_id"] == str(handle_id)]["_content"]
+            texts = [str(value) for value in matched.tolist() if str(value).strip()]
+            if not texts:
+                continue
+            vectors = [self.feature_module.style_features(value) for value in texts]
+            if not vectors:
+                continue
+            import numpy as np
+            matrix = np.vstack(vectors)
+            mean_vector = matrix.mean(axis=0)
+            token_lists = [self.feature_module.words(value) for value in texts]
+            tokens = [token for group in token_lists for token in group]
+            token_counts = {}
+            for token in tokens:
+                token_counts[token] = token_counts.get(token, 0) + 1
+            top_terms = sorted(
+                ((term, count) for term, count in token_counts.items() if len(term) >= 4),
+                key=lambda item: (-item[1], item[0]),
+            )[:8]
+            rows.append({
+                "handle": handle,
+                "post_count": len(texts),
+                "features": {
+                    name: round(float(mean_vector[index]), 5)
+                    for index, name in enumerate(feature_names)
+                },
+                "top_terms": [{"term": term, "count": count} for term, count in top_terms],
+            })
+            all_vectors.append(mean_vector)
+            total_posts += len(texts)
+
+        if not all_vectors:
+            return empty
+
+        aggregate = np.vstack(all_vectors).mean(axis=0)
+        return {
+            "available": True,
+            "sample_post_count": total_posts,
+            "profiled_handle_count": len(rows),
+            "engine_status": self.engine_status,
+            "fallback_used": self.engine is None,
+            "features": {
+                name: round(float(aggregate[index]), 5)
+                for index, name in enumerate(feature_names)
+            },
+            "per_handle": rows,
+            "method": "Per-post style_features from the same feature implementation used by the trained authorship engine; actor-level values are the unweighted mean of profiled handle means.",
+            "function_word_vocabulary_size": len(function_words),
         }
 
     def check_contradiction(self, handle_a: str, handle_b: str) -> Dict[str, Any]:

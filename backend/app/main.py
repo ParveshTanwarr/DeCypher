@@ -10,7 +10,7 @@ from app.database.neo4j_client import neo4j_conn
 from app.config import settings
 import app.models.sql_models
 from app.models.sql_models import Actor
-from app.routers import actors, search, feedback, export, auth, scanner, nlp, correlation, ai
+from app.routers import actors, search, feedback, export, auth, scanner, nlp, correlation, ai, behavioral
 from app.middleware.audit_log import AuditLogMiddleware
 from app.services.ingestion import ensure_investigation_evidence_for_all_actors, init_db_and_load_csvs
 from app.services.nlp_service import nlp_service
@@ -120,6 +120,7 @@ Instrumentator().instrument(app).expose(app)
 
 app.include_router(auth.router)
 app.include_router(actors.router)
+app.include_router(behavioral.router)
 app.include_router(search.router)
 app.include_router(feedback.router)
 app.include_router(export.router)
