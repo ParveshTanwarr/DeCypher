@@ -25,7 +25,7 @@ from app.services.nlp_service import nlp_service
 from app.services.observation_scope import build_observation_target_keys
 
 
-PROFILE_VERSION = "1.0"
+PROFILE_VERSION = "1.1"
 
 
 def _as_date(value: Optional[datetime]) -> Optional[date]:
@@ -432,6 +432,11 @@ class BehavioralProfileService:
             .all()
         )
         result = dict(snapshot.profile_data or {})
+        drift = result.get("behavioral_drift")
+        if isinstance(drift, dict):
+            drift.setdefault("lifecycle_changes", {})
+            drift.setdefault("interaction_changes", {})
+            drift.setdefault("infrastructure_changes", {})
         lifecycle = result.get("dimensions", {}).get("temporal_lifecycle", {})
         today = datetime.now(timezone.utc).date()
         first_seen = date.fromisoformat(lifecycle["first_observed"]) if lifecycle.get("first_observed") else None
