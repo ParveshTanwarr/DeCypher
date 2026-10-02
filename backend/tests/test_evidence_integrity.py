@@ -43,7 +43,7 @@ def test_new_observations_are_chained_into_the_ledger(client, admin_headers):
     assert response.json()["inserted_count"] == 1
 
     ledger = client.get(
-        "/integrity/ledger?limit=500",
+        "/integrity/ledger?limit=200",
         headers=admin_headers,
     )
     assert ledger.status_code == 200, ledger.text
