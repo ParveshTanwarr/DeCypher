@@ -1,10 +1,14 @@
 """Unit tests for authorized scanner target validation."""
 
 import os
+import sys
+from pathlib import Path
 
 import pytest
 
-from infra.scanner import scan_target, validate_scan_target
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+
+from infra.scanner import validate_scan_target
 
 
 def test_scanner_rejects_external_host():
