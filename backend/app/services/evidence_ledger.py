@@ -143,23 +143,16 @@ class EvidenceLedgerService:
                 continue
 
             payload = self.observation_payload(observation)
-            self.db.add(
-                EvidenceLedgerEntry(
-                    observation_id=observation_id,
-                    actor_id=actor_id,
-                    event_type="observation_ingested",
-                    created_by=created_by,
-                    payload=payload,
-                    previous_hash=previous_hash,
-                )
+            entry = EvidenceLedgerEntry(
+                observation_id=observation_id,
+                actor_id=actor_id,
+                event_type="observation_ingested",
+                created_by=created_by,
+                payload=payload,
+                previous_hash=previous_hash,
             )
+            self.db.add(entry)
             self.db.flush()
-
-            entry = (
-                self.db.query(EvidenceLedgerEntry)
-                .filter(EvidenceLedgerEntry.id == EvidenceLedgerEntry.id)
-                .one()
-            )
             created_at = _iso(entry.created_at) or datetime.now(
                 timezone.utc
             ).isoformat()
