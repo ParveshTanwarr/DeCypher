@@ -392,6 +392,12 @@ class CorrelationService:
         It is not a causal source-quality measurement and should not be treated
         as ground truth.
         """
+        actor = self.db.query(Actor).filter(Actor.actor_id == actor_id).first()
+        actor_sources = {
+            (observation.source or "unknown").strip() or "unknown"
+            for observation in self._actor_observations(actor)
+        } if actor else set()
+
         target_map = self._build_actor_target_map()
         observations = self.db.query(
             Observation.source,
@@ -441,6 +447,8 @@ class CorrelationService:
 
         result: Dict[str, Dict[str, Any]] = {}
         for source, actor_ids in source_actors.items():
+            if actor_sources and source not in actor_sources:
+                continue
             confirmed = 0
             false_positive = 0
             for linked_actor in actor_ids:
