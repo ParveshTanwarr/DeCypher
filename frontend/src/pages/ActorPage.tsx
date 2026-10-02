@@ -383,7 +383,14 @@ export default function ActorPage({
           try {
             // Profile snapshots are persisted by the backend. Read the latest
             // snapshot first so opening an actor page does not rerun NLP.
-            return await getActorBehavioralProfile(actorId);
+            const profile = await getActorBehavioralProfile(actorId);
+            // Older persisted snapshots are still readable, but refresh once
+            // after a profile-version change so the new aggregation/drift
+            // semantics become active without recomputing on every page load.
+            if (profile.profile_version !== "1.1") {
+              return await refreshActorBehavioralProfile(actorId);
+            }
+            return profile;
           } catch (error) {
             // Generate only when this actor has never had a profile created.
             // Do not silently turn API/network failures into expensive refreshes.
