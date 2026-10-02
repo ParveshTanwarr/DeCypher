@@ -146,10 +146,83 @@ export interface GraphLink { source: string; target: string; relation: string; }
 export interface GraphPayload { nodes: GraphNode[]; links: GraphLink[]; }
 export function getActorGraph(actorId: string): Promise<GraphPayload> { return request<GraphPayload>(`/actors/${encodeURIComponent(actorId)}/graph`); }
 
-export interface CorrelationSignal { type: string; confidence: number; description: string; weight: number; details?: { handle_a?: string; handle_b?: string; is_same_author?: boolean; threshold_used?: number; shared_markers?: string[]; domain_routing?: Record<string, number>; }; }
+export interface SourceReliability {
+  source: string;
+  prior: number;
+  posterior: number;
+  review_count: number;
+  confirmed_reviews: number;
+  false_positive_reviews: number;
+  review_coverage: number;
+  multiplier: number;
+  basis: string;
+}
+
+export interface CounterfactualScenario {
+  removed_signal: string;
+  baseline_score: number;
+  without_score: number;
+  delta: number;
+  absolute_impact: number;
+  remaining_signal_count: number;
+  remaining_weight: number;
+  interpretation: string;
+}
+
+export interface CounterfactualAnalysis {
+  available: boolean;
+  baseline_evidence_score: number;
+  scenarios: CounterfactualScenario[];
+  note: string;
+}
+
+export interface CorrelationSignal {
+  type: string;
+  confidence: number;
+  description: string;
+  weight: number;
+  details?: {
+    handle_a?: string;
+    handle_b?: string;
+    is_same_author?: boolean;
+    threshold_used?: number;
+    shared_markers?: string[];
+    domain_routing?: Record<string, number>;
+    contradiction?: Record<string, unknown> | null;
+    source_reliability?: Record<string, SourceReliability>;
+  };
+}
 export interface PriorityResult { score: number; level: string; components: { risk_severity: number; correlation: number; evidence_confidence: number; recency: number; evidence_coverage: number; }; weights: Record<string, number>; }
-export interface CorrelationResult { candidate_actor: string; primary_handle: string; overall_confidence: number; risk_level: string; signals: CorrelationSignal[]; signal_count: number; available_weight: number; interpretation: string; priority?: PriorityResult; }
-export function getActorCorrelation(actorId: string, handleA?: string, handleB?: string): Promise<CorrelationResult> { const params = new URLSearchParams(); if (handleA) params.set("handle_a", handleA); if (handleB) params.set("handle_b", handleB); const query = params.toString(); return request<CorrelationResult>(`/correlation/actor/${encodeURIComponent(actorId)}${query ? `?${query}` : ""}`); }
+export interface CorrelationResult {
+  candidate_actor: string;
+  primary_handle: string;
+  overall_confidence: number;
+  risk_level: string;
+  signals: CorrelationSignal[];
+  signal_count: number;
+  available_weight: number;
+  interpretation: string;
+  deconfliction?: Record<string, unknown> | null;
+  priority?: PriorityResult;
+  counterfactual?: CounterfactualAnalysis;
+  source_reliability?: Record<string, SourceReliability>;
+}
+export function getActorCorrelation(actorId: string, handleA?: string, handleB?: string): Promise<CorrelationResult> {
+  const params = new URLSearchParams();
+  if (handleA) params.set("handle_a", handleA);
+  if (handleB) params.set("handle_b", handleB);
+  const query = params.toString();
+  return request<CorrelationResult>(\`/correlation/actor/\${encodeURIComponent(actorId)}\${query ? \`?\${query}\` : ""}\`);
+}
+export function getActorCounterfactual(actorId: string, handleA?: string, handleB?: string) {
+  const params = new URLSearchParams();
+  if (handleA) params.set("handle_a", handleA);
+  if (handleB) params.set("handle_b", handleB);
+  const query = params.toString();
+  return request<Pick<CorrelationResult, "candidate_actor" | "counterfactual" | "source_reliability">>(
+    \`/correlation/actor/\${encodeURIComponent(actorId)}/counterfactual\${query ? \`?\${query}\` : ""}\`,
+  );
+}
 export function getAllCorrelations(): Promise<{ results: CorrelationResult[] }> { return request<{ results: CorrelationResult[] }>(`/correlation/actors`); }
 export function searchActors(query: string): Promise<SearchResponse> { return request<SearchResponse>(`/search?q=${encodeURIComponent(query)}`); }
 
