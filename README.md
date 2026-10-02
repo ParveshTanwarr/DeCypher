@@ -498,6 +498,19 @@ The repository pins `scikit-learn==1.9.0` to match the bundled model artifacts. 
 
 ---
 
+## Synthetic validation
+
+The repository includes an offline authorship evaluation harness that samples same-actor and
+cross-actor handle pairs from the synthetic dataset and reports accuracy, precision, recall, F1
+and ROC-AUC where both classes are present:
+
+```bash
+python scripts/evaluate_synthetic_attribution.py --pairs 100 --seed 42
+```
+
+The script uses the synthetic dataset's ground-truth actor labels only as an evaluation answer key.
+Those measurements do not establish real-world attribution accuracy.
+
 ## Scoring model
 
 ### Correlation confidence
