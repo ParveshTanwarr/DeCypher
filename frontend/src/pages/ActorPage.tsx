@@ -9,7 +9,14 @@ import {
   downloadActorExport,
   downloadActorReport,
 } from "../api/client";
-import type { BehavioralProfile, CorrelationResult, GraphNode, GraphLink } from "../api/client";
+import type {
+  BehavioralProfile,
+  CorrelationResult,
+  EvidenceIntegrityStatus,
+  EvidenceIntegrityVerification,
+  GraphNode,
+  GraphLink,
+} from "../api/client";
 
 interface ActorDetail {
   actor_id: string;
@@ -336,6 +343,11 @@ export default function ActorPage({
     useState<BehavioralProfile | null>(null);
   const [behavioralLoading, setBehavioralLoading] = useState(true);
   const [behavioralError, setBehavioralError] = useState("");
+  const [integrityStatus, setIntegrityStatus] =
+    useState<EvidenceIntegrityStatus | null>(null);
+  const [integrityVerification, setIntegrityVerification] =
+    useState<EvidenceIntegrityVerification | null>(null);
+  const [integrityChecking, setIntegrityChecking] = useState(false);
 
   const [loading, setLoading] = useState(true);
   const [correlationLoading, setCorrelationLoading] = useState(true);
@@ -451,6 +463,15 @@ export default function ActorPage({
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
+      });
+
+    getEvidenceIntegrityStatus()
+      .then((status) => {
+        if (!cancelled) setIntegrityStatus(status);
+      })
+      .catch((error) => {
+        console.error("Failed to load evidence integrity status:", error);
+        if (!cancelled) setIntegrityStatus(null);
       });
 
     // Evidence is supplementary to the actor record. A failure here
@@ -787,6 +808,29 @@ export default function ActorPage({
             </details>
           </>
         )}
+      </div>
+
+
+      {/* Evidence integrity */}
+      <div className="card" style={{ marginTop: "20px" }}>
+        <div className="eyebrow">EVIDENCE INTEGRITY</div>
+        <h2 style={{ marginTop: "8px" }}>Tamper-Evident Ledger</h2>
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            gap: "16px",
+            flexWrap: "wrap",
+            marginTop: "16px",
+          }}
+        >
+          <div>
+            <strong>
+              {${"integrityStatus.entry_count"}}
+            </strong>
+          </div>
+        </div>
       </div>
 
       {/* Correlation analysis */}
