@@ -49,6 +49,11 @@ The platform correlates actor identities across handles, wallets, PGP fingerprin
 - Full-chain verification endpoint and actor-facing integrity status.
 - Optional external blockchain anchoring is not configured in the bundled prototype.
 
+### Advanced evidence analysis
+- Leave-one-signal-out counterfactual sensitivity analysis for the current weighted correlation set.
+- Review-conditioned source reliability using leave-one-actor-out investigator feedback.
+- Reliability bounds and explicit interpretation notes prevent these estimates from being treated as source truth or causal effects.
+
 ### AI / NLP
 - Domain-aware authorship attribution using the bundled PAN20 and DeCypher model artifacts.
 - Explainable stylometric signals.
@@ -161,6 +166,7 @@ DeCypher/
 │   ├── architecture.md
 │   ├── autonomous-scanning.md
 │   ├── behavioral-profiling.md
+│   ├── correlation-analysis.md
 │   └── evidence-integrity.md
 ├── frontend/
 │   └── src/
@@ -324,6 +330,7 @@ GET /search?q=<actor|handle|wallet|PGP>
 ### Correlation
 ```text
 GET /correlation/actor/{actor_id}
+GET /correlation/actor/{actor_id}/counterfactual
 GET /correlation/actors
 ```
 
@@ -598,6 +605,7 @@ Never use the scanner against infrastructure without authorization.
 - [Architecture](docs/architecture.md)
 - [Autonomous scanning](docs/autonomous-scanning.md)
 - [Behavioural profiling](docs/behavioral-profiling.md)
+- [Correlation analysis](docs/correlation-analysis.md)
 - [Evidence integrity](docs/evidence-integrity.md)
 - [Synthetic dataset](data/README.md)
 - [Backend tests](backend/tests/README.md)
