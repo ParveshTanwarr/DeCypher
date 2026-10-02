@@ -5,8 +5,11 @@ from __future__ import annotations
 from collections import defaultdict
 from datetime import datetime, timezone
 from typing import Any, Iterable
+import logging
 
 from sqlalchemy.orm import Session, joinedload
+
+logger = logging.getLogger(__name__)
 
 from app.models.sql_models import (
     Actor,
@@ -265,8 +268,9 @@ def sync_temporal_events_to_neo4j(db: Session, actor_id: str | None = None) -> i
     events = query.all()
     if not events:
         return 0
-    graph_service.sync_temporal_events(
-        [
+    try:
+        graph_service.sync_temporal_events(
+            [
             {
                 "event_id": event.event_key,
                 "actor_id": event.actor_id,
@@ -277,9 +281,12 @@ def sync_temporal_events_to_neo4j(db: Session, actor_id: str | None = None) -> i
                 "source": event.source,
                 "payload": event.payload,
             }
-            for event in events
-        ]
-    )
+                for event in events
+            ]
+        )
+    except Exception as exc:
+        # Postgres remains the source of truth when Neo4j is unavailable.
+        logger.warning("Temporal Neo4j projection deferred: %s", exc)
     return len(events)
 
 
