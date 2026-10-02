@@ -231,7 +231,18 @@ class BehavioralProfileService:
 
     def refresh(self, actor: Actor) -> Dict[str, Any]:
         profile = self.build_profile(actor)
-        canonical = json.dumps(profile, sort_keys=True, separators=(",", ":"), default=str)
+        fingerprint_payload = json.loads(
+            json.dumps(profile, sort_keys=True, separators=(",", ":"), default=str)
+        )
+        lifecycle_fingerprint = fingerprint_payload.get("dimensions", {}).get(
+            "temporal_lifecycle", {}
+        )
+        # Relative ages are presentation-time values, not source changes.
+        lifecycle_fingerprint.pop("account_age_days", None)
+        lifecycle_fingerprint.pop("days_since_last_seen", None)
+        canonical = json.dumps(
+            fingerprint_payload, sort_keys=True, separators=(",", ":"), default=str
+        )
         fingerprint = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
         snapshot = (
             self.db.query(BehavioralProfileSnapshot)
@@ -348,6 +359,14 @@ class BehavioralProfileService:
             .all()
         )
         result = dict(snapshot.profile_data or {})
+        lifecycle = result.get("dimensions", {}).get("temporal_lifecycle", {})
+        today = datetime.now(timezone.utc).date()
+        first_seen = date.fromisoformat(lifecycle["first_observed"]) if lifecycle.get("first_observed") else None
+        last_seen = date.fromisoformat(lifecycle["last_observed"]) if lifecycle.get("last_observed") else None
+        lifecycle["account_age_days"] = max(0, (today - first_seen).days) if first_seen else None
+        lifecycle["days_since_last_seen"] = (
+            (today - last_seen).days if last_seen and last_seen <= today else None
+        )
         result.update(
             {
                 "generated_at": (
