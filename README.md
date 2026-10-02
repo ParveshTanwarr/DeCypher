@@ -609,3 +609,10 @@ Actor Profile
 ```
 
 The platform is intended to demonstrate an end-to-end intelligence workflow rather than claim autonomous real-world attribution.
+
+
+## Behavioural profiling
+
+The authenticated actor workspace includes an evidence-backed behavioural profile covering linguistic style, account lifecycle, operational footprint, recorded trust relationships, and infrastructure observations. Profiles are versioned and fingerprinted in PostgreSQL; changed source data creates a new snapshot and a descriptive comparison against the previous profile.
+
+See [docs/behavioral-profiling.md](docs/behavioral-profiling.md) for endpoints, feature definitions, and interpretation limits. The bundled dataset is synthetic, and post-level activity cadence is not inferred because the current post records do not provide usable event timestamps.
