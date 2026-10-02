@@ -255,6 +255,18 @@ export interface BehavioralProfile {
     };
   };
   patterns: string[];
+  behavioral_drift?: {
+    available: boolean;
+    baseline_generated_at?: string | null;
+    linguistic_feature_deltas: Array<{
+      feature: string;
+      previous: number;
+      current: number;
+      delta: number;
+    }>;
+    operational_changes: Record<string, { previous: number; current: number; delta: number }>;
+    note: string;
+  };
   limitations: string[];
   history: Array<{
     generated_at?: string;
