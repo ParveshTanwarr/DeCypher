@@ -208,7 +208,9 @@ class NLPStylometryService:
             "digit_rate", "function_word_rate", "emoji_rate", "typo_pattern_rate",
         ]
         rows = []
-        all_vectors = []
+        handle_mean_vectors = []
+        weighted_feature_sum = None
+        weighted_post_total = 0
         total_posts = 0
         function_words = getattr(self.feature_module, "FUNCTION_WORDS", set())
 
@@ -244,13 +246,22 @@ class NLPStylometryService:
                 },
                 "top_terms": [{"term": term, "count": count} for term, count in top_terms],
             })
-            all_vectors.append(mean_vector)
+            handle_mean_vectors.append(mean_vector)
+            if weighted_feature_sum is None:
+                weighted_feature_sum = mean_vector * len(texts)
+            else:
+                weighted_feature_sum += mean_vector * len(texts)
+            weighted_post_total += len(texts)
             total_posts += len(texts)
 
         if not all_vectors:
             return empty
 
-        aggregate = np.vstack(all_vectors).mean(axis=0)
+        if weighted_feature_sum is None or not handle_mean_vectors:
+            return empty
+
+        post_weighted = weighted_feature_sum / weighted_post_total
+        handle_weighted = np.vstack(handle_mean_vectors).mean(axis=0)
         return {
             "available": True,
             "sample_post_count": total_posts,
@@ -258,11 +269,16 @@ class NLPStylometryService:
             "engine_status": self.engine_status,
             "fallback_used": self.engine is None,
             "features": {
-                name: round(float(aggregate[index]), 5)
+                name: round(float(post_weighted[index]), 5)
+                for index, name in enumerate(feature_names)
+            },
+            "handle_mean_features": {
+                name: round(float(handle_weighted[index]), 5)
                 for index, name in enumerate(feature_names)
             },
             "per_handle": rows,
-            "method": "Per-post style_features from the same feature implementation used by the trained authorship engine; actor-level values are the unweighted mean of profiled handle means.",
+            "aggregation_method": "post_weighted",
+            "method": "Per-post style_features from the same feature implementation used by the trained authorship engine. Actor-level features are weighted by each handle's number of profiled posts; handle_mean_features preserves the equal-weighted mean across handle profiles.",
             "function_word_vocabulary_size": len(function_words),
         }
 
