@@ -141,8 +141,11 @@ class GraphAnomalyService:
     def __init__(self, db: Session):
         self.db = db
 
-    def analyze(self, actor_id: str) -> dict[str, Any]:
-        population = _build_population(self.db)
+    @staticmethod
+    def _score_population(
+        population: dict[str, dict[str, float]],
+        actor_id: str,
+    ) -> dict[str, Any]:
         if actor_id not in population:
             raise ValueError(f"Actor '{actor_id}' not found.")
 
@@ -151,7 +154,10 @@ class GraphAnomalyService:
             name: _percentile([row[name] for row in population.values()], value)
             for name, value in features.items()
         }
-        tail_scores = {name: _tail_score(score) for name, score in percentiles.items()}
+        tail_scores = {
+            name: _tail_score(score)
+            for name, score in percentiles.items()
+        }
         weighted_score = sum(
             tail_scores[name] * FEATURE_WEIGHTS[name]
             for name in FEATURE_WEIGHTS
@@ -159,7 +165,11 @@ class GraphAnomalyService:
         weighted_score = round(max(0.0, min(100.0, weighted_score)), 2)
 
         reasons = []
-        for name, score in sorted(tail_scores.items(), key=lambda item: item[1], reverse=True):
+        for name, score in sorted(
+            tail_scores.items(),
+            key=lambda item: item[1],
+            reverse=True,
+        ):
             if score >= 50.0:
                 reasons.append({
                     "feature": name,
@@ -192,12 +202,15 @@ class GraphAnomalyService:
             ),
         }
 
+    def analyze(self, actor_id: str) -> dict[str, Any]:
+        return self._score_population(_build_population(self.db), actor_id)
+
     def analyze_all(self, limit: int = 25) -> dict[str, Any]:
         population = _build_population(self.db)
-        results = []
-        for actor_id in population:
-            result = self.analyze(actor_id)
-            results.append(result)
+        results = [
+            self._score_population(population, actor_id)
+            for actor_id in population
+        ]
         results.sort(key=lambda item: item["anomaly_score"], reverse=True)
         return {
             "total_actors": len(results),
