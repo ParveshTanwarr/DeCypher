@@ -242,7 +242,16 @@ def backfill_temporal_events(db: Session, actor_id: str | None = None) -> int:
     if not candidates:
         return 0
 
-    keys = [row["event_key"] for row in candidates]
+    # Multiple source rows can legitimately describe the same normalized event
+    # (for example, one PGP key attached to multiple handles of the same actor).
+    # Collapse identical event keys before the bulk insert so idempotency is
+    # guaranteed both across runs and within a single materialization batch.
+    candidates_by_key = {}
+    for row in candidates:
+        candidates_by_key.setdefault(row["event_key"], row)
+    candidates = list(candidates_by_key.values())
+
+    keys = list(candidates_by_key)
     existing = {
         row[0]
         for row in db.query(TemporalEvent.event_key)
