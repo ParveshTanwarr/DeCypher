@@ -144,6 +144,19 @@ class Observation(Base):
     description = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), default=utc_now, server_default=func.now())
 
+class EvidenceLedgerEntry(Base):
+    __tablename__ = "evidence_ledger_entries"
+    id = Column(Integer, primary_key=True, index=True)
+    observation_id = Column(String(128), unique=True, index=True, nullable=True)
+    actor_id = Column(String(64), ForeignKey("actors.actor_id", ondelete="SET NULL"), index=True, nullable=True)
+    event_type = Column(String(64), nullable=False)
+    created_by = Column(String(128), nullable=False, default="system")
+    payload = Column(JSON, nullable=False)
+    previous_hash = Column(String(64), nullable=False, index=True)
+    record_hash = Column(String(64), unique=True, nullable=False, index=True)
+    created_at = Column(DateTime(timezone=True), default=utc_now, server_default=func.now(), index=True)
+
+
 class ScanTarget(Base):
     __tablename__ = "scan_targets"
     id = Column(Integer, primary_key=True, index=True)
