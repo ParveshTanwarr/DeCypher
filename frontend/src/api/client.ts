@@ -159,3 +159,113 @@ export function chatWithAI(message: string, actorId?: string, history: ChatMessa
     body: JSON.stringify({ message, actor_id: actorId || null, history }),
   });
 }
+
+
+export interface BehavioralProfile {
+  actor_id: string;
+  profile_version: string;
+  generated_at?: string;
+  source_fingerprint?: string;
+  coverage: {
+    score: number;
+    available_dimensions: number;
+    total_dimensions: number;
+    dimensions: Record<string, boolean>;
+  };
+  summary: {
+    linked_handle_count: number;
+    marketplace_count: number;
+    wallet_count: number;
+    pgp_key_count: number;
+    trust_link_count: number;
+    infrastructure_observation_count: number;
+    post_count: number;
+  };
+  dimensions: {
+    linguistic: {
+      available: boolean;
+      sample_post_count: number;
+      profiled_handle_count: number;
+      engine_status: string;
+      fallback_used: boolean;
+      features: Record<string, number>;
+      per_handle: Array<{
+        handle: string;
+        post_count: number;
+        features: Record<string, number>;
+        top_terms: Array<{ term: string; count: number }>;
+      }>;
+      cross_handle_consistency: {
+        available: boolean;
+        mean_similarity: number | null;
+        comparisons: number;
+        engine_status: string;
+        fallback_used: boolean;
+        interpretation?: string;
+      };
+    };
+    temporal_lifecycle: {
+      available: boolean;
+      first_observed?: string | null;
+      last_observed?: string | null;
+      account_age_days?: number | null;
+      observed_span_days?: number | null;
+      days_since_last_seen?: number | null;
+      handle_timeline: Array<{
+        handle: string;
+        marketplace?: string | null;
+        status?: string | null;
+        first_seen?: string | null;
+        last_seen?: string | null;
+        active_window_days?: number | null;
+      }>;
+      status_distribution: Record<string, number>;
+      overlapping_handle_windows: number;
+      inter_handle_gap_days: number[];
+      has_post_timestamps: boolean;
+    };
+    operational: {
+      available: boolean;
+      marketplace_count: number;
+      marketplaces: Array<{ name: string; handle_count: number }>;
+      wallet_count: number;
+      unique_wallet_count: number;
+      within_actor_wallet_reuse_count: number;
+      cross_actor_shared_wallet_count: number;
+      pgp_key_count: number;
+      pgp_reuse_across_other_handles_count: number;
+    };
+    interaction: {
+      available: boolean;
+      trust_link_count: number;
+      outgoing_count: number;
+      incoming_count: number;
+      distinct_counterparty_handles: number;
+      relationship_types: Record<string, number>;
+      average_confidence: number | null;
+      scope_note: string;
+    };
+    infrastructure: {
+      available: boolean;
+      observation_count: number;
+      indicator_types: Record<string, number>;
+      sources: Record<string, number>;
+      last_observed: string | null;
+      mean_observation_confidence: number | null;
+    };
+  };
+  patterns: string[];
+  limitations: string[];
+  history: Array<{
+    generated_at?: string;
+    coverage_score: number;
+    profile_version: string;
+    source_fingerprint: string;
+  }>;
+}
+export function refreshActorBehavioralProfile(actorId: string): Promise<BehavioralProfile> {
+  return request<BehavioralProfile>(`/actors/${encodeURIComponent(actorId)}/behavioral-profile/refresh`, { method: "POST" });
+}
+export function getActorBehavioralProfile(actorId: string): Promise<BehavioralProfile> {
+  return request<BehavioralProfile>(`/actors/${encodeURIComponent(actorId)}/behavioral-profile`);
+}
