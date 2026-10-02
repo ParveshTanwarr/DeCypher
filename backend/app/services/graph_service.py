@@ -380,7 +380,7 @@ def sync_temporal_events(events: List[Dict[str, Any]]) -> None:
                 WHEN row.entity_type = "handle" THEN [1]
                 ELSE []
             END |
-            MERGE (h:Handle {handle_id: toInteger(row.entity_id)})
+            MERGE (h:Handle {handle_id: toString(row.entity_id)})
             MERGE (e)-[:DESCRIBES]->(h)
         )
 
