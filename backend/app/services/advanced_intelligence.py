@@ -1022,6 +1022,116 @@ class EvaluationService:
         self.db.commit()
         return metrics
 
+    def actor_disjoint_holdout(self, pairs: int = 100, threshold: float = 0.65) -> dict[str, Any]:
+        """Evaluate handle-pair matching on actor groups excluded from pair construction.
+
+        The split is deterministic and grouped by actor ID. This avoids placing
+        handles from the same labelled actor in both the pair-sampling partitions.
+        It does not prove that the bundled text was excluded from model training;
+        model artifact provenance must be checked separately.
+        """
+        handles = (
+            self.db.query(DarkWebHandle)
+            .filter(DarkWebHandle.actor_id.isnot(None))
+            .order_by(DarkWebHandle.actor_id.asc(), DarkWebHandle.id.asc())
+            .all()
+        )
+        grouped: dict[str, list[DarkWebHandle]] = defaultdict(list)
+        for handle in handles:
+            grouped[str(handle.actor_id)].append(handle)
+
+        holdout_ids = {
+            actor_id for actor_id in grouped
+            if int(hashlib.sha256(actor_id.encode("utf-8")).hexdigest()[:8], 16) % 5 == 0
+        }
+        holdout = {actor_id: rows for actor_id, rows in grouped.items() if actor_id in holdout_ids}
+        training_actor_count = len(grouped) - len(holdout)
+        if len(holdout) < 2:
+            return {
+                "available": False,
+                "reason": "At least two actor groups must fall into the deterministic holdout partition.",
+                "split_strategy": "deterministic_actor_group_80_20",
+                "training_actor_count": training_actor_count,
+                "holdout_actor_count": len(holdout),
+            }
+
+        positive_pairs = []
+        for actor_id, group in sorted(holdout.items()):
+            if len(group) >= 2:
+                positive_pairs.append((group[0], group[1], 1, actor_id))
+
+        negative_pairs = []
+        holdout_handles = [
+            (actor_id, handle)
+            for actor_id, group in sorted(holdout.items())
+            for handle in group
+        ]
+        for index, (actor_a, handle_a) in enumerate(holdout_handles):
+            for actor_b, handle_b in holdout_handles[index + 1:]:
+                if actor_a != actor_b:
+                    negative_pairs.append((handle_a, handle_b, 0, None))
+                if len(negative_pairs) >= max(1, pairs) * 3:
+                    break
+            if len(negative_pairs) >= max(1, pairs) * 3:
+                break
+
+        sampled = (positive_pairs + negative_pairs)[:max(20, min(int(pairs), 500))]
+        scored = []
+        for handle_a, handle_b, expected, source_actor in sampled:
+            result = nlp_service.compare(handle_a.handle, handle_b.handle)
+            score = float(result.get("similarity_score") or 0.0)
+            predicted = score >= threshold
+            scored.append({
+                "handle_a": handle_a.handle,
+                "handle_b": handle_b.handle,
+                "expected_same_actor": bool(expected),
+                "predicted_same_actor": predicted,
+                "score": round(score, 4),
+                "model_status": result.get("engine_status"),
+                "fallback_used": bool(result.get("fallback_used")),
+                "holdout_actor_group": source_actor,
+            })
+
+        tp = sum(1 for row in scored if row["predicted_same_actor"] and row["expected_same_actor"])
+        fp = sum(1 for row in scored if row["predicted_same_actor"] and not row["expected_same_actor"])
+        fn = sum(1 for row in scored if not row["predicted_same_actor"] and row["expected_same_actor"])
+        tn = sum(1 for row in scored if not row["predicted_same_actor"] and not row["expected_same_actor"])
+        precision = tp / (tp + fp) if tp + fp else 0.0
+        recall = tp / (tp + fn) if tp + fn else 0.0
+        accuracy = (tp + tn) / len(scored) if scored else 0.0
+        metrics = {
+            "available": bool(scored),
+            "split_strategy": "deterministic_actor_group_80_20",
+            "training_actor_count": training_actor_count,
+            "holdout_actor_count": len(holdout),
+            "holdout_handle_count": len(holdout_handles),
+            "pairs": len(scored),
+            "positive_pairs": sum(1 for row in scored if row["expected_same_actor"]),
+            "negative_pairs": sum(1 for row in scored if not row["expected_same_actor"]),
+            "threshold": threshold,
+            "tp": tp, "fp": fp, "fn": fn, "tn": tn,
+            "precision": round(precision, 4),
+            "recall": round(recall, 4),
+            "f1": round(2 * precision * recall / (precision + recall), 4) if precision + recall else 0.0,
+            "accuracy": round(accuracy, 4),
+            "model_status": nlp_service.engine_status,
+            "fallback_pair_count": sum(1 for row in scored if row["fallback_used"]),
+            "dataset": "bundled_synthetic_dataset",
+            "limitations": [
+                "Actor groups are separated during pair construction to avoid handle-level label leakage between pair partitions.",
+                "This is not proof of training-data isolation; the model artifact training corpus must be independently documented.",
+                "Synthetic benchmark metrics do not establish real-world attribution accuracy.",
+            ],
+        }
+        run = EvaluationRun(
+            evaluation_type="actor_disjoint_stylometry_holdout",
+            source="bundled_synthetic_dataset",
+            metrics=metrics,
+        )
+        self.db.add(run)
+        self.db.commit()
+        return {"metrics": metrics, "cases": scored}
+
     def historical_cases(self, cases: list[dict[str, Any]]) -> dict[str, Any]:
         scored = []
         for case in cases[:500]:
