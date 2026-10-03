@@ -428,6 +428,44 @@ def sync_temporal_events(events: List[Dict[str, Any]]) -> None:
     )
 
 
+
+def sync_external_entity_links(links: List[Dict[str, Any]]) -> None:
+    """Project source-derived entity candidates without merging actor identities."""
+    rows = [
+        {
+            "actor_id": row.get("actor_id"),
+            "entity_type": row.get("entity_type"),
+            "canonical_value": row.get("canonical_value"),
+            "source": row.get("source"),
+            "score": float(row.get("score") or 0.0),
+            "match_type": row.get("match_type"),
+            "identity_status": "candidate_only",
+        }
+        for row in links
+        if row.get("actor_id") and row.get("entity_type")
+        and row.get("canonical_value") and row.get("source")
+    ]
+    if not rows:
+        return
+    neo4j_conn.write(
+        """
+        UNWIND $rows AS row
+        MATCH (a:Actor {actor_id: row.actor_id})
+        MERGE (e:ExternalEntity {
+            entity_type: row.entity_type,
+            canonical_value: row.canonical_value,
+            source: row.source
+        })
+        SET e.identity_status = row.identity_status
+        MERGE (a)-[r:POSSIBLE_MATCH]->(e)
+        SET r.score = row.score,
+            r.match_type = row.match_type,
+            r.identity_status = row.identity_status
+        """,
+        {"rows": rows},
+    )
+
+
 def get_actor_subgraph(
     actor_id: str,
 ) -> Optional[Dict[str, Any]]:
@@ -557,6 +595,25 @@ def get_actor_subgraph(
         return None
 
     row = rows[0]
+    row["external_entity_links"] = []
+    try:
+        entity_rows = neo4j_conn.query(
+            """
+            MATCH (a:Actor {actor_id: $actor_id})-[r:POSSIBLE_MATCH]->(e:ExternalEntity)
+            RETURN e.entity_type AS entity_type,
+                   e.canonical_value AS canonical_value,
+                   e.source AS source,
+                   r.score AS score,
+                   r.match_type AS match_type,
+                   r.identity_status AS identity_status
+            ORDER BY r.score DESC, e.entity_type, e.canonical_value
+            """,
+            {"actor_id": actor_id},
+        )
+        row["external_entity_links"] = entity_rows or []
+    except Exception:
+        # External entity projection is additive; core actor graph remains usable.
+        row["external_entity_links"] = []
 
     row["handle_nodes"] = [h for h in row.get("handle_nodes", []) if h and h.get("handle_id") and h.get("handle")]
     row["handles"] = [h["handle"] for h in row["handle_nodes"]]
