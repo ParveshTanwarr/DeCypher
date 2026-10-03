@@ -1,0 +1,38 @@
+{
+  "case_id": "alphabay-2017-cazes",
+  "case_name": "United States v. Alexandre Cazes / AlphaBay",
+  "ground_truth_source": {
+    "title": "Indictment, Case No. 1:17-CR-00144",
+    "url": "https://www.justice.gov/opa/press-release/file/982826/dl",
+    "notes": "The indictment identifies Alexandre Cazes with the aliases Alpha02 and Admin."
+  },
+  "documented_identities": [
+    {
+      "identity_id": "alphabay-cazes",
+      "canonical_name": "Alexandre Cazes",
+      "aliases": ["Alpha02", "Admin"],
+      "role": "AlphaBay creator/administrator"
+    },
+    {
+      "identity_id": "alphabay-wheeler",
+      "canonical_name": "Ronald L. Wheeler III",
+      "aliases": ["Trappy"],
+      "role": "AlphaBay spokesperson"
+    },
+    {
+      "identity_id": "alphabay-herrell",
+      "canonical_name": "Colorado AlphaBay moderator",
+      "aliases": ["Penissmith", "Botah"],
+      "role": "AlphaBay moderator/scam watcher"
+    }
+  ],
+  "expected_same_identity_pairs": [
+    ["Alpha02", "Admin"],
+    ["Penissmith", "Botah"]
+  ],
+  "expected_different_identity_pairs": [
+    ["Alpha02", "Trappy"],
+    ["Admin", "Trappy"],
+    ["Alpha02", "Penissmith"]
+  ]
+}
