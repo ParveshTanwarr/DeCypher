@@ -36,6 +36,7 @@ class Settings(BaseSettings):
     TOR_SOCKS5_PROXY: str = ""
     TOR_ALLOWED_ONION_HOSTS: str = ""
     TOR_TIMEOUT_SECONDS: int = 30
+    TOR_MAX_RESPONSE_BYTES: int = 2_000_000
     TOR_DESCRIPTOR_URL: str = ""
     MEDIA_MAX_BYTES: int = 5_000_000
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
