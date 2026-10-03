@@ -200,8 +200,12 @@ def _collect_actor_events(db: Session, actor_ids: Iterable[str]) -> list[dict[st
             targets_by_actor[str(target.actor_id)].append(target)
 
     actor_by_target: dict[str, str] = {}
+    actors_by_id = {
+        str(actor.actor_id): actor
+        for actor in db.query(Actor).filter(Actor.actor_id.in_(actor_ids)).all()
+    }
     for actor_id in actor_ids:
-        actor = db.query(Actor).filter(Actor.actor_id == actor_id).first()
+        actor = actors_by_id.get(str(actor_id))
         if not actor:
             continue
         for key in build_observation_target_keys(
