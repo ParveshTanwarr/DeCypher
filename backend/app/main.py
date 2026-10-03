@@ -45,37 +45,6 @@ def _ensure_compatibility_schema() -> None:
             connection.exec_driver_sql(
                 "ALTER TABLE darkweb_handles ADD COLUMN source_handle_id VARCHAR(64)"
             )
-        # Repair accidental duplicate canonical IDs before enforcing uniqueness.
-        # Keep the lowest SQL row ID and give any duplicate a deterministic
-        # legacy identity; the CSV-backed canonical row will be restored on
-        # the next backfill pass when applicable.
-        connection.exec_driver_sql(
-            """
-            WITH ranked AS (
-                SELECT
-                    id,
-                    source_handle_id,
-                    ROW_NUMBER() OVER (
-                        PARTITION BY source_handle_id
-                        ORDER BY id ASC
-                    ) AS rn
-                FROM darkweb_handles
-                WHERE source_handle_id IS NOT NULL
-            )
-            UPDATE darkweb_handles AS target
-            SET source_handle_id = 'legacy:' || target.id::text
-            FROM ranked
-            WHERE target.id = ranked.id
-              AND ranked.rn > 1
-            """
-        )
-
-        connection.exec_driver_sql(
-            "CREATE UNIQUE INDEX IF NOT EXISTS uq_darkweb_handles_source_handle_id "
-            "ON darkweb_handles (source_handle_id) "
-            "WHERE source_handle_id IS NOT NULL"
-        )
-
         # Backfill the stable source IDs for existing synthetic rows. The
         # relational integer PK remains unchanged and continues to serve SQL
         # foreign keys; the source ID is exclusively the cross-system identity.
@@ -103,10 +72,38 @@ def _ensure_compatibility_schema() -> None:
                         },
                     )
 
+        # Repair accidental duplicate canonical IDs after CSV backfill, then
+        # enforce uniqueness for the canonical cross-system identity.
+        connection.exec_driver_sql(
+            """
+            WITH ranked AS (
+                SELECT
+                    id,
+                    ROW_NUMBER() OVER (
+                        PARTITION BY source_handle_id
+                        ORDER BY id ASC
+                    ) AS rn
+                FROM darkweb_handles
+                WHERE source_handle_id IS NOT NULL
+            )
+            UPDATE darkweb_handles AS target
+            SET source_handle_id = 'legacy:' || target.id::text
+            FROM ranked
+            WHERE target.id = ranked.id
+              AND ranked.rn > 1
+            """
+        )
+
         connection.exec_driver_sql(
             "UPDATE darkweb_handles "
             "SET source_handle_id = 'legacy:' || id::text "
             "WHERE source_handle_id IS NULL"
+        )
+
+        connection.exec_driver_sql(
+            "CREATE UNIQUE INDEX IF NOT EXISTS uq_darkweb_handles_source_handle_id "
+            "ON darkweb_handles (source_handle_id) "
+            "WHERE source_handle_id IS NOT NULL"
         )
 
 
