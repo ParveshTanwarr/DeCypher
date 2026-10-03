@@ -9,7 +9,7 @@ from app.database.postgres import get_db
 from app.models.sql_models import Actor
 from app.routers.auth import get_current_user
 from app.services.graph_anomaly_service import GraphAnomalyService
-from app.services.temporal_events import get_actor_timeline, materialize_temporal_events
+from app.services.temporal_events import get_actor_timeline
 
 router = APIRouter(
     prefix="/analytics",
