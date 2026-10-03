@@ -1,0 +1,8 @@
+# Temporary local-only Neo4j password recovery override.
+# Use only with docker-compose.yml as documented in NEO4J_RECOVERY.md.
+services:
+  neo4j:
+    environment:
+      NEO4J_dbms_security_auth__enabled: "false"
+    healthcheck:
+      disable: true
