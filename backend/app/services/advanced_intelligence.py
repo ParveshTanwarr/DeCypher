@@ -560,7 +560,7 @@ class TorIntelligenceService:
             raw = _read_limited_response(response, settings.TOR_MAX_RESPONSE_BYTES)
             body = raw.decode(response.encoding or "utf-8", errors="replace")
             title_match = re.search(r"<title[^>]*>(.*?)</title>", body, re.I | re.S)
-            return {
+            service_metadata = {
                 "url": url,
                 "status_code": response.status_code,
                 "content_type": response.headers.get("content-type"),
@@ -568,8 +568,52 @@ class TorIntelligenceService:
                 "content_length": len(raw),
                 "server": response.headers.get("server"),
                 "title": title_match.group(1).strip() if title_match else None,
-                "observed_at": utc_now().isoformat(),
             }
+
+        # Probe only the conventional, read-only status endpoint on the
+        # explicitly allowlisted onion service. All response reads remain
+        # bounded and redirects are disabled.
+        status_url = urlunsplit((parsed.scheme, parsed.netloc, "/server-status", "", ""))
+        status_signature = None
+        try:
+            with requests.get(
+                status_url,
+                timeout=settings.TOR_TIMEOUT_SECONDS,
+                allow_redirects=False,
+                proxies=proxies,
+                headers={"User-Agent": "DeCypher-Tor-Inspector/1.0"},
+                stream=True,
+            ) as status_response:
+                if status_response.status_code == 200:
+                    status_raw = _read_limited_response(
+                        status_response, settings.TOR_MAX_RESPONSE_BYTES
+                    )
+                    status_body = re.sub(
+                        r"\\s+", " ", status_raw.decode(
+                            status_response.encoding or "utf-8", errors="replace"
+                        )
+                    ).lower()
+                    if "EXPOSED_STATUS_PAGE_TEST".lower() in status_body:
+                        status_signature = "EXPOSED_STATUS_PAGE_TEST"
+                    else:
+                        apache_markers = (
+                            "apache server status",
+                            "server uptime:",
+                            "total accesses:",
+                            "scoreboard:",
+                        )
+                        if sum(marker in status_body for marker in apache_markers) >= 3:
+                            status_signature = "apache_mod_status_signature"
+        except requests.RequestException:
+            # A missing/unreachable status endpoint is not itself a finding.
+            pass
+
+        return {
+            **service_metadata,
+            "exposed_status_page": status_signature is not None,
+            "status_page_signature": status_signature,
+            "observed_at": utc_now().isoformat(),
+        }
 
     @staticmethod
     def parse_descriptor(descriptor_text: str) -> dict[str, Any]:
