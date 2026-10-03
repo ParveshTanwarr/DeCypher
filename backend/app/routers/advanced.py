@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 from datetime import datetime, timezone
-from urllib.parse import urlparse
+from urllib.parse import urlparse, urlunsplit
 from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket, WebSocketDisconnect
@@ -82,6 +82,25 @@ class MediaCompareRequest(BaseModel):
 
 class AblationRequest(BaseModel):
     disabled_signals: list[str] = Field(default_factory=list)
+
+
+def _safe_collection_source(source: CollectionSource) -> CollectionSourceResponse:
+    parsed = urlparse(source.url)
+    safe_url = urlunsplit((parsed.scheme, parsed.netloc, parsed.path, "", ""))
+    return CollectionSourceResponse(
+        id=source.id,
+        name=source.name,
+        kind=source.kind,
+        url=safe_url,
+        actor_id=source.actor_id,
+        enabled=source.enabled,
+        interval_minutes=source.interval_minutes,
+        last_run_at=source.last_run_at,
+        next_run_at=source.next_run_at,
+        last_status=source.last_status,
+        last_error=source.last_error,
+        created_at=source.created_at,
+    )
 
 
 def _require_actor(db: Session, actor_id: str) -> Actor:
@@ -194,7 +213,7 @@ def create_collection_source(payload: CollectionSourceCreate, db: Session = Depe
     db.add(source)
     db.commit()
     db.refresh(source)
-    return CollectionSourceResponse.model_validate(source)
+    return _safe_collection_source(source)
 
 
 @router.get(
@@ -203,7 +222,7 @@ def create_collection_source(payload: CollectionSourceCreate, db: Session = Depe
     dependencies=[Depends(get_current_user)],
 )
 def list_collection_sources(db: Session = Depends(get_db)):
-    return db.query(CollectionSource).order_by(CollectionSource.id.asc()).all()
+    return [_safe_collection_source(source) for source in db.query(CollectionSource).order_by(CollectionSource.id.asc()).all()]
 
 
 @router.post(
