@@ -15,7 +15,7 @@ class EvidenceLedgerBlock(Base):
     merkle_root = Column(String(64), nullable=False)
     block_hash = Column(String(64), unique=True, nullable=False, index=True)
     entry_count = Column(Integer, nullable=False, default=0)
-    created_at = Column(DateTime(timezone=True), default=utc_now, server_default="CURRENT_TIMESTAMP", index=True)
+    created_at = Column(DateTime(timezone=True), default=utc_now, index=True)
 
 class CollectionSource(Base):
     __tablename__ = "collection_sources"
@@ -32,13 +32,13 @@ class CollectionSource(Base):
     next_run_at = Column(DateTime(timezone=True), default=utc_now, nullable=False, index=True)
     last_status = Column(String(32), default="never", nullable=False)
     last_error = Column(Text, nullable=True)
-    created_at = Column(DateTime(timezone=True), default=utc_now, server_default="CURRENT_TIMESTAMP", index=True)
+    created_at = Column(DateTime(timezone=True), default=utc_now, index=True)
 
 class CollectionRun(Base):
     __tablename__ = "collection_runs"
     id = Column(Integer, primary_key=True, index=True)
     source_id = Column(Integer, ForeignKey("collection_sources.id", ondelete="CASCADE"), nullable=False, index=True)
-    started_at = Column(DateTime(timezone=True), default=utc_now, server_default="CURRENT_TIMESTAMP")
+    started_at = Column(DateTime(timezone=True), default=utc_now)
     finished_at = Column(DateTime(timezone=True), nullable=True)
     status = Column(String(32), default="running", nullable=False)
     items_seen = Column(Integer, default=0, nullable=False)
@@ -55,7 +55,7 @@ class ExternalEntity(Base):
     source = Column(String(128), nullable=False)
     confidence = Column(Float, default=0.5, nullable=False)
     metadata = Column(JSON, nullable=False, default=dict)
-    created_at = Column(DateTime(timezone=True), default=utc_now, server_default="CURRENT_TIMESTAMP", index=True)
+    created_at = Column(DateTime(timezone=True), default=utc_now, index=True)
     __table_args__ = (UniqueConstraint("entity_type", "canonical_value", "source", name="uq_external_entity"),)
 
 class EntityLink(Base):
@@ -66,7 +66,7 @@ class EntityLink(Base):
     score = Column(Float, nullable=False)
     match_type = Column(String(64), nullable=False)
     explanation = Column(JSON, nullable=False, default=dict)
-    created_at = Column(DateTime(timezone=True), default=utc_now, server_default="CURRENT_TIMESTAMP", index=True)
+    created_at = Column(DateTime(timezone=True), default=utc_now, index=True)
     __table_args__ = (UniqueConstraint("actor_id", "entity_id", name="uq_entity_link_actor_entity"),)
 
 class MediaEvidence(Base):
@@ -81,7 +81,7 @@ class MediaEvidence(Base):
     width = Column(Integer, nullable=True)
     height = Column(Integer, nullable=True)
     metadata = Column(JSON, nullable=False, default=dict)
-    created_at = Column(DateTime(timezone=True), default=utc_now, server_default="CURRENT_TIMESTAMP", index=True)
+    created_at = Column(DateTime(timezone=True), default=utc_now, index=True)
 
 class StylometryDiscovery(Base):
     __tablename__ = "stylometry_discoveries"
@@ -94,7 +94,7 @@ class StylometryDiscovery(Base):
     same_author = Column(Boolean, nullable=False, default=False)
     model_status = Column(String(64), nullable=False)
     evidence = Column(JSON, nullable=False, default=dict)
-    created_at = Column(DateTime(timezone=True), default=utc_now, server_default="CURRENT_TIMESTAMP", index=True)
+    created_at = Column(DateTime(timezone=True), default=utc_now, index=True)
 
 class Alert(Base):
     __tablename__ = "alerts"
@@ -105,7 +105,7 @@ class Alert(Base):
     title = Column(String(256), nullable=False)
     message = Column(Text, nullable=False)
     payload = Column(JSON, nullable=False, default=dict)
-    created_at = Column(DateTime(timezone=True), default=utc_now, server_default="CURRENT_TIMESTAMP", index=True)
+    created_at = Column(DateTime(timezone=True), default=utc_now, index=True)
 
 class EvaluationRun(Base):
     __tablename__ = "evaluation_runs"
@@ -114,4 +114,4 @@ class EvaluationRun(Base):
     source = Column(String(256), nullable=False)
     status = Column(String(32), nullable=False, default="completed")
     metrics = Column(JSON, nullable=False, default=dict)
-    created_at = Column(DateTime(timezone=True), default=utc_now, server_default="CURRENT_TIMESTAMP", index=True)
+    created_at = Column(DateTime(timezone=True), default=utc_now, index=True)
