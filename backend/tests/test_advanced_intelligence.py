@@ -194,6 +194,7 @@ def test_collection_runs_redact_internal_error_details(client, admin_headers):
         db.add(run)
         db.commit()
         run_id = run.id
+        source_id = source.id
     finally:
         db.close()
 
@@ -204,7 +205,6 @@ def test_collection_runs_redact_internal_error_details(client, admin_headers):
         assert "error" not in row
         assert "SUPER-SECRET" not in response.text
     finally:
-        source_id = source.id if source is not None else None
         db = SessionLocal()
         try:
             if run is not None:
