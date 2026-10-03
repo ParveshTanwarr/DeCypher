@@ -5,9 +5,11 @@ import sys
 from pathlib import Path
 
 import pytest
+import requests
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
+from infra import scanner
 from infra.scanner import validate_scan_target
 
 
@@ -37,3 +39,16 @@ def test_scanner_accepts_allowlisted_loopback():
             os.environ.pop("AUTOSCAN_ALLOWED_HOSTS", None)
         else:
             os.environ["AUTOSCAN_ALLOWED_HOSTS"] = original
+
+
+
+def test_scanner_network_failure_is_reported_as_failed_scan(monkeypatch):
+    monkeypatch.setenv("AUTOSCAN_ALLOWED_HOSTS", "127.0.0.1,localhost")
+
+    def fail_request(*args, **kwargs):
+        raise requests.ConnectionError("test target unavailable")
+
+    monkeypatch.setattr(scanner.requests, "get", fail_request)
+
+    with pytest.raises(RuntimeError, match="Authorized scan request failed"):
+        scanner.scan_target("http://127.0.0.1:9000/")
