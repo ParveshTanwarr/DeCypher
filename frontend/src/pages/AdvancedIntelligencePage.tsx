@@ -11,6 +11,10 @@ import {
   getActorEntityLinks,
   compareMedia,
   fingerprintMedia,
+  createCollectionSource,
+  runHistoricalCaseValidation,
+  inspectTor,
+  getMerkleStatus,
   type AdvancedAlert,
   type CollectionStatus,
   type CollectionSource,
@@ -32,6 +36,14 @@ export default function AdvancedIntelligencePage({ actorId }: Props) {
   const [mediaA, setMediaA] = useState("");
   const [mediaB, setMediaB] = useState("");
   const [mediaResult, setMediaResult] = useState<Record<string, any> | null>(null);
+  const [merkle, setMerkle] = useState<Record<string, any> | null>(null);
+  const [torUrl, setTorUrl] = useState("");
+  const [torResult, setTorResult] = useState<Record<string, any> | null>(null);
+  const [caseManifest, setCaseManifest] = useState("");
+  const [caseResult, setCaseResult] = useState<Record<string, any> | null>(null);
+  const [sourceName, setSourceName] = useState("");
+  const [sourceKind, setSourceKind] = useState<"json" | "rss" | "html" | "tor_http">("rss");
+  const [sourceUrl, setSourceUrl] = useState("");
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -41,13 +53,17 @@ export default function AdvancedIntelligencePage({ actorId }: Props) {
       getCalibrationEvaluation(60),
       getGraphAnomalyLeaderboard(10),
       getAdvancedAlerts(),
+      getMerkleStatus(),
     ]).then(([c, s, cal, graph, a]) => {
       if (c.status === "fulfilled") setCollection(c.value);
       if (s.status === "fulfilled") setSources(s.value);
       if (cal.status === "fulfilled") setCalibration(cal.value);
       if (graph.status === "fulfilled") setAnomalies(graph.value.results);
       if (a.status === "fulfilled") setAlerts(a.value);
+      const m = [c, s, cal, graph, a][0];
+      if (m.status === "fulfilled") {}
     });
+    getMerkleStatus().then(setMerkle).catch(() => setMerkle(null));
   }, []);
 
   useEffect(() => {
@@ -129,6 +145,28 @@ export default function AdvancedIntelligencePage({ actorId }: Props) {
 
       <div className="dashboard-grid" style={{ marginBottom: 20 }}>
         <div className="card">
+          <div className="eyebrow">EVIDENCE BLOCKCHAIN / MERKLE</div>
+          <h3 style={{ marginTop: 8 }}>Tamper-evident evidence blocks</h3>
+          <div style={{ fontFamily: "monospace", fontSize: 12 }}>
+            {merkle ? `${merkle.block_count || 0} blocks · ${merkle.entry_count || 0} entries · valid=${String(merkle.valid)}` : "Loading Merkle verification…"}
+          </div>
+          <p style={{ opacity: 0.6, fontSize: 12, marginTop: 8 }}>
+            SHA-256 evidence chain + Merkle blocks. Optional external blockchain anchoring remains deployment-configurable.
+          </p>
+        </div>
+        <div className="card">
+          <div className="eyebrow">TOR INTELLIGENCE</div>
+          <h3 style={{ marginTop: 8 }}>Allowlisted hidden-service inspection</h3>
+          <div style={{ display: "flex", gap: 8 }}>
+            <input value={torUrl} onChange={(e) => setTorUrl(e.target.value)} placeholder="https://example.onion/" style={{ flex: 1 }} />
+            <button className="secondary-button" onClick={async () => { if (!torUrl) return; setTorResult(await inspectTor(torUrl)); }}>Inspect</button>
+          </div>
+          {torResult && <pre style={{ whiteSpace: "pre-wrap", fontSize: 11, marginTop: 10, opacity: 0.75 }}>{JSON.stringify(torResult, null, 2)}</pre>}
+        </div>
+      </div>
+
+      <div className="dashboard-grid" style={{ marginBottom: 20 }}>
+        <div className="card">
           <div className="eyebrow">CONTINUOUS COLLECTION</div>
           <h3 style={{ marginTop: 8 }}>Marketplace / forum / deep-web connectors</h3>
           <p style={{ opacity: 0.65, fontSize: 13 }}>
@@ -139,6 +177,20 @@ export default function AdvancedIntelligencePage({ actorId }: Props) {
             {collection
               ? \`\${collection.enabled_sources}/\${collection.sources} sources enabled · \${collection.poll_interval_minutes} min dispatcher\`
               : "Loading…"}
+          </div>
+          <div style={{ display: "grid", gap: 8, marginTop: 12 }}>
+            <input value={sourceName} onChange={(e) => setSourceName(e.target.value)} placeholder="Source name" />
+            <select value={sourceKind} onChange={(e) => setSourceKind(e.target.value as any)}>
+              <option value="rss">RSS</option><option value="json">JSON</option><option value="html">HTML</option><option value="tor_http">Tor HTTP</option>
+            </select>
+            <input value={sourceUrl} onChange={(e) => setSourceUrl(e.target.value)} placeholder="https://feed.example" />
+            <button className="secondary-button" onClick={async () => {
+              if (!sourceName || !sourceUrl) return;
+              const created = await createCollectionSource({ name: sourceName, kind: sourceKind, url: sourceUrl, actor_id: actorId || null });
+              setSources((current) => [...current, created]);
+              setSourceName("");
+              setSourceUrl("");
+            }}>Register source</button>
           </div>
           <div style={{ marginTop: 12 }}>
             {sources.map((source) => (
@@ -248,7 +300,20 @@ export default function AdvancedIntelligencePage({ actorId }: Props) {
         </div>
       </div>
 
-      <div className="dashboard-grid">
+      <div className="dashboard-grid" style={{ marginBottom: 20 }}>
+        <div className="card">
+          <div className="eyebrow">HISTORICAL CASE VALIDATION</div>
+          <h3 style={{ marginTop: 8 }}>Public-case reconstruction harness</h3>
+          <p style={{ opacity: 0.6, fontSize: 12 }}>
+            Paste a documented case manifest using the handle pair and expected-match schema.
+          </p>
+          <textarea value={caseManifest} onChange={(e) => setCaseManifest(e.target.value)} rows={7} style={{ width: "100%" }} placeholder='[{"case_id":"case-1","handle_a":"...","handle_b":"...","expected_same_actor":true}]' />
+          <button className="secondary-button" style={{ marginTop: 8 }} onClick={async () => {
+            try { setCaseResult(await runHistoricalCaseValidation(JSON.parse(caseManifest))); }
+            catch (error) { setCaseResult({ error: String(error) }); }
+          }}>Validate manifest</button>
+          {caseResult && <pre style={{ whiteSpace: "pre-wrap", fontSize: 11, marginTop: 10, opacity: 0.75 }}>{JSON.stringify(caseResult, null, 2)}</pre>}
+        </div>
         <div className="card">
           <div className="eyebrow">CROSS-MODAL IMAGE CORRELATION</div>
           <h3 style={{ marginTop: 8 }}>Perceptual hashing</h3>
