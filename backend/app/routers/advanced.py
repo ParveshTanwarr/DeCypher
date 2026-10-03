@@ -460,6 +460,21 @@ def calibration(
     return EvaluationService(db).calibration(pairs=pairs)
 
 
+@router.get(
+    "/evaluation/holdout",
+    dependencies=[Depends(require_role("admin", "investigator"))],
+)
+def actor_disjoint_stylometry_holdout(
+    pairs: int = Query(100, ge=20, le=500),
+    threshold: float = Query(0.65, ge=0.0, le=1.0),
+    db: Session = Depends(get_db),
+):
+    return EvaluationService(db).actor_disjoint_holdout(
+        pairs=pairs,
+        threshold=threshold,
+    )
+
+
 @router.post(
     "/evaluation/historical-cases",
     dependencies=[Depends(require_role("admin", "investigator"))],
