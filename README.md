@@ -225,7 +225,7 @@ pip install -r requirements.txt
 cp .env.example .env
 ```
 
-Set a unique `SECRET_KEY` before starting the API. The Dockerized Celery worker/beat services also read this `.env`. The example disables autonomous scanning by default and excludes startup-only synthetic filler evidence from correlation by default.
+Set a unique `SECRET_KEY` and unique application credentials before starting the API. The Dockerized Celery worker/beat services also read this `.env`. The example disables autonomous scanning by default and excludes startup-only synthetic filler evidence from correlation by default.
 
 For the optional Copilot:
 
