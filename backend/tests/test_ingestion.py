@@ -165,13 +165,19 @@ def test_stable_handle_identity_preserves_same_visible_handle_across_actors():
     """Duplicate visible handles must not collapse when their source IDs differ."""
     db = SessionLocal()
     try:
-        rows = (
-            db.query(DarkWebHandle.source_handle_id, DarkWebHandle.actor_id)
-            .filter(DarkWebHandle.handle == "thra_v2")
-            .all()
+        total = db.query(func.count(DarkWebHandle.id)).scalar()
+        distinct_source_ids = db.query(func.count(func.distinct(DarkWebHandle.source_handle_id))).scalar()
+        assert total == 896
+        assert distinct_source_ids == 896
+
+        duplicate_visible = (
+            db.query(DarkWebHandle.handle, DarkWebHandle.platform)
+            .group_by(DarkWebHandle.handle, DarkWebHandle.platform)
+            .having(func.count(DarkWebHandle.id) > 1)
+            .count()
         )
-        assert len(rows) == 1, "fixture should contain one thra_v2 source row"
-        assert rows[0][0] == "H00031"
+        assert duplicate_visible >= 1, "fixture should exercise duplicate visible handles"
+
     finally:
         db.close()
 
