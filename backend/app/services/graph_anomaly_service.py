@@ -11,9 +11,11 @@ from app.models.sql_models import (
     Actor,
     DarkWebHandle,
     Observation,
+    ScanTarget,
     TrustLink,
     Wallet,
 )
+from app.services.observation_scope import build_observation_target_keys
 
 
 FEATURE_WEIGHTS = {
@@ -86,12 +88,31 @@ def _build_population(db: Session) -> dict[str, dict[str, float]]:
             actors_by_wallet[wallet.address].add(str(wallet.actor_id))
 
     observations = db.query(Observation).all()
-    target_to_actor = {actor_id.lower(): actor_id for actor_id in actors}
-    target_to_actor.update({
-        handle.handle.strip().lower(): str(handle.actor_id)
-        for handle in handles
-        if handle.actor_id and handle.handle
-    })
+    scan_targets = db.query(ScanTarget).filter(ScanTarget.actor_id.in_(actors)).all()
+    handles_by_actor: dict[str, list[DarkWebHandle]] = defaultdict(list)
+    for handle in handles:
+        if handle.actor_id:
+            handles_by_actor[str(handle.actor_id)].append(handle)
+    scan_targets_by_actor: dict[str, list[ScanTarget]] = defaultdict(list)
+    for target in scan_targets:
+        if target.actor_id:
+            scan_targets_by_actor[str(target.actor_id)].append(target)
+
+    target_to_actor: dict[str, str] = {}
+    actor_rows = {str(actor.actor_id): actor for actor in db.query(Actor).filter(Actor.actor_id.in_(actors)).all()}
+    for actor_id in actors:
+        actor = actor_rows.get(str(actor_id))
+        if not actor:
+            continue
+        target_to_actor.update({
+            key.lower(): str(actor_id)
+            for key in build_observation_target_keys(
+                actor.actor_id,
+                actor.primary_handle,
+                handles_by_actor.get(str(actor_id), []),
+                scan_targets_by_actor.get(str(actor_id), []),
+            )
+        })
     for observation in observations:
         actor_id = target_to_actor.get((observation.target or "").strip().lower())
         if actor_id and (observation.value or observation.target):
