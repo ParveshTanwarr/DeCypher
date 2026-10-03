@@ -327,7 +327,7 @@ class CollectionService:
                             display_name=canonical,
                             source=source_label,
                             confidence=observation.confidence,
-                            metadata=metadata,
+                            entity_metadata=metadata,
                         )
                         self.db.add(entity)
                         self.db.flush()
@@ -570,7 +570,7 @@ class MediaCorrelationService:
                 mime_type=mime,
                 width=width,
                 height=height,
-                metadata={"bytes": len(data)},
+                metadata_json={"bytes": len(data)},
             )
             self.db.add(row)
         else:
@@ -581,7 +581,7 @@ class MediaCorrelationService:
             row.mime_type = mime
             row.width = width
             row.height = height
-            row.metadata = {"bytes": len(data)}
+            row.metadata_json = {"bytes": len(data)}
         self.db.commit()
         return {
             "media_id": media_id, "sha256": sha, "phash": phash, "width": width,
