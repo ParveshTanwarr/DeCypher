@@ -15,8 +15,10 @@ x-backend-common: &backend-common
   depends_on:
     postgres:
       condition: service_healthy
+    # Neo4j is an optional graph projection: the API has a PostgreSQL fallback.
+    # Do not prevent API/worker startup when Neo4j auth or availability is degraded.
     neo4j:
-      condition: service_healthy
+      condition: service_started
     redis:
       condition: service_healthy
 
@@ -29,7 +31,7 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in backend/.env}
       POSTGRES_DB: threat_intel
-    ports: ["5432:5432"]
+    ports: ["127.0.0.1:5432:5432"]
     volumes: [pgdata:/var/lib/postgresql/data]
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -d threat_intel"]
@@ -46,7 +48,8 @@ services:
       NEO4J_PLUGINS: '["graph-data-science", "apoc"]'
       NEO4J_dbms_security_procedures_unrestricted: "apoc.*,gds.*"
       NEO4J_dbms_security_procedures_allowlist: "apoc.*,gds.*"
-    ports: ["7474:7474", "7687:7687"]
+    # Bind local development ports to this machine only.
+    ports: ["127.0.0.1:7474:7474", "127.0.0.1:7687:7687"]
     volumes: [neo4jdata:/data]
     healthcheck:
       test: ["CMD", "cypher-shell", "-u", "neo4j", "-p", "${NEO4J_PASSWORD:?Set NEO4J_PASSWORD in backend/.env}", "RETURN 1"]
@@ -58,7 +61,7 @@ services:
     image: redis:7-alpine
     container_name: threat_redis
     restart: unless-stopped
-    ports: ["6379:6379"]
+    ports: ["127.0.0.1:6379:6379"]
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -69,7 +72,7 @@ services:
     <<: *backend-common
     container_name: threat_api
     restart: unless-stopped
-    ports: ["8000:8000"]
+    ports: ["127.0.0.1:8000:8000"]
     healthcheck:
       test:
         [
@@ -98,7 +101,7 @@ services:
     image: prom/prometheus:v3.5.0
     container_name: threat_prometheus
     restart: unless-stopped
-    ports: ["9090:9090"]
+    ports: ["127.0.0.1:9090:9090"]
     volumes:
       - ../infra/monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - prometheusdata:/prometheus
@@ -114,7 +117,7 @@ services:
     image: grafana/grafana:12.1.1
     container_name: threat_grafana
     restart: unless-stopped
-    ports: ["3000:3000"]
+    ports: ["127.0.0.1:3000:3000"]
     environment:
       GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
       GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?Set GRAFANA_ADMIN_PASSWORD in backend/.env}
