@@ -263,10 +263,44 @@ def _backfill_graph_if_needed(actor_count: int) -> None:
         # finishes. The dedicated backfill helper remains idempotent.
         materialize_temporal_events(db)
         db.commit()
+
+        # Startup is not considered graph-ready until the rebuilt projection
+        # actually contains the SQL-authoritative minimums. This prevents a
+        # swallowed Neo4j syntax/projection error from producing a "healthy"
+        # API with an incomplete graph.
+        verified = {
+            "actors": int((neo4j_conn.query("MATCH (n:Actor) RETURN count(n) AS count") or [{}])[0].get("count") or 0),
+            "handles": int((neo4j_conn.query("MATCH (n:Handle) RETURN count(n) AS count") or [{}])[0].get("count") or 0),
+            "wallets": int((neo4j_conn.query("MATCH (n:Wallet) RETURN count(n) AS count") or [{}])[0].get("count") or 0),
+            "pgp_keys": int((neo4j_conn.query("MATCH (n:PGPKey) RETURN count(n) AS count") or [{}])[0].get("count") or 0),
+            "trust_links": int((neo4j_conn.query("MATCH (:Handle)-[r:TRUSTS]->(:Handle) RETURN count(r) AS count") or [{}])[0].get("count") or 0),
+            "observations": int((neo4j_conn.query("MATCH (n:Observation) RETURN count(n) AS count") or [{}])[0].get("count") or 0),
+            "temporal_events": int((neo4j_conn.query("MATCH (n:Event) RETURN count(n) AS count") or [{}])[0].get("count") or 0),
+            "event_handle_links": int((neo4j_conn.query(
+                "MATCH (:Event)-[:DESCRIBES]->(:Handle) RETURN count(*) AS count"
+            ) or [{}])[0].get("count") or 0),
+            "numeric_handle_ids": int((neo4j_conn.query(
+                'MATCH (n:Handle) WHERE n.handle_id =~ "^[0-9]+$" RETURN count(n) AS count'
+            ) or [{}])[0].get("count") or 0),
+        }
+        if any(verified[name] < expected[name] for name in expected):
+            raise RuntimeError(
+                f"Neo4j graph verification failed: expected={expected}, verified={verified}"
+            )
+        if verified["numeric_handle_ids"] > 0:
+            raise RuntimeError(
+                f"Neo4j graph verification found legacy numeric handle IDs: {verified}"
+            )
+        if expected["temporal_events"] > 0 and verified["event_handle_links"] == 0:
+            raise RuntimeError(
+                f"Neo4j temporal graph verification found no Event->Handle links: {verified}"
+            )
     except Exception as exc:
         db.rollback()
-        # The API can still use its PostgreSQL graph fallback when Neo4j is down.
-        print(f"[!] Neo4j graph backfill deferred: {exc}")
+        # Graph completeness is a startup invariant for this deployment.
+        # Failing here is preferable to silently serving a partial graph.
+        print(f"[!] Neo4j graph backfill failed: {exc}")
+        raise
     finally:
         db.close()
 
