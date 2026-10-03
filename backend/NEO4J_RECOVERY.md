@@ -85,14 +85,13 @@ Run all commands from the `backend/` directory.
 6. Verify authentication and then start the complete stack:
 
    ```bash
-   docker exec threat_neo4j cypher-shell -u neo4j -p "$NEO4J_PASSWORD" "RETURN 1 AS connected;"
+   docker compose ps neo4j
    docker compose up -d
    curl http://127.0.0.1:8000/health
    ```
 
-   Note: `docker exec` does not automatically read the host `.env` file. For the direct
-   authentication test, either substitute the password locally in the command (do not paste it
-   into chat) or use the healthcheck status from `docker compose ps`.
+   The Neo4j container should report `healthy`. Its healthcheck authenticates using the
+   configured `NEO4J_PASSWORD`; an `unhealthy` status means the password still does not match.
 
 7. Once recovery is complete, do not use the recovery overlay again. Normal operation uses
    `docker-compose.yml` only.
