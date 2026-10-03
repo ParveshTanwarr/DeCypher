@@ -14,6 +14,7 @@ from app.models.sql_models import (
     ScanTarget,
     TrustLink,
     Wallet,
+    TemporalEvent,
 )
 from app.services.observation_scope import build_observation_target_keys
 
@@ -26,6 +27,8 @@ FEATURE_WEIGHTS = {
     "marketplace_switches": 0.10,
     "temporal_handle_overlap": 0.10,
     "observation_source_diversity": 0.05,
+    "two_hop_trust_reach": 0.10,
+    "temporal_event_density": 0.10,
 }
 
 
@@ -117,6 +120,7 @@ def _build_population(db: Session) -> dict[str, dict[str, float]]:
             ].add(actor_id)
 
     counterparties_by_actor: dict[str, set[str]] = defaultdict(set)
+    handle_graph: dict[int, set[int]] = defaultdict(set)
     for link in db.query(TrustLink).all():
         source = handle_by_id.get(link.source_handle_id)
         target = handle_by_id.get(link.target_handle_id)
@@ -127,12 +131,18 @@ def _build_population(db: Session) -> dict[str, dict[str, float]]:
             continue
         counterparties_by_actor[source_actor].add(target_actor)
         counterparties_by_actor[target_actor].add(source_actor)
+        handle_graph[link.source_handle_id].add(link.target_handle_id)
+        handle_graph[link.target_handle_id].add(link.source_handle_id)
 
     source_diversity_by_actor: dict[str, set[str]] = defaultdict(set)
+    temporal_event_density_by_actor: dict[str, float] = defaultdict(float)
     for observation in observations:
         actor_id = target_to_actor.get((observation.target or "").strip().lower())
         if actor_id and observation.source:
             source_diversity_by_actor[actor_id].add(observation.source)
+
+    for event in db.query(TemporalEvent).all():
+        temporal_event_density_by_actor[str(event.actor_id)] += 1.0
 
     population: dict[str, dict[str, float]] = {}
     for actor_id in actors:
@@ -149,14 +159,21 @@ def _build_population(db: Session) -> dict[str, dict[str, float]]:
             1 for _, actor_ids in actors_by_infra.items()
             if actor_id in actor_ids and len(actor_ids) > 1
         )
+        direct_counterparties = counterparties_by_actor[actor_id]
+        second_hop = set()
+        for counterparty in direct_counterparties:
+            second_hop.update(counterparties_by_actor[counterparty])
+        second_hop.discard(actor_id)
         population[actor_id] = {
             "cross_actor_wallet_reuse": float(wallet_reuse),
             "shared_pgp_reuse": float(pgp_reuse),
-            "trust_degree": float(len(counterparties_by_actor[actor_id])),
+            "trust_degree": float(len(direct_counterparties)),
             "external_infrastructure_reuse": float(infra_reuse),
             "marketplace_switches": float(max(0, len(marketplaces_by_actor[actor_id]) - 1)),
             "temporal_handle_overlap": float(_overlap_count(actor_handles)),
             "observation_source_diversity": float(len(source_diversity_by_actor[actor_id])),
+            "two_hop_trust_reach": float(len(second_hop)),
+            "temporal_event_density": float(temporal_event_density_by_actor[actor_id]),
         }
     return population
 
