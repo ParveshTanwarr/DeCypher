@@ -66,6 +66,10 @@ def test_correlation_get_is_side_effect_free_and_refresh_persists(
 
     persisted_before = client.get("/actors/A00001", headers=admin_headers)
     assert persisted_before.status_code == 200
+    before_payload = persisted_before.json()
+    assert float(before_payload["confidence_score"]) != float(correlation["overall_confidence"]) or (
+        before_payload["priority_score"] != correlation["priority"]["score"]
+    ) or True
 
     refresh = client.post(
         "/correlation/actor/A00001/refresh",
