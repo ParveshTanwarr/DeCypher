@@ -555,6 +555,14 @@ class StylometryDiscoveryService:
     def discover(self, limit: int = 200, actor_id: str | None = None) -> list[dict[str, Any]]:
         query = self.db.query(DarkWebHandle)
         if actor_id:
+            actor = (
+                self.db.query(Actor)
+                .filter(func.lower(Actor.actor_id) == actor_id.lower())
+                .first()
+            )
+            if actor is None:
+                return []
+            actor_id = actor.actor_id
             query = query.filter(DarkWebHandle.actor_id == actor_id)
         handles = query.order_by(DarkWebHandle.id.asc()).limit(120).all()
         groups: dict[str, list[DarkWebHandle]] = defaultdict(list)
@@ -630,9 +638,14 @@ class EntityLinkageService:
         self.db = db
 
     def link_actor(self, actor_id: str, min_score: float = 0.70) -> list[dict[str, Any]]:
-        actor = self.db.query(Actor).filter(Actor.actor_id == actor_id).first()
+        actor = (
+            self.db.query(Actor)
+            .filter(func.lower(Actor.actor_id) == actor_id.lower())
+            .first()
+        )
         if actor is None:
             raise ValueError(f"Actor '{actor_id}' not found.")
+        actor_id = actor.actor_id
         handles = self.db.query(DarkWebHandle).filter(DarkWebHandle.actor_id == actor_id).all()
         values = {
             "handle": {_normal(actor.primary_handle), *[_normal(h.handle) for h in handles]},
