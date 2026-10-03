@@ -15,6 +15,7 @@ from urllib.parse import urlparse
 
 import requests
 from PIL import Image
+from sqlalchemy import func
 
 from app.config import settings
 from app.models.advanced_models import (
