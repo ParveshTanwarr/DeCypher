@@ -476,10 +476,14 @@ class BehavioralProfileService:
         for handle in handles:
             start = _as_date(handle.registration_date or handle.first_seen)
             end = _as_date(handle.last_seen)
-            if start:
+            is_future_end = bool(end and end > today)
+            observed_end = min(end, today) if end else None
+
+            if start and start <= today:
                 starts.append(start)
-            if end:
-                ends.append(end)
+            if observed_end and observed_end >= (start or observed_end):
+                ends.append(observed_end)
+
             timeline.append(
                 {
                     "handle": handle.handle,
@@ -487,8 +491,11 @@ class BehavioralProfileService:
                     "status": handle.status,
                     "first_seen": _iso(start),
                     "last_seen": _iso(end),
+                    "future_dated": is_future_end,
                     "active_window_days": (
-                        max(0, (end - start).days) if start and end else None
+                        max(0, (observed_end - start).days)
+                        if start and observed_end
+                        else None
                     ),
                 }
             )
@@ -499,7 +506,15 @@ class BehavioralProfileService:
         overlaps = 0
         gaps = []
         ordered = sorted(
-            [( _as_date(h.registration_date or h.first_seen), _as_date(h.last_seen)) for h in handles],
+            [
+                (
+                    _as_date(h.registration_date or h.first_seen),
+                    min(_as_date(h.last_seen), today)
+                    if _as_date(h.last_seen)
+                    else None,
+                )
+                for h in handles
+            ],
             key=lambda pair: pair[0] or date.max,
         )
         for index, (start_a, end_a) in enumerate(ordered):
