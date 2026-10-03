@@ -41,7 +41,7 @@ function App() {
     socket.onopen = () => socket.send(token);
     socket.onmessage = (event) => {
       try {
-        const alert = JSON.parse(event.data) as AppNotification & { id: number; title: string; message: string };
+        const alert = JSON.parse(event.data) as { id: number; title: string; message: string };
         setNotifications((current) => [
           {
             id: `live-${alert.id}`,
