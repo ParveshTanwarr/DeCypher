@@ -12,8 +12,9 @@ existing `neo4jdata` volume keeps the old Neo4j user password. The healthcheck t
 The API and Celery services depend on Neo4j being started, not on its authenticated healthcheck
 being green. Neo4j is an optional graph projection and the API has a PostgreSQL graph fallback,
 so a stale Neo4j password should not prevent the rest of the local application from starting.
-The Neo4j healthcheck still validates the configured password and reports an authentication
-mismatch accurately.
+The healthcheck uses an explicit local Bolt URI and authenticates with the configured
+`NEO4J_PASSWORD`. It intentionally does not report healthy while authentication is failing.
+A 60-second startup grace period allows Neo4j and its plugins to initialize.
 
 ## Reset the existing Neo4j password
 
@@ -56,7 +57,7 @@ Run all commands from the `backend/` directory.
    `backend/` and connect to the local system database without credentials:
 
    ```bash
-   docker exec -it threat_neo4j cypher-shell -d system
+   docker exec -it threat_neo4j cypher-shell -a bolt://localhost:7687 -d system
    ```
 
 4. At the Cypher Shell prompt, set a new strong password (at least 8 characters):
@@ -90,8 +91,14 @@ Run all commands from the `backend/` directory.
    curl http://127.0.0.1:8000/health
    ```
 
-   The Neo4j container should report `healthy`. Its healthcheck authenticates using the
-   configured `NEO4J_PASSWORD`; an `unhealthy` status means the password still does not match.
+   The Neo4j container should report `healthy`. Inspect the healthcheck output if it does not:
+
+   ```bash
+   docker inspect threat_neo4j --format '{{json .State.Health}}'
+   ```
+
+   Do not disable the healthcheck to make the status appear green; an `unhealthy` status means
+   the configured credentials or Bolt readiness check still fails.
 
 7. Once recovery is complete, do not use the recovery overlay again. Normal operation uses
    `docker-compose.yml` only.
