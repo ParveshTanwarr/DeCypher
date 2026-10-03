@@ -58,6 +58,7 @@ def _ensure_compatibility_schema() -> None:
                     source_id = (row.get("handle_id") or "").strip()
                     handle = (row.get("handle_name") or "").strip()
                     platform = (row.get("marketplace") or "").strip() or None
+                    actor_id = (row.get("actor_id") or "").strip()
                     if not source_id or not handle:
                         continue
                     connection.execute(
@@ -72,6 +73,7 @@ def _ensure_compatibility_schema() -> None:
                             "source_id": source_id,
                             "handle": handle,
                             "platform": platform,
+                            "actor_id": actor_id,
                         },
                     )
 
@@ -103,6 +105,15 @@ def _ensure_compatibility_schema() -> None:
             "WHERE source_handle_id IS NULL"
         )
 
+        # The old schema used handle+platform as a unique key. That
+        # incorrectly collapsed legitimate repeated visible handles across actors.
+        # Drop it when present; stable source_handle_id is the canonical identity.
+        connection.exec_driver_sql(
+            "ALTER TABLE darkweb_handles DROP CONSTRAINT IF EXISTS uq_handle_platform"
+        )
+        connection.exec_driver_sql(
+            "DROP INDEX IF EXISTS uq_handle_platform"
+        )
         connection.exec_driver_sql(
             "CREATE UNIQUE INDEX IF NOT EXISTS uq_darkweb_handles_source_handle_id "
             "ON darkweb_handles (source_handle_id) "
