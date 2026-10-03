@@ -28,38 +28,31 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
     return bcrypt.checkpw(pwd_bytes, hashed_password.encode("utf-8"))
 
 
-# Real pre-computed bcrypt hashes (cost factor 12) -- generated once with
-# hash_password() so login doesn't re-hash on every startup.
-# "analystpassword" -> hashed below
-# "adminpassword"   -> hashed below
-# (The previous hashes here were placeholder strings, not actual hashes of
-# these passwords -- bcrypt.checkpw() against them returned False for
-# "analyst" with no exception raised, so the old exception-based plaintext
-# fallback never triggered and that account could never log in. Real
-# hashes make the fallback below purely defensive, not load-bearing.)
-FAKE_USERS_DB = {
-    "analyst": {
-        "username": "analyst",
-        "hashed_password": "$2b$12$uiZ/.aZ95M/bjg3RE6IwNuQcTC/Zuk.fsRtHcifqmY/hodEnGFRn6",
-        "role": "investigator",
-    },
-    "admin": {
-        "username": "admin",
-        "hashed_password": "$2b$12$OZewJfXH5OceeFP2kbLIV.iY2vv1SNM3KqOU/WXYkbHaPQ8526Q86",
-        "role": "admin",
-    },
-    # Machine-to-machine account so non-interactive callers (the infra
-    # team's scanner pipeline, CI, etc.) can obtain a token the same way a
-    # human does, now that every router requires one. There was no such
-    # account before -- once auth got enforced, anything that isn't a
-    # person logging into the dashboard had no way to authenticate at all.
-    # Change this password before relying on it for anything real.
-    "scanner_service": {
-        "username": "scanner_service",
-        "hashed_password": "$2b$12$ZTaSLukC8ISYhwwFz2oy1uB31ELLNqH471a6zfkSpa7oJl8hrUemC",
-        "role": "service",
-    },
-}
+def _build_users_db() -> dict[str, dict[str, str]]:
+    """Build demo/service identities from environment-provided passwords.
+
+    Passwords are intentionally not shipped in source control. Tests and a local
+    demo can provide them through environment variables before importing the app.
+    """
+    configured = (
+        ("analyst", settings.ANALYST_PASSWORD, "investigator"),
+        ("admin", settings.ADMIN_PASSWORD, "admin"),
+        ("scanner_service", settings.SCANNER_SERVICE_PASSWORD, "service"),
+    )
+    users: dict[str, dict[str, str]] = {}
+    for username, password, role in configured:
+        if not password:
+            continue
+        users[username] = {
+            "username": username,
+            "hashed_password": hash_password(password),
+            "role": role,
+        }
+    return users
+
+
+USERS_DB = _build_users_db()
+
 
 
 class Token(BaseModel):
@@ -151,7 +144,7 @@ def login_for_access_token(request: Request, form_data: OAuth2PasswordRequestFor
     client_ip = request.client.host if request.client else "unknown"
     _check_rate_limit(f"{form_data.username}:{client_ip}")
 
-    user = FAKE_USERS_DB.get(form_data.username)
+    user = USERS_DB.get(form_data.username)
 
     valid = False
     if user:
