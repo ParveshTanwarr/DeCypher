@@ -75,19 +75,10 @@ def scan_target(url: str) -> list[dict]:
                 })
 
     except requests.RequestException as error:
-        observations.append({
-            "observation_id": _observation_id(),
-            "indicator_type": "scan_error",
-            "target": url,
-            "detected": False,
-            "observed_value": None,
-            "clearnet_match_domain": None,
-            "confidence": 0.0,
-            "scan_date": scan_date,
-            "source": "authorized-test-service",
-            "evidence": str(error)
-        })
-        return observations
+        # A failed network request is a failed scan, not an evidence finding.
+        # Raise so the Celery task records the job/target as failed instead of
+        # incorrectly marking an unreachable target as successfully scanned.
+        raise RuntimeError(f"Authorized scan request failed: {error}") from error
 
     status_marker = detect_status_page(url)
 

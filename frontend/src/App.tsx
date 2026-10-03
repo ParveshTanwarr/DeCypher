@@ -3,6 +3,7 @@ import { Activity, AlertTriangle, BarChart3, GitBranch, LayoutDashboard, LogOut,
 import "./App.css";
 import "./dashboard.css";
 import { getActors, getAllCorrelations, setAuthToken } from "./api/client";
+import type { AdvancedAlert } from "./api/client";
 import ExportMenu from "./components/export/ExportMenu";
 import NotificationBell, { type AppNotification } from "./components/notifications/NotificationBell";
 import LoginPage from "./pages/LoginPage";
@@ -25,6 +26,7 @@ function App() {
   const [loading, setLoading] = useState(() => Boolean(token));
   const [loadError, setLoadError] = useState("");
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
+  const [liveAlert, setLiveAlert] = useState<AdvancedAlert | null>(null);
   const [theme, setTheme] = useState<"dark" | "light">(() => (localStorage.getItem("decypher_theme") as "dark" | "light") || "dark");
 
   useEffect(() => {
@@ -41,7 +43,8 @@ function App() {
     socket.onopen = () => socket.send(token);
     socket.onmessage = (event) => {
       try {
-        const alert = JSON.parse(event.data) as { id: number; title: string; message: string };
+        const alert = JSON.parse(event.data) as AdvancedAlert;
+        if (alert.id) setLiveAlert(alert);
         setNotifications((current) => [
           {
             id: `live-${alert.id}`,
@@ -169,6 +172,7 @@ function App() {
     setLoading(false);
     setToken("");
     setActors([]);
+    setLiveAlert(null);
     setSelectedActor("");
     setPage("dashboard");
   }
@@ -256,7 +260,12 @@ function App() {
       {page === "search" && <SearchPage onSelectActor={openActor} />}
       {page === "actor" && selectedActor && <ActorPage key={selectedActor} actorId={selectedActor} onBack={() => setPage("search")} onGraph={() => setPage("graph")} />}
       {page === "graph" && selectedActor && <GraphPage key={selectedActor} actorId={selectedActor} onBack={() => setPage("actor")} />}
-      {page === "advanced" && <AdvancedIntelligencePage actorId={selectedActor || undefined} />}
+      {page === "advanced" && (
+        <AdvancedIntelligencePage
+          actorId={selectedActor || undefined}
+          liveAlert={liveAlert}
+        />
+      )}
     </div></main>
     <ChatAssistant actorId={selectedActor || undefined} />
   </div>;

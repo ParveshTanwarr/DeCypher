@@ -162,3 +162,87 @@ def test_collection_sources_do_not_expose_stored_headers(client, admin_headers, 
             db.commit()
         finally:
             db.close()
+
+
+
+def test_collection_runs_redact_internal_error_details(client, admin_headers):
+    from app.database.postgres import SessionLocal
+    from app.models.advanced_models import CollectionRun, CollectionSource
+
+    db = SessionLocal()
+    source = None
+    run = None
+    try:
+        source = CollectionSource(
+            name="test-run-redaction-source",
+            kind="json",
+            url="http://localhost/intel",
+            enabled=False,
+            interval_minutes=15,
+            next_run_at=__import__("datetime").datetime.now(__import__("datetime").timezone.utc),
+        )
+        db.add(source)
+        db.flush()
+        run = CollectionRun(
+            source_id=source.id,
+            status="failed",
+            items_seen=0,
+            observations_created=0,
+            entities_created=0,
+            error="GET http://localhost/intel?api_key=SUPER-SECRET failed",
+        )
+        db.add(run)
+        db.commit()
+        run_id = run.id
+        source_id = source.id
+    finally:
+        db.close()
+
+    try:
+        response = client.get("/collection/runs", headers=admin_headers)
+        assert response.status_code == 200, response.text
+        row = next(item for item in response.json() if item["id"] == run_id)
+        assert "error" not in row
+        assert "SUPER-SECRET" not in response.text
+    finally:
+        db = SessionLocal()
+        try:
+            if run is not None:
+                db.query(CollectionRun).filter(CollectionRun.id == run_id).delete()
+            if source_id is not None:
+                db.query(CollectionSource).filter(CollectionSource.id == source_id).delete()
+            db.commit()
+        finally:
+            db.close()
+
+
+def test_actor_identifier_case_is_normalized_across_core_reads(client, admin_headers):
+    correlation = client.get("/correlation/actor/a00001", headers=admin_headers)
+    assert correlation.status_code == 200, correlation.text
+    assert correlation.json()["candidate_actor"] == "A00001"
+
+    timeline = client.get("/analytics/actors/a00001/timeline", headers=admin_headers)
+    assert timeline.status_code == 200, timeline.text
+    assert timeline.json()["actor_id"] == "A00001"
+
+
+def test_timeline_get_does_not_materialize_rows(client, admin_headers):
+    from app.database.postgres import SessionLocal
+    from app.models.sql_models import TemporalEvent
+
+    db = SessionLocal()
+    try:
+        before = db.query(TemporalEvent).count()
+    finally:
+        db.close()
+
+    response = client.get("/analytics/actors/A00001/timeline", headers=admin_headers)
+    assert response.status_code == 200, response.text
+
+    db = SessionLocal()
+    try:
+        after = db.query(TemporalEvent).count()
+    finally:
+        db.close()
+
+    assert after == before

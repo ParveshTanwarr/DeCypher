@@ -2,13 +2,14 @@ from datetime import datetime
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.database.postgres import get_db
 from app.models.sql_models import Actor
 from app.routers.auth import get_current_user
 from app.services.graph_anomaly_service import GraphAnomalyService
-from app.services.temporal_events import get_actor_timeline, materialize_temporal_events
+from app.services.temporal_events import get_actor_timeline
 
 router = APIRouter(
     prefix="/analytics",
@@ -25,11 +26,16 @@ def actor_timeline(
     limit: int = Query(250, ge=1, le=1000),
     db: Session = Depends(get_db),
 ):
-    if not db.query(Actor.actor_id).filter(Actor.actor_id == actor_id).first():
+    actor = (
+        db.query(Actor)
+        .filter(func.lower(Actor.actor_id) == actor_id.lower())
+        .first()
+    )
+    if actor is None:
         raise HTTPException(status_code=404, detail="Actor not found.")
-    materialize_temporal_events(db, actor_id=actor_id)
-    db.commit()
-    return get_actor_timeline(db, actor_id, start=start, end=end, limit=limit)
+    # GET is intentionally read-only. Timeline materialization is handled by
+    # startup/ingestion workflows; the query itself never writes/commits state.
+    return get_actor_timeline(db, actor.actor_id, start=start, end=end, limit=limit)
 
 
 @router.get("/actors/{actor_id}/graph-anomaly")
@@ -37,8 +43,15 @@ def actor_graph_anomaly(
     actor_id: str,
     db: Session = Depends(get_db),
 ):
+    actor = (
+        db.query(Actor)
+        .filter(func.lower(Actor.actor_id) == actor_id.lower())
+        .first()
+    )
+    if actor is None:
+        raise HTTPException(status_code=404, detail="Actor not found.")
     try:
-        return GraphAnomalyService(db).analyze(actor_id)
+        return GraphAnomalyService(db).analyze(actor.actor_id)
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc))
 

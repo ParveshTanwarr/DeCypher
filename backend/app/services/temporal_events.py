@@ -350,41 +350,78 @@ def get_actor_timeline(
     end: datetime | None = None,
     limit: int = 250,
 ) -> dict[str, Any]:
-    query = db.query(TemporalEvent).filter(TemporalEvent.actor_id == actor_id)
-    if start:
-        query = query.filter(TemporalEvent.timestamp >= start)
-    if end:
-        query = query.filter(TemporalEvent.timestamp <= end)
-    events = (
-        query
-        .order_by(TemporalEvent.timestamp.desc(), TemporalEvent.id.desc())
-        .limit(limit)
+    """Return a current timeline without mutating the database or graph."""
+    candidates = _collect_actor_events(db, [actor_id])
+
+    candidate_by_key: dict[str, dict[str, Any]] = {}
+    for candidate in candidates:
+        candidate_by_key.setdefault(candidate["event_key"], candidate)
+
+    persisted = (
+        db.query(TemporalEvent)
+        .filter(TemporalEvent.actor_id == actor_id)
         .all()
     )
+
+    rows_by_key: dict[str, dict[str, Any]] = {}
+    for event in persisted:
+        if start and event.timestamp < start:
+            continue
+        if end and event.timestamp > end:
+            continue
+        rows_by_key[event.event_key] = {
+            "id": event.id,
+            "event_key": event.event_key,
+            "event_type": event.event_type,
+            "entity_type": event.entity_type,
+            "entity_id": event.entity_id,
+            "timestamp": _iso(event.timestamp),
+            "source": event.source,
+            "payload": event.payload,
+        }
+
+    # Include current source-derived events that have not yet been persisted.
+    # This keeps GET current without turning it into a write operation.
+    for candidate in candidate_by_key.values():
+        timestamp = candidate["timestamp"]
+        if start and timestamp < start:
+            continue
+        if end and timestamp > end:
+            continue
+        rows_by_key.setdefault(
+            candidate["event_key"],
+            {
+                "id": None,
+                "event_key": candidate["event_key"],
+                "event_type": candidate["event_type"],
+                "entity_type": candidate["entity_type"],
+                "entity_id": candidate["entity_id"],
+                "timestamp": _iso(timestamp),
+                "source": candidate["source"],
+                "payload": candidate["payload"],
+            },
+        )
+
+    rows = list(rows_by_key.values())
+
+    rows.sort(
+        key=lambda event: (event["timestamp"] or "", event["id"] or 0),
+        reverse=True,
+    )
+    rows = rows[:limit]
+
     grouped: dict[str, int] = defaultdict(int)
-    for event in events:
-        grouped[event.event_type] += 1
+    for event in rows:
+        grouped[event["event_type"]] += 1
 
     return {
         "actor_id": actor_id,
-        "total_events": len(events),
+        "total_events": len(rows),
         "event_types": dict(sorted(grouped.items())),
-        "events": [
-            {
-                "id": event.id,
-                "event_key": event.event_key,
-                "event_type": event.event_type,
-                "entity_type": event.entity_type,
-                "entity_id": event.entity_id,
-                "timestamp": _iso(event.timestamp),
-                "source": event.source,
-                "payload": event.payload,
-            }
-            for event in events
-        ],
+        "events": rows,
         "methodology": (
             "Events are normalized from observed handle lifecycle, wallet, PGP, "
             "trust-link, scanner observation, and scan-target timestamps. "
-            "The timeline is evidence-oriented and does not infer missing events."
+            "The GET timeline performs no materialization, database writes, or graph synchronization."
         ),
     }

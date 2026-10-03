@@ -257,9 +257,10 @@ def run_collection_source_task(self: Task, source_id: int) -> dict[str, Any]:
             raise ValueError(f"Collection source {source_id} does not exist.")
         if not source.enabled:
             return {"source_id": source_id, "status": "disabled"}
+        # CollectionService owns the collection transaction and next-run
+        # scheduling. Do not overwrite its completion timestamp here; doing so
+        # duplicated scheduling logic and introduced small timing drift.
         result = CollectionService(db).run_source(source)
-        source.next_run_at = utc_now() + timedelta(minutes=max(1, int(source.interval_minutes or 15)))
-        db.commit()
         return {"source_id": source_id, **result}
     except Exception as exc:
         db.rollback()
