@@ -57,9 +57,16 @@ class CorrelationService:
         persist: bool = False,
         include_feedback: bool = True,
     ) -> Dict[str, Any]:
-        actor = self.db.query(Actor).filter(Actor.actor_id == actor_id).first()
+        actor = (
+            self.db.query(Actor)
+            .filter(func.lower(Actor.actor_id) == actor_id.lower())
+            .first()
+        )
         if not actor:
             raise ValueError(f"Actor {actor_id} not found")
+        # Continue all downstream queries with the canonical stored identifier
+        # so callers can use any casing consistently across correlation APIs.
+        actor_id = actor.actor_id
 
         signals: List[Dict[str, Any]] = []
         source_reliability = self._source_reliability(actor_id)
