@@ -89,10 +89,6 @@ def _build_population(db: Session) -> dict[str, dict[str, float]]:
 
     observations = db.query(Observation).all()
     scan_targets = db.query(ScanTarget).filter(ScanTarget.actor_id.in_(actors)).all()
-    handles_by_actor: dict[str, list[DarkWebHandle]] = defaultdict(list)
-    for handle in handles:
-        if handle.actor_id:
-            handles_by_actor[str(handle.actor_id)].append(handle)
     scan_targets_by_actor: dict[str, list[ScanTarget]] = defaultdict(list)
     for target in scan_targets:
         if target.actor_id:
