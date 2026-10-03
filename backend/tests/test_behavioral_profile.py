@@ -16,7 +16,9 @@ def test_behavioral_profile_refresh_returns_evidence_backed_dimensions(client, a
         "interaction",
         "infrastructure",
     }
-    assert body["dimensions"]["temporal_lifecycle"]["has_post_timestamps"] is False
+    assert body["dimensions"]["temporal_lifecycle"]["has_post_timestamps"] is True
+    assert body["dimensions"]["temporal_lifecycle"]["post_activity"]["available"] is True
+    assert body["dimensions"]["temporal_lifecycle"]["post_activity"]["timestamped_post_count"] > 0
     assert any("synthetic" in item.lower() for item in body["limitations"])
     assert body["summary"]["linked_handle_count"] >= 1
     assert body["dimensions"]["linguistic"]["aggregation_method"] == "post_weighted"
