@@ -790,6 +790,12 @@ def get_actor_subgraph(actor_id: str, db: Session = Depends(get_db)):
                     label="Observation",
                     name=str(name),
                     category="Observation",
+                    properties={
+                        "indicator_type": observation.get("indicator_type"),
+                        "value": observation.get("value"),
+                        "target": observation.get("target"),
+                        "source": observation.get("source"),
+                    },
                 )
             )
 
