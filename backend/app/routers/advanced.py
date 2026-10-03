@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
+import json
+import uuid
 from datetime import datetime, timezone
 from urllib.parse import urlparse, urlunsplit
 from typing import Any, Optional
@@ -13,7 +16,7 @@ from sqlalchemy.orm import Session
 from app.config import settings
 from app.database.postgres import get_db
 from app.models.advanced_models import Alert, CollectionRun, CollectionSource, ExternalEntity, EntityLink
-from app.models.sql_models import Actor
+from app.models.sql_models import Actor, Observation
 from app.routers.auth import get_current_user, require_role
 from app.services.advanced_intelligence import (
     AlertService,
@@ -26,6 +29,8 @@ from app.services.advanced_intelligence import (
     TorIntelligenceService,
 )
 from app.services.correlation_service import CorrelationService
+from app.services.evidence_ledger import EvidenceLedgerService
+from app.services import graph_service
 from app.services.nlp_service import nlp_service
 from app.services.historical_cases import HistoricalCaseService
 
@@ -296,7 +301,12 @@ def collection_status(db: Session = Depends(get_db)):
     "/tor/inspect",
     dependencies=[Depends(require_role("admin", "investigator"))],
 )
-def inspect_tor(url: str, db: Session = Depends(get_db)):
+def inspect_tor(
+    url: str,
+    actor_id: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
+):
+    actor = _require_actor(db, actor_id) if actor_id else None
     try:
         result = TorIntelligenceService().inspect_onion(url)
     except Exception as exc:
@@ -308,18 +318,81 @@ def inspect_tor(url: str, db: Session = Depends(get_db)):
     )
     result["url"] = safe_target_url
 
+    # Persist the bounded inspection metadata as traceable evidence. When an
+    # actor is supplied, it is explicitly a candidate association selected by
+    # the investigator, not an automatically discovered identity.
+    observation_id = f"torinspect_{uuid.uuid4().hex}"
+    observation = Observation(
+        observation_id=observation_id,
+        indicator_type="tor_service_metadata",
+        detected=True,
+        value=result.get("content_sha256"),
+        target=actor.actor_id if actor else safe_target_url,
+        source="authorized_tor_inspection",
+        timestamp=datetime.now(timezone.utc),
+        confidence=0.65,
+        description=json.dumps({
+            "status_code": result.get("status_code"),
+            "content_type": result.get("content_type"),
+            "content_sha256": result.get("content_sha256"),
+            "content_length": result.get("content_length"),
+            "server": result.get("server"),
+            "title": result.get("title"),
+            "association_status": "investigator_supplied_actor" if actor else "unassigned_observation",
+        }, sort_keys=True),
+    )
+    db.add(observation)
+    db.flush()
+    EvidenceLedgerService(db).append_missing_for_observations(
+        [{
+            "observation_id": observation.observation_id,
+            "indicator_type": observation.indicator_type,
+            "detected": observation.detected,
+            "value": observation.value,
+            "target": observation.target,
+            "source": observation.source,
+            "timestamp": observation.timestamp,
+            "confidence": observation.confidence,
+            "description": observation.description,
+        }],
+        actor_id=actor.actor_id if actor else None,
+        created_by="tor_inspection",
+    )
+    db.commit()
+    result["observation_id"] = observation_id
+
+    if actor:
+        try:
+            graph_service.sync_actor_observations(actor.actor_id, [{
+                "observation_id": observation.observation_id,
+                "indicator_type": observation.indicator_type,
+                "detected": observation.detected,
+                "value": observation.value,
+                "target": observation.target,
+                "source": observation.source,
+                "confidence": observation.confidence,
+                "description": observation.description,
+                "timestamp": observation.timestamp.isoformat(),
+            }])
+        except Exception as exc:
+            print(f"[tor] Neo4j evidence projection warning: {exc}")
+        try:
+            CorrelationService(db).correlate_actor(actor.actor_id, persist=True)
+        except Exception as exc:
+            print(f"[tor] Correlation refresh warning: {exc}")
+
     try:
         AlertService(db).create(
             alert_type="tor_observation",
             severity="medium",
             title="Tor target inspected",
             message=f"Authorized Tor observation completed for {parsed_url.hostname}.",
+            actor_id=actor.actor_id if actor else None,
             payload=result,
         )
         db.commit()
     except Exception as exc:
         db.rollback()
-        # The Tor inspection itself succeeded; alert persistence is additive.
         print(f"[tor] Alert persistence failed: {exc}")
     return result
 
