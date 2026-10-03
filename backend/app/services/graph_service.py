@@ -378,13 +378,23 @@ def sync_temporal_events(events: List[Dict[str, Any]]) -> None:
 
         MERGE (a)-[:HAS_EVENT]->(e)
 
+        // Handle identity is resolved against the canonical graph handle
+        // projection. Never MERGE a Handle from the relational integer PK.
+        OPTIONAL MATCH (h:Handle {
+            handle_id: row.payload.graph_handle_id
+        })
+        OPTIONAL MATCH (h_by_name:Handle {
+            handle: row.payload.handle,
+            platform: row.payload.platform
+        })
         FOREACH (
             ignored IN CASE
-                WHEN row.entity_type = "handle" THEN [1]
+                WHEN row.entity_type = "handle"
+                AND coalesce(h, h_by_name) IS NOT NULL
+                THEN [1]
                 ELSE []
             END |
-            MERGE (h:Handle {handle_id: toString(row.entity_id)})
-            MERGE (e)-[:DESCRIBES]->(h)
+            MERGE (e)-[:DESCRIBES]->(coalesce(h, h_by_name))
         )
 
         FOREACH (
