@@ -61,17 +61,22 @@ def scan_target(url: str) -> list[dict]:
             banner = detect_banner(response)
 
             if banner:
+                is_controlled_marker = bool(response.headers.get("X-DeCypher-Test-Banner"))
                 observations.append({
                     "observation_id": _observation_id(),
-                    "indicator_type": "default_banner",
+                    "indicator_type": "default_banner" if is_controlled_marker else "service_banner",
                     "target": url,
                     "detected": True,
                     "observed_value": banner,
                     "clearnet_match_domain": None,
-                    "confidence": 0.85,
+                    "confidence": 0.85 if is_controlled_marker else 0.55,
                     "scan_date": scan_date,
-                    "source": "authorized-test-service",
-                    "evidence": "Test server banner detected."
+                    "source": "authorized_scan",
+                    "evidence": (
+                        "Controlled DeCypher test banner detected."
+                        if is_controlled_marker
+                        else "Service identification header collected; this is an observation, not a vulnerability verdict."
+                    )
                 })
 
     except requests.RequestException as error:
@@ -93,8 +98,8 @@ def scan_target(url: str) -> list[dict]:
             "clearnet_match_domain": None,
             "confidence": 0.90,
             "scan_date": scan_date,
-            "source": "authorized-test-service",
-            "evidence": "Authorized test status page detected."
+            "source": "authorized_scan",
+            "evidence": f"Authorized status endpoint matched the detector signature: {status_marker}."
         })
 
     if url.startswith("https://"):
@@ -157,7 +162,7 @@ def scan_target(url: str) -> list[dict]:
             "confidence": 0.75,
             "scan_date": scan_date,
             "source": "authorized-test-service",
-            "evidence": "Authorized descriptor timing test signal detected."
+            "evidence": f"Authorized descriptor timing endpoint returned the controlled marker: {timing_marker}."
         })
 
     return observations
