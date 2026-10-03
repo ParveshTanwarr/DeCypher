@@ -18,7 +18,8 @@ class Neo4jConnection:
                         auth=(settings.NEO4J_USER, settings.NEO4J_PASSWORD),
                         max_connection_lifetime=30 * 60,
                         max_connection_pool_size=50,
-                        connection_acquisition_timeout=30.0,
+                        connection_timeout=3.0,
+                        connection_acquisition_timeout=3.0,
                         # Default is 30s, which meant any caller relying on
                         # a fallback (see graph_service.get_actor_subgraph)
                         # would hang for ~30s of retries before the
