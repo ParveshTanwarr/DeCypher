@@ -30,11 +30,13 @@ services:
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in backend/.env}
+      # libpq reads PGPASSWORD automatically for the authenticated healthcheck below.
+      PGPASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in backend/.env}
       POSTGRES_DB: threat_intel
     ports: ["127.0.0.1:5433:5432"]
     volumes: [pgdata:/var/lib/postgresql/data]
     healthcheck:
-      test: ["CMD-SHELL", "PGPASSWORD=$POSTGRES_PASSWORD psql -h postgres -U postgres -d threat_intel -v ON_ERROR_STOP=1 -Atqc 'SELECT 1' | grep -qx 1"]
+      test: ["CMD", "psql", "-h", "postgres", "-U", "postgres", "-d", "threat_intel", "-v", "ON_ERROR_STOP=1", "-Atqc", "SELECT 1"]
       interval: 5s
       timeout: 5s
       retries: 10
