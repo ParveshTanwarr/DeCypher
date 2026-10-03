@@ -415,3 +415,45 @@ def test_actor_disjoint_stylometry_holdout_endpoint_reports_split_and_metrics(cl
     assert 0.0 <= body["metrics"]["precision"] <= 1.0
     assert 0.0 <= body["metrics"]["recall"] <= 1.0
     assert any("training-data isolation" in item for item in body["metrics"]["limitations"])
+
+
+
+def test_tor_inspection_detects_allowlisted_status_page_with_bounded_requests(monkeypatch):
+    from types import SimpleNamespace
+    from app.config import settings
+    import app.services.advanced_intelligence as intelligence
+
+    monkeypatch.setattr(settings, "TOR_ALLOWED_ONION_HOSTS", "authorized-demo.onion")
+    monkeypatch.setattr(settings, "TOR_SOCKS5_PROXY", "socks5h://127.0.0.1:9050")
+
+    class FakeResponse:
+        def __init__(self, body, headers=None):
+            self.status_code = 200
+            self.headers = headers or {"content-type": "text/html", "server": "fixture"}
+            self.encoding = "utf-8"
+            self.body = body
+        def __enter__(self):
+            return self
+        def __exit__(self, *args):
+            return False
+        def iter_content(self, chunk_size=8192):
+            yield self.body.encode("utf-8")
+
+    responses = [
+        FakeResponse("<html><title>Authorized fixture</title></html>"),
+        FakeResponse("Apache Server Status. Server uptime: 2 hours. Total accesses: 42. Scoreboard: _W"),
+    ]
+    calls = []
+    def fake_get(url, **kwargs):
+        calls.append((url, kwargs))
+        return responses.pop(0)
+
+    monkeypatch.setattr(intelligence.requests, "get", fake_get)
+    result = intelligence.TorIntelligenceService().inspect_onion(
+        "http://authorized-demo.onion/"
+    )
+    assert result["exposed_status_page"] is True
+    assert result["status_page_signature"] == "apache_mod_status_signature"
+    assert len(calls) == 2
+    assert all(call[1]["allow_redirects"] is False for call in calls)
+    assert all(call[1]["proxies"]["http"] == "socks5h://127.0.0.1:9050" for call in calls)
