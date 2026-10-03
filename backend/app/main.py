@@ -119,10 +119,18 @@ def _ensure_compatibility_schema() -> None:
         connection.exec_driver_sql(
             "DROP INDEX IF EXISTS uq_handle_platform"
         )
+        # The loader uses PostgreSQL ON CONFLICT(source_handle_id), which
+        # requires an ordinary unique constraint/index matching that target.
+        # A partial unique index does not satisfy that conflict target.
+        # Existing pre-canonical databases may still have the earlier partial
+        # index, so replace it with a full unique index after NULLs have been
+        # repaired above.
+        connection.exec_driver_sql(
+            "DROP INDEX IF EXISTS uq_darkweb_handles_source_handle_id"
+        )
         connection.exec_driver_sql(
             "CREATE UNIQUE INDEX IF NOT EXISTS uq_darkweb_handles_source_handle_id "
-            "ON darkweb_handles (source_handle_id) "
-            "WHERE source_handle_id IS NOT NULL"
+            "ON darkweb_handles (source_handle_id)"
         )
 
 
