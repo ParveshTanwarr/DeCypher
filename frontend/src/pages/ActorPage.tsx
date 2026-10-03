@@ -394,6 +394,8 @@ export default function ActorPage({
 
     setLoadError("");
     setCorrelation(null);
+    setHistoricalCases([]);
+    setHistoricalCaseLoading(true);
     setCorrelationLoading(true);
 
     getActor(actorId)
@@ -760,6 +762,25 @@ export default function ActorPage({
                     </div>
                   </div>
                 ))}
+
+                <div style={{ marginTop: "14px", display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: "8px" }}>
+                  <div style={{ padding: "9px", borderRadius: "7px", background: "rgba(255,255,255,0.025)" }}>
+                    <div className="eyebrow">POSITIVE CONTROLS</div>
+                    <strong>{caseContext.validation_summary.positive_control_pairs}</strong>
+                  </div>
+                  <div style={{ padding: "9px", borderRadius: "7px", background: "rgba(255,255,255,0.025)" }}>
+                    <div className="eyebrow">NEGATIVE CONTROLS</div>
+                    <strong>{caseContext.validation_summary.negative_control_pairs}</strong>
+                  </div>
+                  <div style={{ padding: "9px", borderRadius: "7px", background: "rgba(255,255,255,0.025)" }}>
+                    <div className="eyebrow">STYLOMETRY</div>
+                    <strong style={{ fontSize: "11px" }}>{caseContext.validation_summary.stylometry_status}</strong>
+                  </div>
+                </div>
+
+                <div style={{ marginTop: "12px", fontSize: "11px", opacity: 0.58 }}>
+                  Validation scope: {caseContext.validation_summary.modules.join(" · ")}.
+                </div>
 
                 {caseContext.provenance.length > 0 && (
                   <div style={{ marginTop: "14px" }}>
