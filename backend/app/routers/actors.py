@@ -357,6 +357,9 @@ def get_actor_subgraph(actor_id: str, db: Session = Depends(get_db)):
     )
     related_handle_ids = set(actor_handle_ids)
     for link in actor_trust_links:
+        # Include both sides of inbound and outbound trust relationships.
+        # This keeps every projected trust endpoint on its canonical stable ID.
+        related_handle_ids.add(link.source_handle_id)
         related_handle_ids.add(link.target_handle_id)
 
     graph_identity_handles = (

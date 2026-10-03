@@ -26,7 +26,7 @@ class ChatRequest(BaseModel):
 def _actor_context(actor_id: Optional[str], db: Session) -> Dict[str, Any]:
     if not actor_id:
         return {"scope": "global", "note": "No actor is currently selected. Answer only from the platform context provided."}
-    actor = db.query(Actor).filter(Actor.actor_id.ilike(actor_id)).first()
+    actor = db.query(Actor).filter(func.lower(Actor.actor_id) == actor_id.lower()).first()
     if not actor:
         raise HTTPException(status_code=404, detail=f"Actor '{actor_id}' not found")
     handles = db.query(DarkWebHandle).filter(DarkWebHandle.actor_id == actor.actor_id).all()

@@ -1,7 +1,7 @@
 param(
     [string]$BaseUrl = "http://127.0.0.1:8000",
-    [string]$Username = "analyst",
-    [string]$Password = "analystpassword",
+    [string]$Username = $env:DECYPHER_SMOKE_USERNAME,
+    [string]$Password = $env:DECYPHER_SMOKE_PASSWORD,
     [string]$ActorId = "A00001"
 )
 
@@ -23,6 +23,9 @@ function Get-HttpStatus($method, $uri, $headers) {
 
 Write-Host "DeCypher runtime smoke test"
 Write-Host "Base URL: $BaseUrl"
+if ([string]::IsNullOrWhiteSpace($Username) -or [string]::IsNullOrWhiteSpace($Password)) {
+    Fail "Set DECYPHER_SMOKE_USERNAME and DECYPHER_SMOKE_PASSWORD before running this smoke test."
+}
 Write-Host ""
 
 $health = Invoke-RestMethod -Method Get -Uri "$BaseUrl/health"

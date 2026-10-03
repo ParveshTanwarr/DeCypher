@@ -62,7 +62,7 @@ cd frontend
 npm run dev
 ```
 
-Open `http://localhost:5173` and sign in with the development credentials documented in the root README.
+Open `http://localhost:5173` and sign in with the username/password values configured in the backend `.env` file. Credentials are intentionally not pre-filled in the browser.
 
 ## Project structure
 

@@ -3,7 +3,7 @@ from typing import Optional
 from sqlalchemy.orm import Session
 
 from app.database.postgres import get_db
-from app.routers.auth import get_current_user
+from app.routers.auth import get_current_user, require_role
 from app.services.correlation_service import CorrelationService
 
 router = APIRouter(
@@ -22,7 +22,7 @@ def correlate_actor(
 ):
     service = CorrelationService(db)
     try:
-        return service.correlate_actor(actor_id, handle_a=handle_a, handle_b=handle_b)
+        return service.correlate_actor(actor_id, handle_a=handle_a, handle_b=handle_b, persist=False)
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc))
 
@@ -56,7 +56,37 @@ def correlate_actor_counterfactual(
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc))
 
+
+
+@router.post("/actor/{actor_id}/refresh")
+def refresh_actor_correlation(
+    actor_id: str,
+    handle_a: Optional[str] = Query(default=None),
+    handle_b: Optional[str] = Query(default=None),
+    db: Session = Depends(get_db),
+    _current_user = Depends(require_role("admin", "investigator")),
+):
+    service = CorrelationService(db)
+    try:
+        return service.correlate_actor(
+            actor_id,
+            handle_a=handle_a,
+            handle_b=handle_b,
+            persist=True,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+
+
+@router.post("/actors/refresh")
+def refresh_all_correlations(
+    db: Session = Depends(get_db),
+    _current_user = Depends(require_role("admin", "investigator")),
+):
+    return {"results": CorrelationService(db).correlate_all(persist=True)}
+
+
 @router.get("/actors")
 def correlate_all_actors(db: Session = Depends(get_db)):
     service = CorrelationService(db)
-    return {"results": service.correlate_all()}
+    return {"results": service.correlate_all(persist=False)}

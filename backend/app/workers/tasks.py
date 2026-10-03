@@ -76,12 +76,21 @@ def run_authorized_scan(target_url: str, actor_id: str | None) -> list[dict[str,
         })
     return mapped
 
-def _persist_observations(db, observations: list[dict[str, Any]]) -> int:
+def _persist_observations(db, observations: list[dict[str, Any]]) -> tuple[int, list[dict[str, Any]]]:
     if not observations:
-        return 0
-    stmt = insert(Observation).values(observations).on_conflict_do_nothing(index_elements=["observation_id"])
-    result = db.execute(stmt)
-    return int(result.rowcount or 0)
+        return 0, []
+    stmt = insert(Observation).values(observations).on_conflict_do_nothing(
+        index_elements=["observation_id"]
+    )
+    inserted_ids = set(
+        db.execute(stmt.returning(Observation.observation_id)).scalars().all()
+    )
+    inserted_observations = [
+        observation
+        for observation in observations
+        if observation.get("observation_id") in inserted_ids
+    ]
+    return len(inserted_observations), inserted_observations
 
 @celery_app.task(bind=True, name="decypher.run_authorized_scan")
 def run_authorized_scan_task(self: Task, job_id: int) -> dict[str, Any]:
@@ -110,27 +119,27 @@ def run_authorized_scan_task(self: Task, job_id: int) -> dict[str, Any]:
         db.commit()
 
         observations = run_authorized_scan(target.target_url, target.actor_id)
-        inserted = _persist_observations(db, observations)
+        inserted, inserted_observations = _persist_observations(db, observations)
 
         # Keep the evidence row and its tamper-evident ledger record in the
         # same PostgreSQL transaction. A later failure rolls both back.
         from app.services.evidence_ledger import EvidenceLedgerService
         EvidenceLedgerService(db).append_missing_for_observations(
-            observations,
+            inserted_observations,
             actor_id=target.actor_id,
             created_by="autoscan_worker",
         )
 
         if target.actor_id:
             try:
-                graph_service.sync_actor_observations(target.actor_id, observations)
+                graph_service.sync_actor_observations(target.actor_id, inserted_observations)
             except Exception as exc:
                 print(f"[autoscan] Neo4j sync warning: {exc}")
 
         priority_score = None
         correlation_score = None
         if target.actor_id:
-            correlation = CorrelationService(db).correlate_actor(target.actor_id)
+            correlation = CorrelationService(db).correlate_actor(target.actor_id, persist=True)
             correlation_score = correlation.get("overall_confidence")
             priority_score = (correlation.get("priority") or {}).get("score")
 

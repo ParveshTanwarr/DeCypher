@@ -54,7 +54,7 @@ class CorrelationService:
         stylometry_score: Optional[float] = None,
         handle_a: Optional[str] = None,
         handle_b: Optional[str] = None,
-        persist: bool = True,
+        persist: bool = False,
         include_feedback: bool = True,
     ) -> Dict[str, Any]:
         actor = self.db.query(Actor).filter(Actor.actor_id == actor_id).first()
@@ -232,7 +232,7 @@ class CorrelationService:
             "weights": {k: round(v, 2) for k, v in PRIORITY_WEIGHTS.items()},
         }
 
-    def correlate_all(self, stylometry_score: Optional[float] = None) -> List[Dict[str, Any]]:
+    def correlate_all(self, stylometry_score: Optional[float] = None, persist: bool = False) -> List[Dict[str, Any]]:
         actors = self.db.query(Actor).all()
         results = []
         for actor in actors:
@@ -241,12 +241,12 @@ class CorrelationService:
                 stylometry_score=stylometry_score,
                 persist=False,
             )
-            # persist=False is a pure calculation mode; update the actor here
-            # explicitly so bulk correlation performs one transaction.
-            actor.confidence_score = result["overall_confidence"]
-            actor.priority_score = result["priority"]["score"]
+            if persist:
+                actor.confidence_score = result["overall_confidence"]
+                actor.priority_score = result["priority"]["score"]
             results.append(result)
-        self.db.commit()
+        if persist:
+            self.db.commit()
         results.sort(
             key=lambda item: (item["priority"]["score"], item["overall_confidence"]),
             reverse=True,

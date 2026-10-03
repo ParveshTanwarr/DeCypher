@@ -225,7 +225,7 @@ pip install -r requirements.txt
 cp .env.example .env
 ```
 
-Set a unique `SECRET_KEY` before starting the API. The Dockerized Celery worker/beat services also read this `.env`. The example disables autonomous scanning by default and excludes startup-only synthetic filler evidence from correlation by default.
+Set a unique `SECRET_KEY` and unique application credentials before starting the API. The Dockerized Celery worker/beat services also read this `.env`. The example disables autonomous scanning by default and excludes startup-only synthetic filler evidence from correlation by default.
 
 For the optional Copilot:
 
@@ -343,10 +343,15 @@ GET /search?q=<actor|handle|wallet|PGP>
 
 ### Correlation
 ```text
-GET /correlation/actor/{actor_id}
-GET /correlation/actor/{actor_id}/counterfactual
-GET /correlation/actors
+GET  /correlation/actor/{actor_id}
+GET  /correlation/actor/{actor_id}/counterfactual
+GET  /correlation/actors
+
+POST /correlation/actor/{actor_id}/refresh
+POST /correlation/actors/refresh
 ```
+
+GET correlation endpoints are side-effect free. Use the POST refresh endpoints when an investigator/admin explicitly wants the derived confidence and priority values persisted to the actor record.
 
 Optional actor correlation parameters:
 
@@ -590,36 +595,37 @@ npm run lint
 
 ---
 
-## Repository audit — 30 September 2026
+## Repository audit — 3 October 2026
 
-A repository-wide review was completed for the submission build. The core non-AI/NLP issues identified in the previous audit have been remediated.
+A second repository-wide hardening pass was completed after the earlier integration audit. The latest pass focused on data consistency, graph identity, authorization boundaries, side-effect-free reads, export/resource limits, search semantics, and removal of shipped runtime credentials.
 
-### Resolved in the submission build
+### Resolved in the current main build
 
-- Scanner evidence resolution is shared across actor detail, evidence, graph, correlation and export paths.
-- Correlation observation queries are scoped to actor evidence; wallet reuse lookups are batched; full correlation commits once after processing.
-- Bulk exports fetch only observations relevant to the exported actors.
-- Native Neo4j graph map construction was cleaned up and graph synchronization uses stable handle IDs.
-- PostgreSQL graph fallback remains available when Neo4j is unavailable.
-- Backend/frontend graph contracts now use explicit node `type` and edge `relation` fields.
-- Credentialed CORS is restricted to the configured frontend-origin allowlist and exposes `Content-Disposition` for browser downloads.
-- Duplicate configuration templates were removed; `backend/.env.example` is canonical.
-- Frontend export controls now use non-submit buttons, prevent duplicate export actions, close cleanly on outside click/Escape, and keep browser object URLs alive through the download hand-off.
-- Dashboard priority queue now renders all indexed actors in priority order inside an isolated scroll region; the surrounding dashboard remains fixed.
-- Dashboard notifications now surface the synchronized actor feed, priority updates and the top-ranked actors as active unread items.
-- On backend startup, every actor is guaranteed a four-signal synthetic investigation evidence trail for the controlled demo; existing evidence is preserved and missing signals are added idempotently. These filler observations are excluded from correlation by default so they cannot silently inflate attribution scores.
+- Inbound and outbound trust-link graph projection now includes both endpoints and preserves canonical `source_handle_id` identities.
+- PostgreSQL graph fallback and Neo4j synchronization use the same stable handle identity scheme.
+- Failed Neo4j synchronization no longer causes stale Neo4j data to be returned for the current request.
+- Temporal, anomaly, correlation, AI context and export observation resolution share the same actor/handle/scan-target key semantics.
+- Investigator feedback is role-restricted and its latest verdict replaces the previous human adjustment instead of compounding repeatedly.
+- Scanner read endpoints are investigator/admin-only; scanner writes remain restricted to admin/service roles.
+- Scanner observation ledger entries are created only for rows actually inserted by PostgreSQL `ON CONFLICT DO NOTHING` operations.
+- Correlation GET endpoints are now side-effect free. Persisted score refresh is available through explicit POST refresh endpoints.
+- Behavioural-profile refresh is restricted to investigator/admin roles.
+- Actor graph PDF exports validate base64 input and enforce a decoded-size limit.
+- Search and scanner filters escape SQL `LIKE` wildcards so literal `%`, `_` and backslashes do not broaden matches.
+- Database, Neo4j, application and scanner-service passwords are no longer shipped as source-code defaults; runtime credentials come from environment configuration.
+- Frontend login no longer pre-fills a repository-shipped demo password.
+- Regression tests cover inbound graph identity, wildcard handling, scanner authorization, behavioural refresh authorization, duplicate ledger IDs, AI actor lookup, correlation refresh semantics and graph export size limits.
 
-### AI/NLP boundary for the submission build
+### AI/NLP boundary
 
-The stylometry/NLP implementation has not been modified. The bundled authorship artifacts, fallback heuristic, feature extraction and model/runtime compatibility behavior remain unchanged.
+The bundled stylometry implementation and model artifacts remain unchanged. Gemini remains optional and is called only by the backend. Actor context is resolved from authoritative PostgreSQL evidence and scan-target metadata before it is sent to the configured Gemini model.
 
-The Gemini Copilot received only a targeted context fix: actor scan-target context now uses the actual `ScanTarget.target_url` field, actor observations are resolved through the same evidence-target helper as the rest of the backend, and request failures are surfaced as a clean API error instead of an unhandled exception.
+### Deployment boundary
 
-### Deployment-only notes
-
-- Development credentials and local database/Neo4j defaults remain intentionally available for the hackathon/demo environment. They must not be reused for production deployment.
-- The synthetic dataset, controlled scanner, Neo4j fallback and optional Redis/Celery autoscan path are deliberate prototype/demo choices rather than core correctness failures.
-- Exact dependency pinning for persisted ML artifacts remains a reproducibility concern for a future deployment-focused pass.
+- The bundled dataset remains synthetic.
+- Autonomous scanning remains opt-in and allowlisted.
+- Correlation, behavioural profiling, and graph anomaly outputs remain investigator-facing analytical signals rather than identity proof.
+- The evidence-integrity layer remains an internal PostgreSQL SHA-256 hash chain; no external blockchain anchor is configured.
 
 ## Security and ethical boundary
 

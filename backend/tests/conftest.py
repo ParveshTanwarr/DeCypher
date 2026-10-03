@@ -13,6 +13,9 @@ import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 os.environ.setdefault("SECRET_KEY", "decypher-test-only-secret-do-not-use-in-production")
+os.environ.setdefault("ADMIN_PASSWORD", "adminpassword")
+os.environ.setdefault("ANALYST_PASSWORD", "analystpassword")
+os.environ.setdefault("SCANNER_SERVICE_PASSWORD", "scanner_service_devkey_change_me")
 
 import pytest
 from fastapi.testclient import TestClient

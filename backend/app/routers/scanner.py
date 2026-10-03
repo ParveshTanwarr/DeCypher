@@ -67,6 +67,7 @@ class ScanJobResponse(BaseModel):
     "/observations",
     response_model=List[ObservationResponse],
     status_code=status.HTTP_200_OK,
+    dependencies=[Depends(require_role("admin", "investigator"))],
 )
 def get_observations(
     limit: int = Query(50, ge=1, le=500),
@@ -77,9 +78,13 @@ def get_observations(
 ):
     query = db.query(Observation)
     if target:
-        query = query.filter(Observation.target.ilike(f"%{target}%"))
+        escaped_target = target.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        query = query.filter(
+            Observation.target.ilike(f"%{escaped_target}%", escape="\\")
+        )
     if indicator_type:
-        query = query.filter(Observation.indicator_type.ilike(f"%{indicator_type}%"))
+        escaped_indicator = indicator_type.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        query = query.filter(Observation.indicator_type.ilike(f"%{escaped_indicator}%", escape="\\"))
     return query.order_by(Observation.timestamp.desc()).offset(offset).limit(limit).all()
 
 
@@ -117,12 +122,21 @@ def ingest_observations(
 
     stmt = insert(Observation).values(list(deduped.values()))
     stmt = stmt.on_conflict_do_nothing(index_elements=["observation_id"])
-    result = db.execute(stmt)
+    inserted_ids = set(db.execute(
+        stmt.returning(Observation.observation_id)
+    ).scalars().all())
+    inserted_observations = [
+        deduped[observation_id]
+        for observation_id in deduped
+        if observation_id in inserted_ids
+    ]
 
-    # Keep observation storage and its integrity record in one transaction.
+    # Keep only rows actually inserted in this transaction in the evidence
+    # ledger. An ON CONFLICT no-op must never create a ledger record with a
+    # different payload from the already-stored observation.
     from app.services.evidence_ledger import EvidenceLedgerService
     EvidenceLedgerService(db).append_missing_for_observations(
-        deduped.values(),
+        inserted_observations,
         actor_id=payload.actor_id,
         created_by="scanner_api",
     )
@@ -132,7 +146,7 @@ def ingest_observations(
         from app.services import graph_service
 
         try:
-            graph_service.sync_actor_observations(payload.actor_id, list(deduped.values()))
+            graph_service.sync_actor_observations(payload.actor_id, inserted_observations)
         except Exception as exc:
             raise HTTPException(
                 status_code=503,
@@ -140,8 +154,8 @@ def ingest_observations(
             )
 
     return BatchIngestionResponse(
-        inserted_count=int(result.rowcount or 0),
-        message=f"Successfully ingested {int(result.rowcount or 0)} new scanner observation(s).",
+        inserted_count=len(inserted_observations),
+        message=f"Successfully ingested {len(inserted_observations)} new scanner observation(s).",
     )
 
 
@@ -187,6 +201,7 @@ def create_scan_target(payload: ScanTargetCreate, db: Session = Depends(get_db))
 @router.get(
     "/targets",
     response_model=List[ScanTargetResponse],
+    dependencies=[Depends(require_role("admin", "investigator"))],
 )
 def list_scan_targets(db: Session = Depends(get_db)):
     return db.query(ScanTarget).order_by(ScanTarget.id.asc()).all()
@@ -242,6 +257,7 @@ def queue_scan_target(target_id: int, db: Session = Depends(get_db)):
 @router.get(
     "/jobs",
     response_model=List[ScanJobResponse],
+    dependencies=[Depends(require_role("admin", "investigator"))],
 )
 def list_scan_jobs(
     limit: int = Query(50, ge=1, le=200),
@@ -253,6 +269,7 @@ def list_scan_jobs(
 @router.get(
     "/jobs/{job_id}",
     response_model=ScanJobResponse,
+    dependencies=[Depends(require_role("admin", "investigator"))],
 )
 def get_scan_job(job_id: int, db: Session = Depends(get_db)):
     job = db.query(ScanJob).filter(ScanJob.id == job_id).first()

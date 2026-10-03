@@ -6,10 +6,10 @@ x-backend-common: &backend-common
     - path: .env
       required: false
   environment:
-    DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-postgrespassword}@postgres:5432/threat_intel
+    DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in backend/.env}@postgres:5432/threat_intel
     NEO4J_URI: bolt://neo4j:7687
     NEO4J_USER: neo4j
-    NEO4J_PASSWORD: ${NEO4J_PASSWORD:-threatpassword}
+    NEO4J_PASSWORD: ${NEO4J_PASSWORD:?Set NEO4J_PASSWORD in backend/.env}
     REDIS_URL: redis://redis:6379/0
     CELERY_RESULT_BACKEND: redis://redis:6379/1
   depends_on:
@@ -27,7 +27,7 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgrespassword}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in backend/.env}
       POSTGRES_DB: threat_intel
     ports: ["5432:5432"]
     volumes: [pgdata:/var/lib/postgresql/data]
@@ -42,14 +42,14 @@ services:
     container_name: threat_neo4j
     restart: unless-stopped
     environment:
-      NEO4J_AUTH: neo4j/${NEO4J_PASSWORD:-threatpassword}
+      NEO4J_AUTH: neo4j/${NEO4J_PASSWORD:?Set NEO4J_PASSWORD in backend/.env}
       NEO4J_PLUGINS: '["graph-data-science", "apoc"]'
       NEO4J_dbms_security_procedures_unrestricted: "apoc.*,gds.*"
       NEO4J_dbms_security_procedures_allowlist: "apoc.*,gds.*"
     ports: ["7474:7474", "7687:7687"]
     volumes: [neo4jdata:/data]
     healthcheck:
-      test: ["CMD", "cypher-shell", "-u", "neo4j", "-p", "${NEO4J_PASSWORD:-threatpassword}", "RETURN 1"]
+      test: ["CMD", "cypher-shell", "-u", "neo4j", "-p", "${NEO4J_PASSWORD:?Set NEO4J_PASSWORD in backend/.env}", "RETURN 1"]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -117,7 +117,7 @@ services:
     ports: ["3000:3000"]
     environment:
       GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
-      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin-change-me}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?Set GRAFANA_ADMIN_PASSWORD in backend/.env}
     volumes:
       - grafanadata:/var/lib/grafana
       - ../infra/monitoring/grafana/provisioning:/etc/grafana/provisioning:ro

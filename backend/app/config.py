@@ -1,13 +1,16 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
-    DATABASE_URL: str = "postgresql://postgres:postgrespassword@localhost:5432/threat_intel"
+    DATABASE_URL: str = ""
     NEO4J_URI: str = "bolt://localhost:7687"
     NEO4J_USER: str = "neo4j"
-    NEO4J_PASSWORD: str = "threatpassword"
+    NEO4J_PASSWORD: str = ""
     SECRET_KEY: str = ""
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 120
+    ADMIN_PASSWORD: str = ""
+    ANALYST_PASSWORD: str = ""
+    SCANNER_SERVICE_PASSWORD: str = ""
     REDIS_URL: str = "redis://localhost:6379/0"
     CELERY_RESULT_BACKEND: str = "redis://localhost:6379/1"
     AUTOSCAN_ENABLED: bool = False
@@ -21,5 +24,6 @@ class Settings(BaseSettings):
     SCANNER_MAX_RESPONSE_BYTES: int = 1_000_000
     # Synthetic filler evidence is excluded from correlation by default. Set true only for a controlled demo.
     CORRELATION_EXCLUDE_SYNTHETIC_DEMO_EVIDENCE: bool = True
+    EXPORT_MAX_GRAPH_IMAGE_BYTES: int = 5_000_000
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 settings = Settings()
