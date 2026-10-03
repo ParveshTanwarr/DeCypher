@@ -382,34 +382,33 @@ def sync_temporal_events(events: List[Dict[str, Any]]) -> None:
         // section after MERGE/SET in Neo4j's query grammar.
         WITH e, row
 
-        // Handle identity is resolved against the canonical graph handle
-        // projection. Never MERGE a Handle from the relational integer PK.
-        OPTIONAL MATCH (h:Handle {
-            handle_id: row.payload.graph_handle_id
-        })
+        // Handle identity is resolved by the canonical source ID carried
+        // in the event payload. If a full graph rebuild has not projected the
+        // handle yet, create the canonical node here rather than silently
+        // dropping the temporal relationship.
+        FOREACH (
+            ignored IN CASE
+                WHEN row.entity_type = "handle"
+                AND row.payload.graph_handle_id IS NOT NULL
+                THEN [1]
+                ELSE []
+            END |
+            MERGE (h:Handle {handle_id: row.payload.graph_handle_id})
+            SET h.handle = coalesce(row.payload.handle, h.handle),
+                h.platform = coalesce(row.payload.platform, h.platform)
+            MERGE (e)-[:DESCRIBES]->(h)
+        )
+
+        // Legacy events without a canonical source ID can still be attached
+        // by their visible handle/platform pair, but only as a fallback.
         OPTIONAL MATCH (h_by_name:Handle {
             handle: row.payload.handle,
             platform: row.payload.platform
         })
-        // Prefer the stable source handle ID. Only fall back to the
-        // human-readable handle/platform pair when the stable ID is absent.
-        // Neo4j relationships require a concrete node expression; using
-        // coalesce(...) directly as the relationship endpoint is invalid
-        // Cypher, so the two cases are handled independently.
         FOREACH (
             ignored IN CASE
                 WHEN row.entity_type = "handle"
-                AND h IS NOT NULL
-                THEN [1]
-                ELSE []
-            END |
-            MERGE (e)-[:DESCRIBES]->(h)
-        )
-
-        FOREACH (
-            ignored IN CASE
-                WHEN row.entity_type = "handle"
-                AND h IS NULL
+                AND row.payload.graph_handle_id IS NULL
                 AND h_by_name IS NOT NULL
                 THEN [1]
                 ELSE []
