@@ -9,7 +9,7 @@ from app.database.postgres import get_db
 from app.models.sql_models import Actor, InvestigatorFeedback
 from app.services.correlation_service import CorrelationService
 from app.models.schemas import FeedbackRequest, FeedbackResponse
-from app.routers.auth import get_current_user, TokenData
+from app.routers.auth import get_current_user, require_role, TokenData
 
 # Matches the originally agreed API contract (POST /investigator/feedback) --
 # this router used to be mounted at plain "/feedback" instead.
@@ -50,30 +50,24 @@ def get_feedback(
     return records
 
 
-@router.post("", response_model=FeedbackResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "",
+    response_model=FeedbackResponse,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_role("admin", "investigator"))],
+)
 def submit_feedback(
     data: FeedbackRequest,
     db: Session = Depends(get_db),
     current_user: TokenData = Depends(get_current_user),
 ):
-    # Verify actor existence first to avoid raw database IntegrityError crashes
+    # Verify actor existence first to avoid raw database IntegrityError crashes.
     actor = db.query(Actor).filter(func.lower(Actor.actor_id) == data.actor_id.lower()).first()
     if not actor:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Cannot submit feedback: Actor '{data.actor_id}' does not exist.",
         )
-
-    # investigator_id comes from the verified token, not the request body --
-    # previously it was a free-text field the caller supplied directly, so
-    # anyone with valid credentials could submit feedback "as" any
-    # investigator name they typed in, with no link to who was actually
-    # logged in.
-    # Preserve the persisted confidence before recalculation so the
-    # investigator verdict remains an adjustment to the actor's current
-    # triage state rather than being lost when evidence is recomputed.
-    previous_confidence = actor.confidence_score if actor.confidence_score is not None else 0.85
-    previous_priority = actor.priority_score if actor.priority_score is not None else 70
 
     feedback_record = InvestigatorFeedback(
         actor_id=actor.actor_id,
@@ -82,26 +76,44 @@ def submit_feedback(
         notes=data.notes,
     )
     db.add(feedback_record)
-    db.commit()
-    db.refresh(feedback_record)
+    db.flush()
 
-    # Recompute through the same correlation path used by the dashboard.
-    # The latest verdict is kept as a separate human-input triage adjustment.
+    # Rebuild the evidence-only baseline before applying the latest human
+    # verdict. This prevents repeated submissions from compounding the same
+    # +0.05/+5 adjustment and ensures a changed verdict replaces the previous
+    # human adjustment rather than leaving stale effects behind.
     correlation_service = CorrelationService(db)
-    correlation_result = correlation_service.correlate_actor(actor.actor_id, persist=True)
-
-    # Correlation recomputation can legitimately produce a different
-    # evidence-only score. Human feedback is intentionally applied on top
-    # of the persisted pre-feedback confidence so a confirmed verdict
-    # cannot be erased by that recalculation.
+    correlation_result = correlation_service.correlate_actor(
+        actor.actor_id,
+        persist=False,
+        include_feedback=False,
+    )
     confidence_adjustment = correlation_service._feedback_confidence_adjustment(actor.actor_id)
     actor.confidence_score = round(
-        max(0.0, min(1.0, previous_confidence + confidence_adjustment["confidence_delta"])),
+        max(
+            0.0,
+            min(
+                1.0,
+                correlation_result["overall_confidence"]
+                + confidence_adjustment["confidence_delta"],
+            ),
+        ),
         4,
     )
-    feedback_priority_delta = correlation_result["priority"]["investigator_feedback"]["priority_delta"]
-    actor.priority_score = int(max(0, min(100, previous_priority + feedback_priority_delta)))
+
+    feedback_priority_delta = correlation_service._feedback_adjustment(actor.actor_id)["priority_delta"]
+    actor.priority_score = int(
+        max(
+            0,
+            min(
+                100,
+                correlation_result["priority"]["base_score"]
+                + feedback_priority_delta,
+            ),
+        )
+    )
     db.commit()
+    db.refresh(feedback_record)
 
     return FeedbackResponse(
         status="success",

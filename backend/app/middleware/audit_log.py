@@ -45,14 +45,18 @@ class AuditLogMiddleware(BaseHTTPMiddleware):
 
         path = request.url.path
 
-        # 2. Asynchronously write audit log without stalling the event loop
+        # 2. Schedule audit persistence outside the request path. The DB
+        # write still runs in a worker thread, but the request no longer waits
+        # for the audit transaction to finish.
         if not path.startswith(IGNORED_PATHS):
-            await asyncio.to_thread(
-                _write_audit_log,
-                username=username,
-                method=request.method,
-                endpoint=path,
-                query_params=str(request.query_params),
+            asyncio.create_task(
+                asyncio.to_thread(
+                    _write_audit_log,
+                    username=username,
+                    method=request.method,
+                    endpoint=path,
+                    query_params=str(request.query_params),
+                )
             )
 
         response = await call_next(request)

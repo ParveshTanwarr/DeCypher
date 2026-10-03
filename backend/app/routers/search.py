@@ -2,6 +2,7 @@ from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 
 from app.database.postgres import get_db
 from app.models.sql_models import Actor, DarkWebHandle, Wallet, PGPKey, handle_pgp_keys
@@ -32,6 +33,37 @@ def global_search(
     search_pattern = f"%{q}%"
     results: List[SearchResultItem] = []
     seen_actor_ids = set()
+
+    # Count unique matching actors independently of the page limit. The API
+    # field is total_matches, so it must not simply mirror returned rows.
+    actor_ids = db.query(Actor.actor_id).filter(
+        (Actor.actor_id.ilike(search_pattern))
+        | (Actor.primary_handle.ilike(search_pattern))
+    )
+    handle_actor_ids = db.query(DarkWebHandle.actor_id).filter(
+        DarkWebHandle.handle.ilike(search_pattern)
+    )
+    wallet_actor_ids = db.query(Wallet.actor_id).filter(
+        Wallet.address.ilike(search_pattern)
+    )
+    pgp_actor_ids = (
+        db.query(DarkWebHandle.actor_id)
+        .join(handle_pgp_keys, DarkWebHandle.id == handle_pgp_keys.c.handle_id)
+        .join(PGPKey, PGPKey.id == handle_pgp_keys.c.pgp_key_id)
+        .filter(PGPKey.fingerprint.ilike(search_pattern))
+    )
+    total_matches = int(
+        db.query(func.count())
+        .select_from(
+            actor_ids.union(
+                handle_actor_ids,
+                wallet_actor_ids,
+                pgp_actor_ids,
+            ).subquery()
+        )
+        .scalar()
+        or 0
+    )
 
     # 1. Search matching Actor IDs or Primary Handles
     direct_actors = (
@@ -122,4 +154,4 @@ def global_search(
                     )
                 )
 
-    return SearchResponse(query=q, total_matches=len(results), results=results)
+    return SearchResponse(query=q, total_matches=total_matches, results=results)

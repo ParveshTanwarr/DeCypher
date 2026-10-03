@@ -55,6 +55,7 @@ class CorrelationService:
         handle_a: Optional[str] = None,
         handle_b: Optional[str] = None,
         persist: bool = True,
+        include_feedback: bool = True,
     ) -> Dict[str, Any]:
         actor = self.db.query(Actor).filter(Actor.actor_id == actor_id).first()
         if not actor:
@@ -149,10 +150,14 @@ class CorrelationService:
 
         overall_confidence = self._weighted_score(signals)
 
-        # Human investigator feedback is a bounded triage adjustment to the
-        # persisted confidence score. Keep it separate from the evidence
-        # signal weights so repeated recalculation remains deterministic.
-        feedback_adjustment = self._feedback_confidence_adjustment(actor.actor_id)
+        # Human feedback is a derived overlay, not part of the evidence-only
+        # score. Keeping the switch explicit lets the feedback endpoint rebuild
+        # the evidence baseline before applying exactly the latest verdict.
+        feedback_adjustment = (
+            self._feedback_confidence_adjustment(actor.actor_id)
+            if include_feedback
+            else {"confidence_delta": 0.0, "latest_verdict": None}
+        )
         overall_confidence = self._clamp(
             overall_confidence + feedback_adjustment["confidence_delta"]
         )
@@ -161,7 +166,12 @@ class CorrelationService:
             # De-confliction is a negative investigative signal, not another positive weight.
             overall_confidence = self._clamp(overall_confidence - 0.15)
         risk_level = self._risk_level(overall_confidence, actor.risk_category)
-        priority = self.calculate_priority(actor, overall_confidence, signals)
+        priority = self.calculate_priority(
+            actor,
+            overall_confidence,
+            signals,
+            include_feedback=include_feedback,
+        )
 
         # Persist the current triage value so dashboard ordering and actor
         # pages remain consistent. This is a derived score, not ground truth.
@@ -187,12 +197,22 @@ class CorrelationService:
             "source_reliability": source_reliability,
         }
 
-    def calculate_priority(self, actor: Actor, correlation_score: float, signals: List[Dict[str, Any]]) -> Dict[str, Any]:
+    def calculate_priority(
+        self,
+        actor: Actor,
+        correlation_score: float,
+        signals: List[Dict[str, Any]],
+        include_feedback: bool = True,
+    ) -> Dict[str, Any]:
         risk = self._risk_severity(actor.risk_category)
         evidence_confidence = self._evidence_confidence(actor.actor_id, signals)
         recency = self._recency_score(actor.actor_id)
         coverage = self._coverage_score(signals)
-        feedback = self._feedback_adjustment(actor.actor_id)
+        feedback = (
+            self._feedback_adjustment(actor.actor_id)
+            if include_feedback
+            else {"priority_delta": 0, "latest_verdict": None, "investigator_id": None, "timestamp": None}
+        )
 
         components = {
             "risk_severity": round(risk, 2),

@@ -16,6 +16,7 @@ from app.models.sql_models import (
     DarkWebHandle,
     Observation,
     PGPKey,
+    ScanTarget,
     TemporalEvent,
     TrustLink,
     Wallet,
@@ -25,6 +26,7 @@ from app.middleware.audit_log import AuditLogMiddleware
 from app.services.ingestion import ensure_investigation_evidence_for_all_actors, init_db_and_load_csvs
 from app.services.nlp_service import nlp_service
 from app.services.temporal_events import materialize_temporal_events
+from app.services.observation_scope import build_observation_target_keys
 
 
 
@@ -44,11 +46,6 @@ def _ensure_compatibility_schema() -> None:
             connection.exec_driver_sql(
                 "ALTER TABLE darkweb_handles ADD COLUMN source_handle_id VARCHAR(64)"
             )
-        connection.exec_driver_sql(
-            "CREATE INDEX IF NOT EXISTS ix_darkweb_handles_source_handle_id "
-            "ON darkweb_handles (source_handle_id)"
-        )
-
         # Backfill the stable source IDs for existing synthetic rows. The
         # relational integer PK remains unchanged and continues to serve SQL
         # foreign keys; the source ID is exclusively the cross-system identity.
@@ -76,10 +73,38 @@ def _ensure_compatibility_schema() -> None:
                         },
                     )
 
+        # Repair accidental duplicate canonical IDs after CSV backfill, then
+        # enforce uniqueness for the canonical cross-system identity.
+        connection.exec_driver_sql(
+            """
+            WITH ranked AS (
+                SELECT
+                    id,
+                    ROW_NUMBER() OVER (
+                        PARTITION BY source_handle_id
+                        ORDER BY id ASC
+                    ) AS rn
+                FROM darkweb_handles
+                WHERE source_handle_id IS NOT NULL
+            )
+            UPDATE darkweb_handles AS target
+            SET source_handle_id = 'legacy:' || target.id::text
+            FROM ranked
+            WHERE target.id = ranked.id
+              AND ranked.rn > 1
+            """
+        )
+
         connection.exec_driver_sql(
             "UPDATE darkweb_handles "
             "SET source_handle_id = 'legacy:' || id::text "
             "WHERE source_handle_id IS NULL"
+        )
+
+        connection.exec_driver_sql(
+            "CREATE UNIQUE INDEX IF NOT EXISTS uq_darkweb_handles_source_handle_id "
+            "ON darkweb_handles (source_handle_id) "
+            "WHERE source_handle_id IS NOT NULL"
         )
 
 
@@ -153,12 +178,32 @@ def _backfill_graph_if_needed(actor_count: int) -> None:
         # Re-project observations from PostgreSQL after every startup. The SQL
         # store is authoritative, and this also repairs observations inserted by
         # the synthetic evidence seeder or background scanner.
-        actor_ids = [row[0] for row in db.query(Actor.actor_id).all()]
+        actors = db.query(Actor).all()
+        actor_ids = [actor.actor_id for actor in actors]
         actor_set = set(actor_ids)
-        target_to_actor = {actor_id.lower(): actor_id for actor_id in actor_ids}
-        for handle in db.query(DarkWebHandle).all():
-            if handle.handle and handle.actor_id:
-                target_to_actor[handle.handle.strip().lower()] = str(handle.actor_id)
+        handles = db.query(DarkWebHandle).all()
+        scan_targets = db.query(ScanTarget).filter(
+            ScanTarget.actor_id.in_(actor_ids)
+        ).all()
+        handles_by_actor: dict[str, list[DarkWebHandle]] = {}
+        for handle in handles:
+            if handle.actor_id:
+                handles_by_actor.setdefault(str(handle.actor_id), []).append(handle)
+        targets_by_actor: dict[str, list[ScanTarget]] = {}
+        for target in scan_targets:
+            if target.actor_id:
+                targets_by_actor.setdefault(str(target.actor_id), []).append(target)
+
+        target_to_actor: dict[str, str] = {}
+        for actor in actors:
+            keys = build_observation_target_keys(
+                actor.actor_id,
+                actor.primary_handle,
+                handles_by_actor.get(str(actor.actor_id), []),
+                targets_by_actor.get(str(actor.actor_id), []),
+            )
+            for key in keys:
+                target_to_actor[key] = str(actor.actor_id)
 
         observations_by_actor: dict[str, list[dict]] = {}
         for observation in db.query(Observation).all():

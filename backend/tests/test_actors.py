@@ -131,3 +131,24 @@ def test_actor_evidence_rejects_reversed_timeline(client, admin_headers):
     r = client.get("/actors/A00001/evidence", headers=admin_headers, params={"start": "2026-12-31T00:00:00Z", "end": "2026-01-01T00:00:00Z"})
     assert r.status_code == 400
     assert "start timestamp" in r.json()["detail"]
+
+
+def test_graph_fallback_uses_stable_handle_ids_after_neo4j_sync_failure(client, admin_headers):
+    """A failed sync must fall back to authoritative Postgres, not stale Neo4j."""
+    from unittest.mock import patch
+    from app.services import graph_service
+
+    stale_graph = {
+        "handle_nodes": [{"handle_id": "STALE-999", "handle": "stale", "platform": "old"}],
+    }
+    with (
+        patch.object(graph_service, "sync_actor_batch", side_effect=RuntimeError("sync failed")),
+        patch.object(graph_service, "get_actor_subgraph", return_value=stale_graph) as read_graph,
+    ):
+        r = client.get("/actors/A00001/graph", headers=admin_headers)
+
+    assert r.status_code == 200, r.text
+    assert read_graph.call_count == 0
+    node_ids = {node["id"] for node in r.json()["nodes"]}
+    assert "handle:H00001" in node_ids
+    assert "handle:STALE-999" not in node_ids

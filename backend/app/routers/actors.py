@@ -21,6 +21,35 @@ from app.services.observation_scope import build_observation_target_keys
 router = APIRouter(prefix="/actors", tags=["Actors"], dependencies=[Depends(get_current_user)])
 
 
+def _graph_handle_id(handle: DarkWebHandle) -> str:
+    """Return the canonical cross-system graph identity for a SQL handle."""
+    return handle.source_handle_id or f"legacy:{handle.id}"
+
+
+def _resolve_graph_handle_id(
+    db: Session,
+    handle_name: Optional[str],
+    actor_id: Optional[str] = None,
+) -> Optional[str]:
+    """Resolve a textual wallet handle to the stable graph handle identity."""
+    normalized = (handle_name or "").strip().lower()
+    if not normalized:
+        return None
+
+    query = (
+        db.query(DarkWebHandle)
+        .filter(func.lower(DarkWebHandle.handle) == normalized)
+        .order_by(DarkWebHandle.id.asc())
+    )
+    if actor_id:
+        actor_handle = query.filter(DarkWebHandle.actor_id == actor_id).first()
+        if actor_handle:
+            return _graph_handle_id(actor_handle)
+
+    handle = query.first()
+    return _graph_handle_id(handle) if handle else None
+
+
 def _build_actor_detail(actor: Actor, db: Session) -> ActorDetail:
     handles = db.query(DarkWebHandle).filter(DarkWebHandle.actor_id == actor.actor_id).all()
     wallets = db.query(Wallet).filter(Wallet.actor_id == actor.actor_id).all()
@@ -344,16 +373,20 @@ def get_actor_subgraph(actor_id: str, db: Session = Depends(get_db)):
     # pipeline has not explicitly populated Neo4j yet.
     # ---------------------------------------------------------
 
+    neo4j_sync_ok = False
+
     try:
         graph_handle_id_by_db_id = {
-            h.id: h.source_handle_id or f"legacy:{h.id}"
+            h.id: _graph_handle_id(h)
             for h in graph_identity_handles
         }
-        handle_id_by_name = {
-            h.handle.strip().lower(): graph_handle_id_by_db_id[h.id]
-            for h in graph_identity_handles
-            if h.handle
-        }
+        handle_id_by_name = {}
+        for handle in handles:
+            if handle.handle:
+                handle_id_by_name.setdefault(
+                    handle.handle.strip().lower(),
+                    _graph_handle_id(handle),
+                )
 
         graph_service.sync_actor_batch(
             actors=[
@@ -366,7 +399,7 @@ def get_actor_subgraph(actor_id: str, db: Session = Depends(get_db)):
             ],
             handles=[
                 {
-                    "handle_id": h.source_handle_id or f"legacy:{h.id}",
+                    "handle_id": _graph_handle_id(h),
                     "actor_id": h.actor_id,
                     "handle": h.handle,
                     "platform": h.platform,
@@ -382,6 +415,11 @@ def get_actor_subgraph(actor_id: str, db: Session = Depends(get_db)):
                     "associated_handle": w.associated_handle,
                     "handle_id": (
                         handle_id_by_name.get(w.associated_handle.strip().lower())
+                        or _resolve_graph_handle_id(
+                            db,
+                            w.associated_handle,
+                            actor_id=w.actor_id,
+                        )
                         if w.associated_handle
                         else None
                     ),
@@ -445,6 +483,7 @@ def get_actor_subgraph(actor_id: str, db: Session = Depends(get_db)):
                 for o in observations
             ],
         )
+        neo4j_sync_ok = True
 
     except Exception as exc:
         # Graph sync is additive. If Neo4j is unavailable,
@@ -455,9 +494,12 @@ def get_actor_subgraph(actor_id: str, db: Session = Depends(get_db)):
     # Prefer the rich Neo4j investigation graph.
     # ---------------------------------------------------------
 
-    neo4j_graph = graph_service.get_actor_subgraph(
-        actor.actor_id
-    )
+    neo4j_graph = None
+    if neo4j_sync_ok:
+        try:
+            neo4j_graph = graph_service.get_actor_subgraph(actor.actor_id)
+        except Exception as exc:
+            print(f"Neo4j read warning: {exc}")
 
     if neo4j_graph:
         nodes = [
@@ -593,18 +635,20 @@ def get_actor_subgraph(actor_id: str, db: Session = Depends(get_db)):
             if not source or not target:
                 continue
 
-            edge_key = (source.id, target.id, "trust")
+            source_graph_id = _graph_handle_id(source)
+            target_graph_id = _graph_handle_id(target)
+            edge_key = (source.id, target.id, trust.relationship_type)
             rendered_key = (
-                f"handle:{source.id}",
-                f"handle:{target.id}",
+                f"handle:{source_graph_id}",
+                f"handle:{target_graph_id}",
                 "TRUSTS",
             )
-            if edge_key not in neo4j_trust_edges or rendered_key in rendered_trust_edges:
+            if edge_key in neo4j_trust_edges or rendered_key in rendered_trust_edges:
                 continue
 
             nodes.append(
                 GraphNode(
-                    id=f"handle:{source.id}",
+                    id=f"handle:{source_graph_id}",
                     label="Handle",
                     name=source.handle,
                     category="Handle",
@@ -612,7 +656,7 @@ def get_actor_subgraph(actor_id: str, db: Session = Depends(get_db)):
             )
             nodes.append(
                 GraphNode(
-                    id=f"handle:{target.id}",
+                    id=f"handle:{target_graph_id}",
                     label="Handle",
                     name=target.handle,
                     category="TrustedHandle",
@@ -620,8 +664,8 @@ def get_actor_subgraph(actor_id: str, db: Session = Depends(get_db)):
             )
             links.append(
                 GraphEdge(
-                    source=f"handle:{source.id}",
-                    target=f"handle:{target.id}",
+                    source=f"handle:{source_graph_id}",
+                    target=f"handle:{target_graph_id}",
                     relation="TRUSTS",
                 )
             )
@@ -831,7 +875,7 @@ def get_actor_subgraph(actor_id: str, db: Session = Depends(get_db)):
     for h in handles:
         nodes.append(
             GraphNode(
-                id=f"handle:{h.handle}",
+                id=f"handle:{_graph_handle_id(h)}",
                 label="Handle",
                 name=h.handle,
                 category="Handle",
@@ -841,7 +885,7 @@ def get_actor_subgraph(actor_id: str, db: Session = Depends(get_db)):
         links.append(
             GraphEdge(
                 source=actor.actor_id,
-                target=f"handle:{h.handle}",
+                target=f"handle:{_graph_handle_id(h)}",
                 relation="USES_HANDLE",
             )
         )
@@ -865,7 +909,7 @@ def get_actor_subgraph(actor_id: str, db: Session = Depends(get_db)):
         for key in h.pgp_keys:
             links.append(
                 GraphEdge(
-                    source=f"handle:{h.handle}",
+                    source=f"handle:{_graph_handle_id(h)}",
                     target=f"pgp:{key.fingerprint}",
                     relation="HAS_PGP_KEY",
                 )
@@ -881,7 +925,7 @@ def get_actor_subgraph(actor_id: str, db: Session = Depends(get_db)):
 
         nodes.append(
             GraphNode(
-                id=f"handle:{source.id}",
+                id=f"handle:{_graph_handle_id(source)}",
                 label="Handle",
                 name=source.handle,
                 category="Handle",
@@ -889,7 +933,7 @@ def get_actor_subgraph(actor_id: str, db: Session = Depends(get_db)):
         )
         nodes.append(
             GraphNode(
-                id=f"handle:{target.id}",
+                id=f"handle:{_graph_handle_id(target)}",
                 label="Handle",
                 name=target.handle,
                 category="TrustedHandle",
@@ -897,8 +941,8 @@ def get_actor_subgraph(actor_id: str, db: Session = Depends(get_db)):
         )
         links.append(
             GraphEdge(
-                source=f"handle:{source.id}",
-                target=f"handle:{target.id}",
+                source=f"handle:{_graph_handle_id(source)}",
+                target=f"handle:{_graph_handle_id(target)}",
                 relation="TRUSTS",
             )
         )
@@ -936,9 +980,16 @@ def get_actor_subgraph(actor_id: str, db: Session = Depends(get_db)):
     # Surface wallet reuse even when Neo4j is unavailable.
     for reused in reused_wallet_rows:
         if reused.associated_handle and reused.address:
+            reused_handle_id = _resolve_graph_handle_id(
+                db,
+                reused.associated_handle,
+                actor_id=reused.actor_id,
+            )
+            if not reused_handle_id:
+                continue
             nodes.append(
                 GraphNode(
-                    id=f"handle:{reused.associated_handle}",
+                    id=f"handle:{reused_handle_id}",
                     label="Handle",
                     name=reused.associated_handle,
                     category="CorrelatedHandle",
@@ -947,7 +998,7 @@ def get_actor_subgraph(actor_id: str, db: Session = Depends(get_db)):
             links.append(
                 GraphEdge(
                     source=f"wallet:{reused.address}",
-                    target=f"handle:{reused.associated_handle}",
+                    target=f"handle:{reused_handle_id}",
                     relation="ALSO_USED_BY",
                 )
             )
@@ -966,7 +1017,7 @@ def get_actor_subgraph(actor_id: str, db: Session = Depends(get_db)):
             if handle.platform == marketplace.name:
                 links.append(
                     GraphEdge(
-                        source=f"handle:{handle.handle}",
+                        source=f"handle:{_graph_handle_id(handle)}",
                         target=f"marketplace:{marketplace.name}",
                         relation="USES_MARKETPLACE",
                     )
