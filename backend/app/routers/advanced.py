@@ -7,6 +7,7 @@ from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel, Field
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.config import settings
@@ -52,7 +53,7 @@ class HistoricalCase(BaseModel):
 
 class MediaFingerprintRequest(BaseModel):
     media_id: str = Field(..., min_length=1, max_length=128)
-    data_url: str = Field(..., min_length=32)
+    data_url: str = Field(..., min_length=32, max_length=7_000_000)
     source: str = Field("investigator_upload", min_length=1, max_length=128)
     actor_id: Optional[str] = Field(None, max_length=64)
 
@@ -112,7 +113,7 @@ def get_historical_case(case_id: str):
     dependencies=[Depends(get_current_user)],
 )
 def historical_case_context_for_actor(actor_id: str, db: Session = Depends(get_db)):
-    if db.query(Actor.actor_id).filter(Actor.actor_id == actor_id).first() is None:
+    if db.query(Actor.actor_id).filter(func.lower(Actor.actor_id) == actor_id.lower()).first() is None:
         raise HTTPException(status_code=404, detail=f"Actor '{actor_id}' not found.")
     return {
         "actor_id": actor_id,
