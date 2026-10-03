@@ -447,11 +447,10 @@ class CollectionService:
             # even when a source is not pre-assigned to one actor. These are
             # candidate evidence links, never identity determinations.
             candidate_links = []
-            if created_entities:
+            if created_obs or created_entities:
                 try:
                     candidate_links = EntityLinkageService(self.db).link_recent_source(
                         source_label=source_label,
-                        created_after=run.started_at,
                     )
                 except Exception as exc:
                     self.db.rollback()
@@ -676,7 +675,7 @@ class EntityLinkageService:
     def __init__(self, db):
         self.db = db
 
-    def link_recent_source(self, source_label: str, created_after: datetime | None = None) -> list[dict[str, Any]]:
+    def link_recent_source(self, source_label: str) -> list[dict[str, Any]]:
         """Link newly collected entities to existing records using exact identifiers.
 
         Matching is intentionally conservative: handle, wallet, PGP fingerprint,
