@@ -55,6 +55,25 @@ export default function AdvancedIntelligencePage({ actorId }: Props) {
     getActorEntityLinks(actorId).then(setEntityLinks).catch(() => setEntityLinks([]));
   }, [actorId]);
 
+  useEffect(() => {
+    const token = sessionStorage.getItem("decypher_token");
+    if (!token) return;
+    const protocol = window.location.protocol === "https:" ? "wss" : "ws";
+    const socket = new WebSocket(`${protocol}://${window.location.host}/alerts/ws`);
+    socket.onopen = () => socket.send(token);
+    socket.onmessage = (event) => {
+      try {
+        const alert = JSON.parse(event.data) as AdvancedAlert;
+        if (alert.id) {
+          setAlerts((current) => [...current.filter((item) => item.id !== alert.id), alert].slice(-25));
+        }
+      } catch {
+        // Ignore malformed live messages.
+      }
+    };
+    return () => socket.close();
+  }, []);
+
   async function discover() {
     setLoading(true);
     try {
