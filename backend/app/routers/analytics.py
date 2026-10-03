@@ -2,6 +2,7 @@ from datetime import datetime
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.database.postgres import get_db
@@ -25,11 +26,16 @@ def actor_timeline(
     limit: int = Query(250, ge=1, le=1000),
     db: Session = Depends(get_db),
 ):
-    if not db.query(Actor.actor_id).filter(Actor.actor_id == actor_id).first():
+    actor = (
+        db.query(Actor)
+        .filter(func.lower(Actor.actor_id) == actor_id.lower())
+        .first()
+    )
+    if actor is None:
         raise HTTPException(status_code=404, detail="Actor not found.")
-    materialize_temporal_events(db, actor_id=actor_id)
-    db.commit()
-    return get_actor_timeline(db, actor_id, start=start, end=end, limit=limit)
+    # GET is intentionally read-only. Timeline materialization is handled by
+    # startup/ingestion workflows; the query itself never writes/commits state.
+    return get_actor_timeline(db, actor.actor_id, start=start, end=end, limit=limit)
 
 
 @router.get("/actors/{actor_id}/graph-anomaly")
