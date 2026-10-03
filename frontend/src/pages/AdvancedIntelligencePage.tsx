@@ -331,7 +331,7 @@ export default function AdvancedIntelligencePage({ actorId, liveAlert }: Props) 
         </div>
 
         <div className="card">
-          <div className="eyebrow">REAL-WORLD ENTITY LINKAGE</div>
+          <div className="eyebrow">TECHNICAL ENTITY LINKAGE</div>
           <h3 style={{ marginTop: 8 }}>Technical entity associations</h3>
           <p style={{ opacity: 0.6, fontSize: 12 }}>
             Links external handles, wallets, PGP fingerprints and infrastructure domains to the selected actor using explicit match evidence.
