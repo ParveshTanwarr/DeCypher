@@ -246,3 +246,214 @@ def test_timeline_get_does_not_materialize_rows(client, admin_headers):
         db.close()
 
     assert after == before
+
+
+
+def test_collection_pipeline_resolves_entities_and_exposes_candidate_graph_link(client, admin_headers, monkeypatch):
+    """A source item must flow through observation, entity, linkage and graph layers."""
+    import json
+    from uuid import uuid4
+    from datetime import datetime, timezone
+    from app.database.postgres import SessionLocal
+    from app.models.advanced_models import CollectionRun, CollectionSource, EntityLink, ExternalEntity
+    from app.models.sql_models import Observation
+    from app.services.advanced_intelligence import CollectionService
+
+    source_name = f"p0-e2e-{uuid4().hex[:10]}"
+    source_url = "http://localhost/authorized-fixture.json"
+    source_label = f"collection:{source_name}"
+    source_id = None
+    observation_id = None
+    db = SessionLocal()
+    try:
+        source = CollectionSource(
+            name=source_name,
+            kind="json",
+            url=source_url,
+            actor_id=None,
+            enabled=False,
+            interval_minutes=15,
+            headers={},
+            parser_config={},
+            next_run_at=datetime.now(timezone.utc),
+        )
+        db.add(source)
+        db.commit()
+        db.refresh(source)
+        source_id = source.id
+
+        fixture = [{
+            "title": "P0 pipeline fixture",
+            "description": "Observed public alias @nyxinhex99 for candidate resolution.",
+        }]
+        monkeypatch.setattr(
+            CollectionService,
+            "_request",
+            lambda self, configured_source: (
+                200,
+                "application/json",
+                json.dumps(fixture),
+            ),
+        )
+
+        result = CollectionService(db).run_source(source)
+        assert result["items_seen"] == 1
+        assert result["observations_created"] == 1
+        assert result["entities_created"] >= 1
+
+        entity = (
+            db.query(ExternalEntity)
+            .filter(
+                ExternalEntity.source == source_label,
+                ExternalEntity.entity_type == "handle",
+                ExternalEntity.canonical_value == "nyxinhex99",
+            )
+            .first()
+        )
+        assert entity is not None
+        link = (
+            db.query(EntityLink)
+            .filter(
+                EntityLink.actor_id == "A00001",
+                EntityLink.entity_id == entity.id,
+            )
+            .first()
+        )
+        assert link is not None
+        assert link.match_type == "exact_handle"
+        assert link.explanation["identity_status"] == "candidate_only"
+
+        graph = client.get("/actors/A00001/graph", headers=admin_headers)
+        assert graph.status_code == 200, graph.text
+        body = graph.json()
+        assert any(
+            node["category"] == "ExternalEntity"
+            and node["name"] == "nyxinhex99"
+            for node in body["nodes"]
+        )
+        assert any(
+            edge["relation"] == "POSSIBLE_MATCH"
+            and edge["source"] == "A00001"
+            for edge in body["links"]
+        )
+
+        observation_id = f"collect_{source_id}_"
+        assert db.query(Observation).filter(
+            Observation.observation_id.like(observation_id + "%")
+        ).count() == 1
+    finally:
+        db.rollback()
+        if source_id is not None:
+            db.query(CollectionRun).filter(CollectionRun.source_id == source_id).delete(synchronize_session=False)
+            db.query(EntityLink).filter(EntityLink.entity_id.in_(
+                db.query(ExternalEntity.id).filter(ExternalEntity.source == source_label)
+            )).delete(synchronize_session=False)
+            db.query(Observation).filter(Observation.observation_id.like(f"collect_{source_id}_%")).delete(synchronize_session=False)
+            db.query(ExternalEntity).filter(ExternalEntity.source == source_label).delete(synchronize_session=False)
+            db.query(CollectionSource).filter(CollectionSource.id == source_id).delete(synchronize_session=False)
+            db.commit()
+        db.close()
+
+
+
+def test_tor_relay_descriptor_parser_reports_non_global_router_address():
+    from app.services.advanced_intelligence import TorIntelligenceService
+
+    parsed = TorIntelligenceService.parse_descriptor(
+        "router testrelay 127.0.0.1 9001 0 0\n"
+        "published 2026-10-03 10:00:00\n"
+        "platform Tor 0.4.8.12 on Linux\n"
+        "proto Cons=1 Desc=1"
+    )
+    assert parsed["descriptor_type"] == "tor_relay_server_descriptor"
+    assert parsed["consistency_status"] == "review_required"
+    assert any(
+        item["code"] == "non_global_router_address"
+        for item in parsed["anomalies"]
+    )
+
+
+def test_tor_relay_descriptor_parser_accepts_well_formed_public_router_fields():
+    from app.services.advanced_intelligence import TorIntelligenceService
+
+    parsed = TorIntelligenceService.parse_descriptor(
+        "router testrelay 8.8.8.8 9001 0 0\n"
+        "published 2026-10-03 10:00:00\n"
+        "platform Tor 0.4.8.12 on Linux\n"
+        "proto Cons=1 Desc=1"
+    )
+    assert parsed["consistency_status"] == "no_basic_inconsistency_detected"
+    assert parsed["anomalies"] == []
+
+
+
+def test_tor_collection_cannot_bypass_onion_allowlist_with_source_parser_config(monkeypatch):
+    from types import SimpleNamespace
+    from app.config import settings
+    from app.services.advanced_intelligence import CollectionService
+
+    monkeypatch.setattr(settings, "TOR_ALLOWED_ONION_HOSTS", "approved-example.onion")
+    source = SimpleNamespace(
+        kind="tor_http",
+        parser_config={"allowed_hosts": ["unapproved-example.onion"]},
+    )
+    assert CollectionService._allowed_host("http://unapproved-example.onion/", source) is False
+    assert CollectionService._allowed_host("http://approved-example.onion/", source) is True
+
+
+
+def test_actor_disjoint_stylometry_holdout_endpoint_reports_split_and_metrics(client, admin_headers):
+    response = client.get(
+        "/evaluation/holdout?pairs=100&threshold=0.65",
+        headers=admin_headers,
+    )
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["metrics"]["split_strategy"] == "deterministic_actor_group_80_20"
+    assert body["metrics"]["holdout_actor_count"] > 1
+    assert body["metrics"]["pairs"] > 0
+    assert 0.0 <= body["metrics"]["precision"] <= 1.0
+    assert 0.0 <= body["metrics"]["recall"] <= 1.0
+    assert any("training-data isolation" in item for item in body["metrics"]["limitations"])
+
+
+
+def test_tor_inspection_detects_allowlisted_status_page_with_bounded_requests(monkeypatch):
+    from types import SimpleNamespace
+    from app.config import settings
+    import app.services.advanced_intelligence as intelligence
+
+    monkeypatch.setattr(settings, "TOR_ALLOWED_ONION_HOSTS", "authorized-demo.onion")
+    monkeypatch.setattr(settings, "TOR_SOCKS5_PROXY", "socks5h://127.0.0.1:9050")
+
+    class FakeResponse:
+        def __init__(self, body, headers=None):
+            self.status_code = 200
+            self.headers = headers or {"content-type": "text/html", "server": "fixture"}
+            self.encoding = "utf-8"
+            self.body = body
+        def __enter__(self):
+            return self
+        def __exit__(self, *args):
+            return False
+        def iter_content(self, chunk_size=8192):
+            yield self.body.encode("utf-8")
+
+    responses = [
+        FakeResponse("<html><title>Authorized fixture</title></html>"),
+        FakeResponse("Apache Server Status. Server uptime: 2 hours. Total accesses: 42. Scoreboard: _W"),
+    ]
+    calls = []
+    def fake_get(url, **kwargs):
+        calls.append((url, kwargs))
+        return responses.pop(0)
+
+    monkeypatch.setattr(intelligence.requests, "get", fake_get)
+    result = intelligence.TorIntelligenceService().inspect_onion(
+        "http://authorized-demo.onion/"
+    )
+    assert result["exposed_status_page"] is True
+    assert result["status_page_signature"] == "apache_mod_status_signature"
+    assert len(calls) == 2
+    assert all(call[1]["allow_redirects"] is False for call in calls)
+    assert all(call[1]["proxies"]["http"] == "socks5h://127.0.0.1:9050" for call in calls)

@@ -14,6 +14,7 @@ from app.models.schemas import (
     GraphPayload,
 )
 from app.models.sql_models import Actor, DarkWebHandle, Wallet, Observation, PGPKey, TrustLink, Marketplace, ScanTarget
+from app.models.advanced_models import EntityLink, ExternalEntity
 from app.routers.auth import get_current_user
 from app.services import graph_service
 from app.services.observation_scope import build_observation_target_keys
@@ -333,6 +334,15 @@ def get_actor_subgraph(actor_id: str, db: Session = Depends(get_db)):
     observations = (
         db.query(Observation)
         .filter(func.lower(Observation.target).in_(observation_target_keys))
+        .all()
+    )
+    # Candidate entity matches are first-class graph evidence. They remain
+    # separate from confirmed actor/handle ownership relationships.
+    candidate_entity_links = (
+        db.query(EntityLink, ExternalEntity)
+        .join(ExternalEntity, ExternalEntity.id == EntityLink.entity_id)
+        .filter(EntityLink.actor_id == actor.actor_id)
+        .order_by(EntityLink.score.desc(), ExternalEntity.id.asc())
         .all()
     )
 
@@ -835,6 +845,29 @@ def get_actor_subgraph(actor_id: str, db: Session = Depends(get_db)):
                             )
                         )
 
+        # Source-derived exact identifier matches are displayed as candidate
+        # links, never as confirmed identity relationships.
+        for entity_link, entity in candidate_entity_links:
+            entity_node_id = f"external:{entity.source}:{entity.entity_type}:{entity.canonical_value}"
+            nodes.append(GraphNode(
+                id=entity_node_id,
+                label="External Entity",
+                name=entity.canonical_value,
+                category="ExternalEntity",
+                properties={
+                    "entity_type": entity.entity_type,
+                    "source": entity.source,
+                    "score": entity_link.score,
+                    "match_type": entity_link.match_type,
+                    "identity_status": "candidate_only",
+                },
+            ))
+            links.append(GraphEdge(
+                source=actor.actor_id,
+                target=entity_node_id,
+                relation="POSSIBLE_MATCH",
+            ))
+
         # Remove duplicate nodes while preserving order.
         unique_nodes = {}
         for node in nodes:
@@ -1069,6 +1102,32 @@ def get_actor_subgraph(actor_id: str, db: Session = Depends(get_db)):
     for link in links:
         unique_links[(link.source, link.target, link.relation)] = link
 
+    # Keep candidate entity evidence visible even when Neo4j is unavailable.
+    for entity_link, entity in candidate_entity_links:
+        entity_node_id = f"external:{entity.source}:{entity.entity_type}:{entity.canonical_value}"
+        nodes.append(GraphNode(
+            id=entity_node_id,
+            label="External Entity",
+            name=entity.canonical_value,
+            category="ExternalEntity",
+            properties={
+                "entity_type": entity.entity_type,
+                "source": entity.source,
+                "score": entity_link.score,
+                "match_type": entity_link.match_type,
+                "identity_status": "candidate_only",
+            },
+        ))
+        links.append(GraphEdge(
+            source=actor.actor_id,
+            target=entity_node_id,
+            relation="POSSIBLE_MATCH",
+        ))
+
+    unique_nodes = {node.id: node for node in nodes}
+    unique_links = {
+        (link.source, link.target, link.relation): link for link in links
+    }
     return GraphPayload(
         nodes=list(unique_nodes.values()),
         links=list(unique_links.values()),

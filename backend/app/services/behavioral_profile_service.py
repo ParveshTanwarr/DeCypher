@@ -25,7 +25,7 @@ from app.services.nlp_service import nlp_service
 from app.services.observation_scope import build_observation_target_keys
 
 
-PROFILE_VERSION = "1.1"
+PROFILE_VERSION = "1.2"
 
 
 def _as_date(value: Optional[datetime]) -> Optional[date]:
@@ -188,11 +188,14 @@ class BehavioralProfileService:
 
         limitations = [
             "The bundled dataset is synthetic; this profile demonstrates prototype behaviour and is not real-world intelligence.",
-            "The current post records do not provide usable per-post timestamps, so posting hours, weekday routines, and posting cadence are not inferred.",
             "Account creation and last-active dates describe account lifecycle windows, not continuous observed activity; future-dated synthetic records are not treated as current activity.",
             "Behavioural similarity and shared operational indicators are investigative leads, not proof of common identity.",
             "If the authorship model is unavailable, any fallback similarity is explicitly labelled and must not be treated as validated model output.",
         ]
+        if not lifecycle.get("post_activity", {}).get("available"):
+            limitations.append(
+                "No usable per-post timestamps were supplied, so posting hours, weekday patterns, and inter-post cadence are not inferred."
+            )
 
         return {
             "actor_id": actor.actor_id,
@@ -510,6 +513,7 @@ class BehavioralProfileService:
                 elif start_b > end_a:
                     gaps.append((start_b - end_a).days)
 
+        post_activity = nlp_service.activity_profile([handle.handle for handle in handles])
         return {
             "available": bool(handles),
             "first_observed": _iso(first),
@@ -527,7 +531,8 @@ class BehavioralProfileService:
             "status_distribution": status_counts,
             "overlapping_handle_windows": overlaps,
             "inter_handle_gap_days": gaps,
-            "has_post_timestamps": False,
+            "has_post_timestamps": bool(post_activity.get("has_post_timestamps")),
+            "post_activity": post_activity,
         }
 
     def _operational(

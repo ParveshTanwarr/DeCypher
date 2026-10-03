@@ -77,10 +77,20 @@ class NLPStylometryService:
             if not (handle_col and text_col):
                 return
 
-            posts_df = df[[handle_col, text_col]].dropna()
+            timestamp_col = next(
+                (column for column in ("timestamp", "created_at", "posted_at", "published_at", "date") if column in df.columns),
+                None,
+            )
+            selected_columns = [handle_col, text_col] + ([timestamp_col] if timestamp_col else [])
+            posts_df = df[selected_columns].dropna(subset=[handle_col, text_col]).copy()
             posts_df = posts_df.rename(columns={handle_col: "_handle_id", text_col: "_content"})
             posts_df["_handle_id"] = posts_df["_handle_id"].astype(str)
             posts_df["_content"] = posts_df["_content"].astype(str)
+            if timestamp_col:
+                posts_df = posts_df.rename(columns={timestamp_col: "_timestamp"})
+                posts_df["_timestamp"] = pd.to_datetime(posts_df["_timestamp"], errors="coerce", utc=True)
+            else:
+                posts_df["_timestamp"] = pd.NaT
             self._posts_df = posts_df
             self._known_handle_ids = set(posts_df["_handle_id"].astype(str))
 
@@ -119,6 +129,58 @@ class NLPStylometryService:
             return ""
         matched = self._posts_df[self._posts_df["_handle_id"] == str(lookup_id)]["_content"]
         return " \n ".join(matched.tolist())
+
+    def activity_profile(self, handles: list[str]) -> Dict[str, Any]:
+        """Summarize timestamped posting activity when source timestamps exist."""
+        empty = {
+            "available": False,
+            "has_post_timestamps": False,
+            "timestamped_post_count": 0,
+            "profiled_handle_count": 0,
+            "per_handle": [],
+            "note": "No usable per-post timestamps were supplied by the source dataset.",
+        }
+        if self._posts_df is None or not handles or "_timestamp" not in self._posts_df.columns:
+            return empty
+
+        rows = []
+        total = 0
+        for handle in handles:
+            handle_id = self._resolve_handle_id(handle)
+            if not handle_id:
+                continue
+            matched = self._posts_df[self._posts_df["_handle_id"] == str(handle_id)]
+            timestamps = matched["_timestamp"].dropna().sort_values()
+            if timestamps.empty:
+                continue
+            gaps = timestamps.diff().dropna().dt.total_seconds() / 3600.0
+            hours = timestamps.dt.hour.value_counts().sort_index()
+            weekdays = timestamps.dt.day_name().value_counts()
+            rows.append({
+                "handle": handle,
+                "timestamped_post_count": int(len(timestamps)),
+                "first_post_at": timestamps.iloc[0].isoformat(),
+                "last_post_at": timestamps.iloc[-1].isoformat(),
+                "active_days": int(timestamps.dt.date.nunique()),
+                "posts_by_utc_hour": {str(int(k)): int(v) for k, v in hours.items()},
+                "posts_by_weekday": {str(k): int(v) for k, v in weekdays.items()},
+                "median_inter_post_interval_hours": (
+                    round(float(gaps.median()), 3) if not gaps.empty else None
+                ),
+            })
+            total += len(timestamps)
+
+        if not rows:
+            return empty
+        return {
+            "available": True,
+            "has_post_timestamps": True,
+            "timestamped_post_count": int(total),
+            "profiled_handle_count": len(rows),
+            "per_handle": rows,
+            "timezone": "UTC",
+            "note": "Descriptive posting activity from source timestamps; it is not a behavioural identity proof.",
+        }
 
     def compare(
         self,
