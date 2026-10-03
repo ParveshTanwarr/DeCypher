@@ -384,3 +384,18 @@ def test_tor_relay_descriptor_parser_accepts_well_formed_public_router_fields():
     )
     assert parsed["consistency_status"] == "no_basic_inconsistency_detected"
     assert parsed["anomalies"] == []
+
+
+
+def test_tor_collection_cannot_bypass_onion_allowlist_with_source_parser_config(monkeypatch):
+    from types import SimpleNamespace
+    from app.config import settings
+    from app.services.advanced_intelligence import CollectionService
+
+    monkeypatch.setattr(settings, "TOR_ALLOWED_ONION_HOSTS", "approved-example.onion")
+    source = SimpleNamespace(
+        kind="tor_http",
+        parser_config={"allowed_hosts": ["unapproved-example.onion"]},
+    )
+    assert CollectionService._allowed_host("http://unapproved-example.onion/", source) is False
+    assert CollectionService._allowed_host("http://approved-example.onion/", source) is True
