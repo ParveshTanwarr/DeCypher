@@ -14,7 +14,6 @@ import app.models.sql_models
 from app.models.sql_models import (
     Actor,
     DarkWebHandle,
-    EvidenceLedgerEntry,
     Observation,
     PGPKey,
     TemporalEvent,
@@ -62,12 +61,14 @@ def _ensure_compatibility_schema() -> None:
                     platform = (row.get("marketplace") or "").strip() or None
                     if not source_id or not handle:
                         continue
-                    connection.exec_driver_sql(
-                        "UPDATE darkweb_handles "
-                        "SET source_handle_id = :source_id "
-                        "WHERE handle = :handle "
-                        "AND ((platform = :platform) OR (platform IS NULL AND :platform IS NULL)) "
-                        "AND (source_handle_id IS NULL OR source_handle_id <> :source_id)",
+                    connection.execute(
+                        text(
+                            "UPDATE darkweb_handles "
+                            "SET source_handle_id = :source_id "
+                            "WHERE handle = :handle "
+                            "AND ((platform = :platform) OR (platform IS NULL AND :platform IS NULL)) "
+                            "AND (source_handle_id IS NULL OR source_handle_id <> :source_id)"
+                        ),
                         {
                             "source_id": source_id,
                             "handle": handle,
