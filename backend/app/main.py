@@ -1,21 +1,85 @@
 import asyncio
+import csv
 from contextlib import asynccontextmanager
+from pathlib import Path
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from prometheus_fastapi_instrumentator import Instrumentator
-from sqlalchemy import func, text
+from sqlalchemy import func, inspect, text
 
 from app.database.postgres import Base, engine
 from app.database.neo4j_client import neo4j_conn
 from app.config import settings
 import app.models.sql_models
-from app.models.sql_models import Actor
+from app.models.sql_models import (
+    Actor,
+    DarkWebHandle,
+    EvidenceLedgerEntry,
+    Observation,
+    PGPKey,
+    TemporalEvent,
+    TrustLink,
+    Wallet,
+)
 from app.routers import actors, search, feedback, export, auth, scanner, nlp, correlation, ai, behavioral, integrity, analytics
 from app.middleware.audit_log import AuditLogMiddleware
 from app.services.ingestion import ensure_investigation_evidence_for_all_actors, init_db_and_load_csvs
 from app.services.nlp_service import nlp_service
 from app.services.temporal_events import materialize_temporal_events
 
+
+
+def _ensure_compatibility_schema() -> None:
+    """Apply small forward-only schema changes that create_all cannot add."""
+    if engine.dialect.name != "postgresql":
+        return
+
+    inspector = inspect(engine)
+    existing_columns = {
+        column["name"]
+        for column in inspector.get_columns("darkweb_handles")
+    }
+
+    with engine.begin() as connection:
+        if "source_handle_id" not in existing_columns:
+            connection.exec_driver_sql(
+                "ALTER TABLE darkweb_handles ADD COLUMN source_handle_id VARCHAR(64)"
+            )
+        connection.exec_driver_sql(
+            "CREATE INDEX IF NOT EXISTS ix_darkweb_handles_source_handle_id "
+            "ON darkweb_handles (source_handle_id)"
+        )
+
+        # Backfill the stable source IDs for existing synthetic rows. The
+        # relational integer PK remains unchanged and continues to serve SQL
+        # foreign keys; the source ID is exclusively the cross-system identity.
+        handles_path = Path(__file__).resolve().parents[2] / "data" / "handles.csv"
+        if handles_path.exists():
+            with handles_path.open("r", encoding="utf-8", newline="") as file:
+                for row in csv.DictReader(file):
+                    source_id = (row.get("handle_id") or "").strip()
+                    handle = (row.get("handle_name") or "").strip()
+                    platform = (row.get("marketplace") or "").strip() or None
+                    if not source_id or not handle:
+                        continue
+                    connection.exec_driver_sql(
+                        "UPDATE darkweb_handles "
+                        "SET source_handle_id = :source_id "
+                        "WHERE handle = :handle "
+                        "AND ((platform = :platform) OR (platform IS NULL AND :platform IS NULL)) "
+                        "AND (source_handle_id IS NULL OR source_handle_id <> :source_id)",
+                        {
+                            "source_id": source_id,
+                            "handle": handle,
+                            "platform": platform,
+                        },
+                    )
+
+        connection.exec_driver_sql(
+            "UPDATE darkweb_handles "
+            "SET source_handle_id = 'legacy:' || id::text "
+            "WHERE source_handle_id IS NULL"
+        )
 
 
 def _bootstrap_demo_data() -> int:
@@ -39,17 +103,50 @@ def _bootstrap_demo_data() -> int:
 
 
 def _backfill_graph_if_needed(actor_count: int) -> None:
-    """Rebuild the controlled graph when Postgres is populated but Neo4j is empty/partial."""
+    """Rebuild Neo4j when its canonical entity projections are empty or incomplete."""
     if actor_count <= 0:
         return
+
+    from app.database.postgres import SessionLocal
+    from app.services import graph_service
+
+    db = SessionLocal()
     try:
-        rows = neo4j_conn.query("MATCH (a:Actor) RETURN count(a) AS count")
-        graph_actor_count = int(rows[0].get("count") or 0) if rows else 0
-        if graph_actor_count < actor_count:
+        expected = {
+            "actors": int(db.query(func.count(Actor.actor_id)).scalar() or 0),
+            "handles": int(db.query(func.count(DarkWebHandle.id)).scalar() or 0),
+            "wallets": int(db.query(func.count(func.distinct(Wallet.address))).scalar() or 0),
+            "pgp_keys": int(db.query(func.count(PGPKey.id)).scalar() or 0),
+            "trust_links": int(db.query(func.count(TrustLink.id)).scalar() or 0),
+            "observations": int(db.query(func.count(Observation.id)).scalar() or 0),
+            "temporal_events": int(db.query(func.count(TemporalEvent.id)).scalar() or 0),
+        }
+    finally:
+        db.close()
+
+    try:
+        counts = {
+            "actors": int((neo4j_conn.query("MATCH (n:Actor) RETURN count(n) AS count") or [{}])[0].get("count") or 0),
+            "handles": int((neo4j_conn.query("MATCH (n:Handle) RETURN count(n) AS count") or [{}])[0].get("count") or 0),
+            "wallets": int((neo4j_conn.query("MATCH (n:Wallet) RETURN count(n) AS count") or [{}])[0].get("count") or 0),
+            "pgp_keys": int((neo4j_conn.query("MATCH (n:PGPKey) RETURN count(n) AS count") or [{}])[0].get("count") or 0),
+            "trust_links": int((neo4j_conn.query("MATCH (:Handle)-[r:TRUSTS]->(:Handle) RETURN count(r) AS count") or [{}])[0].get("count") or 0),
+            "observations": int((neo4j_conn.query("MATCH (n:Observation) RETURN count(n) AS count") or [{}])[0].get("count") or 0),
+            "temporal_events": int((neo4j_conn.query("MATCH (n:Event) RETURN count(n) AS count") or [{}])[0].get("count") or 0),
+            "numeric_handle_ids": int((neo4j_conn.query(
+                'MATCH (n:Handle) WHERE n.handle_id =~ "^[0-9]+$" RETURN count(n) AS count'
+            ) or [{}])[0].get("count") or 0),
+        }
+
+        incomplete = any(counts[name] < expected[name] for name in expected)
+        legacy_nodes = counts["numeric_handle_ids"] > 0
+        if incomplete or legacy_nodes:
             print(
-                f"[*] Neo4j has {graph_actor_count}/{actor_count} actors; "
-                "running a controlled graph backfill."
+                "[*] Neo4j graph projection is incomplete or contains legacy handle IDs; "
+                "running a deterministic graph rebuild. "
+                f"expected={expected}, actual={counts}"
             )
+            graph_service.reset_graph()
             init_db_and_load_csvs(reset_tables=False, sync_neo4j=True)
     except Exception as exc:
         # The API can still use its PostgreSQL graph fallback when Neo4j is down.
@@ -93,6 +190,7 @@ def _backfill_evidence_ledger() -> int:
 async def lifespan(app: FastAPI):
     print("[*] Creating and verifying database tables...")
     await asyncio.to_thread(Base.metadata.create_all, bind=engine)
+    await asyncio.to_thread(_ensure_compatibility_schema)
     print("[*] Database tables ready.")
 
     actor_count = await asyncio.to_thread(_bootstrap_demo_data)
