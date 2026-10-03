@@ -629,14 +629,12 @@ class CorrelationService:
             )
         now = datetime.now(timezone.utc)
         normalized_dates = []
-        future_dates = 0
         for value in dates:
             if value.tzinfo is None:
                 value = value.replace(tzinfo=timezone.utc)
             if value > now:
                 # Future-dated synthetic/source records must never become
                 # "current" evidence and receive a 100 recency score.
-                future_dates += 1
                 continue
             normalized_dates.append(value)
 
