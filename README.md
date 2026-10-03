@@ -246,7 +246,7 @@ docker compose up -d
 ```
 
 This starts:
-- PostgreSQL on `5432`
+- PostgreSQL on host port `5433` (container port `5432`)
 - Neo4j HTTP/Bolt on `7474/7687`
 - Redis on `6379`
 - Celery worker and Celery Beat for autonomous scanning
@@ -573,6 +573,12 @@ Only scan infrastructure that you own or are explicitly authorized to test. Do n
 See [docs/autonomous-scanning.md](docs/autonomous-scanning.md).
 
 ---
+
+## PostgreSQL persistent-volume password recovery
+
+The PostgreSQL container publishes host port `5433` and keeps container port `5432`. This avoids colliding with a PostgreSQL server already running on the developer's Mac. Compose services continue to connect to `postgres:5432` over the Docker network.
+
+Changing `POSTGRES_PASSWORD` in `backend/.env` does not change the password stored in an already-initialized `pgdata` volume. If the API reports `password authentication failed for user "postgres"`, preserve the volume and follow [backend/POSTGRES_RECOVERY.md](backend/POSTGRES_RECOVERY.md) to align the stored role password with the local environment. Never use `docker compose down -v` for credential recovery.
 
 ## Neo4j persistent-volume password recovery
 
