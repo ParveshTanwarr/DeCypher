@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 
 from app.database.postgres import get_db
 from app.models.sql_models import Actor
-from app.routers.auth import get_current_user
+from app.routers.auth import get_current_user, require_role
 from app.services.behavioral_profile_service import BehavioralProfileService
 
 router = APIRouter(
@@ -14,7 +14,10 @@ router = APIRouter(
 )
 
 
-@router.post("/{actor_id}/behavioral-profile/refresh")
+@router.post(
+    "/{actor_id}/behavioral-profile/refresh",
+    dependencies=[Depends(require_role("admin", "investigator"))],
+)
 def refresh_behavioral_profile(actor_id: str, db: Session = Depends(get_db)):
     actor = (
         db.query(Actor)
