@@ -68,6 +68,33 @@ function App() {
     setAuthToken(token); setLoadError("");
     Promise.allSettled([getActors(), getAllCorrelations()])
       .then(([actorsResult, correlationsResult]) => {
+        const actorError =
+          actorsResult.status === "rejected"
+            ? (actorsResult.reason as { status?: number; message?: string })
+            : null;
+        const correlationError =
+          correlationsResult.status === "rejected"
+            ? (correlationsResult.reason as { status?: number; message?: string })
+            : null;
+
+        // A browser tab can retain a session token after the backend has
+        // restarted or the token has expired. Do not leave the user on a
+        // dashboard that looks loaded but contains zero actors in that case.
+        if (
+          actorError?.status === 401 ||
+          actorError?.status === 403 ||
+          correlationError?.status === 401 ||
+          correlationError?.status === 403
+        ) {
+          console.error("Authentication expired or was rejected by the backend.");
+          sessionStorage.removeItem("decypher_token");
+          setAuthToken("");
+          setToken("");
+          setActors([]);
+          setLoadError("");
+          return;
+        }
+
         if (actorsResult.status === "rejected") {
           console.error("Failed to load actors:", actorsResult.reason);
           setActors([]);
