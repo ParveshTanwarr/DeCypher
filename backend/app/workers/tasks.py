@@ -13,7 +13,6 @@ from app.models.sql_models import Actor, Observation, ScanJob, ScanTarget
 from app.services import graph_service
 from app.services.correlation_service import CorrelationService
 from app.workers.celery_app import celery_app
-from infra.target_policy import validate_scan_target
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 
@@ -24,6 +23,13 @@ def _allowed_hosts() -> set[str]:
     return {x.strip().lower() for x in settings.AUTOSCAN_ALLOWED_HOSTS.split(",") if x.strip()}
 
 def validate_authorized_target(target_url: str) -> None:
+    # Import the shared policy only after placing the project root on sys.path;
+    # the backend container's working directory is /app/backend while infra is
+    # a sibling package under /app.
+    if str(PROJECT_ROOT) not in sys.path:
+        sys.path.insert(0, str(PROJECT_ROOT))
+    from infra.target_policy import validate_scan_target
+
     validate_scan_target(target_url, _allowed_hosts())
 
 def effective_scan_interval_minutes(target: ScanTarget, priority_score: int | None) -> int:
