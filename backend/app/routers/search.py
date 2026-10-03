@@ -26,31 +26,33 @@ class SearchResponse(BaseModel):
 
 @router.get("", response_model=SearchResponse)
 def global_search(
-    q: str = Query(..., min_length=2, description="Search term (handle, wallet, or actor ID)"),
+    q: str = Query(..., min_length=2, max_length=128, description="Search term (handle, wallet, or actor ID)"),
     limit: int = Query(50, ge=1, le=200, description="Max results to return"),
     db: Session = Depends(get_db),
 ):
-    search_pattern = f"%{q}%"
+    escaped_q = q.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+    search_pattern = f"%{escaped_q}%"
+    like_kwargs = {"escape": "\\"}
     results: List[SearchResultItem] = []
     seen_actor_ids = set()
 
     # Count unique matching actors independently of the page limit. The API
     # field is total_matches, so it must not simply mirror returned rows.
     actor_ids = db.query(Actor.actor_id).filter(
-        (Actor.actor_id.ilike(search_pattern))
-        | (Actor.primary_handle.ilike(search_pattern))
+        (Actor.actor_id.ilike(search_pattern, **like_kwargs))
+        | (Actor.primary_handle.ilike(search_pattern, **like_kwargs))
     )
     handle_actor_ids = db.query(DarkWebHandle.actor_id).filter(
-        DarkWebHandle.handle.ilike(search_pattern)
+        DarkWebHandle.handle.ilike(search_pattern, **like_kwargs)
     )
     wallet_actor_ids = db.query(Wallet.actor_id).filter(
-        Wallet.address.ilike(search_pattern)
+        Wallet.address.ilike(search_pattern, **like_kwargs)
     )
     pgp_actor_ids = (
         db.query(DarkWebHandle.actor_id)
         .join(handle_pgp_keys, DarkWebHandle.id == handle_pgp_keys.c.handle_id)
         .join(PGPKey, PGPKey.id == handle_pgp_keys.c.pgp_key_id)
-        .filter(PGPKey.fingerprint.ilike(search_pattern))
+        .filter(PGPKey.fingerprint.ilike(search_pattern, **like_kwargs))
     )
     total_matches = int(
         db.query(func.count())
