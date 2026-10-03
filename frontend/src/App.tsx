@@ -205,7 +205,7 @@ function App() {
             <div className="stat-card stat-blue"><span>Total Actors</span><strong>{actors.length}</strong><small>Indexed identities</small><LayoutDashboard size={18} /></div>
             <div className="stat-card stat-red"><span>Priority ≥ High</span><strong>{priorityStats.urgent}</strong><small>Actors needing attention</small><AlertTriangle size={18} /></div>
             <div className="stat-card stat-green"><span>Average Priority</span><strong>{priorityStats.average.toFixed(0)}</strong><small>Derived triage score / 100</small><Target size={18} /></div>
-            <div className="stat-card stat-purple"><span>Average Confidence</span><strong>{averageConfidence.toFixed(1)}%</strong><small>{highPriorityCount} high/critical priority actors</small><ShieldCheck size={18} /></div>
+            <div className="stat-card stat-purple"><span>Average Evidence Confidence</span><strong>{averageConfidence.toFixed(1)}%</strong><small>Weighted evidence agreement · not identity probability</small><ShieldCheck size={18} /></div>
           </section>
           <section className="dashboard-grid">
             <div className="panel actors-panel"><div className="panel-header"><div><div className="eyebrow">PRIORITY QUEUE</div><h3>Actors ranked by operational priority</h3><p className="panel-meta">{actors.length} indexed actors · highest priority first</p></div><button className="secondary-button" onClick={() => setPage("search")}>Open investigation search <span aria-hidden="true">→</span></button></div>
