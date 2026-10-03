@@ -357,7 +357,6 @@ def sync_actor_observations(
     )
 
 
-
 def sync_temporal_events(events: List[Dict[str, Any]]) -> None:
     """Project normalized temporal evidence events into Neo4j."""
     if not events:
@@ -378,14 +377,9 @@ def sync_temporal_events(events: List[Dict[str, Any]]) -> None:
 
         MERGE (a)-[:HAS_EVENT]->(e)
 
-        // A WITH clause is required before starting the OPTIONAL MATCH
-        // section after MERGE/SET in Neo4j's query grammar.
         WITH e, row
 
-        // Handle identity is resolved by the canonical source ID carried
-        // in the event payload. If a full graph rebuild has not projected the
-        // handle yet, create the canonical node here rather than silently
-        // dropping the temporal relationship.
+        // Materialize the canonical handle node carried by the event payload.
         FOREACH (
             ignored IN CASE
                 WHEN row.entity_type = "handle"
@@ -398,6 +392,8 @@ def sync_temporal_events(events: List[Dict[str, Any]]) -> None:
                 h.platform = coalesce(row.payload.platform, h.platform)
             MERGE (e)-[:DESCRIBES]->(h)
         )
+
+        WITH e, row
 
         // Legacy events without a canonical source ID can still be attached
         // by their visible handle/platform pair, but only as a fallback.
@@ -445,7 +441,6 @@ def sync_temporal_events(events: List[Dict[str, Any]]) -> None:
         """,
         {"rows": events},
     )
-
 
 
 def sync_external_entity_links(links: List[Dict[str, Any]]) -> None:
@@ -674,13 +669,13 @@ def get_actor_subgraph(
         if m
     ]
     row["handle_marketplaces"] = [
-    pair
-    for pair in row.get("handle_marketplaces", [])
-    if pair
-    and pair.get("handle_id")
-    and pair.get("handle")
-    and pair.get("marketplace")
-]
+        pair
+        for pair in row.get("handle_marketplaces", [])
+        if pair
+        and pair.get("handle_id")
+        and pair.get("handle")
+        and pair.get("marketplace")
+    ]
 
     row["observations"] = [
         o
