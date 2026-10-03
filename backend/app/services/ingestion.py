@@ -87,6 +87,9 @@ def _upsert_actors(session: Session, df: pd.DataFrame, primary_handles: pd.DataF
 
 def _upsert_darkweb_handles(session: Session, prepared_handles: pd.DataFrame):
     valid_cols = [
+        # Keep the source identifier in the relational staging frame. It is
+        # the canonical identity used by both PostgreSQL and Neo4j.
+        "handle_id",
         "handle",
         "platform",
         "actor_id",
