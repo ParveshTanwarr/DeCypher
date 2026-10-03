@@ -2,6 +2,8 @@ import os
 
 import requests
 
+from infra.detectors.response_utils import read_response_text
+
 
 def detect_status_page(base_url: str):
     """
@@ -15,18 +17,16 @@ def detect_status_page(base_url: str):
     status_url = base_url.rstrip("/") + "/server-status"
 
     try:
-        response = requests.get(
+        with requests.get(
             status_url,
             timeout=int(os.getenv("SCANNER_CONNECT_TIMEOUT_SECONDS", "10")),
             verify=os.getenv("SCANNER_TLS_VERIFY", "true").strip().lower() not in {"0", "false", "no", "off"},
             allow_redirects=False,
-        )
-
-        if (
-            response.status_code == 200
-            and "EXPOSED_STATUS_PAGE_TEST" in response.content[: int(os.getenv("SCANNER_MAX_RESPONSE_BYTES", "1000000"))].decode("utf-8", errors="ignore")
-        ):
-            return "EXPOSED_STATUS_PAGE_TEST"
+            stream=True,
+        ) as response:
+            body = read_response_text(response)
+            if response.status_code == 200 and "EXPOSED_STATUS_PAGE_TEST" in body:
+                return "EXPOSED_STATUS_PAGE_TEST"
 
     except requests.RequestException:
         pass

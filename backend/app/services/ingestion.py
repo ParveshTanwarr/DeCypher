@@ -101,6 +101,9 @@ def _upsert_darkweb_handles(session: Session, prepared_handles: pd.DataFrame):
     if "handle" in df_filtered.columns and "platform" in df_filtered.columns:
         df_filtered = df_filtered.drop_duplicates(subset=["handle", "platform"], keep="last")
 
+    # Persist the stable source handle ID separately from the relational model's
+    # integer primary key. The source ID is the only identifier exposed to Neo4j.
+    df_filtered["source_handle_id"] = prepared_handles.loc[df_filtered.index, "handle_id"]
     records = df_filtered.where(pd.notnull(df_filtered), None).to_dict(orient="records")
     if not records:
         return 0, []
@@ -109,6 +112,7 @@ def _upsert_darkweb_handles(session: Session, prepared_handles: pd.DataFrame):
     stmt = stmt.on_conflict_do_update(
         constraint="uq_handle_platform",
         set_={
+            "source_handle_id": stmt.excluded.source_handle_id,
             "actor_id": stmt.excluded.actor_id,
             "status": stmt.excluded.status,
             "last_seen": stmt.excluded.last_seen,

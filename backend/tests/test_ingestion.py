@@ -26,12 +26,15 @@ def test_ingested_handle_ids_are_preserved_for_graph_sync():
     db = SessionLocal()
     try:
         rows = (
-            db.query(DarkWebHandle.id)
+            db.query(DarkWebHandle.id, DarkWebHandle.source_handle_id)
             .filter(DarkWebHandle.actor_id.isnot(None))
             .all()
         )
         assert rows, "ingested handles should have database IDs"
         assert all(row[0] > 0 for row in rows)
+        assert all(row[1] and str(row[1]).startswith("H") for row in rows), (
+            "every seeded handle should retain its stable CSV source ID for graph identity"
+        )
     finally:
         db.close()
 

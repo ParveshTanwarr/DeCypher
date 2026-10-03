@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 from typing import Any, Iterable
 import logging
 
+from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session, joinedload
 
 logger = logging.getLogger(__name__)
@@ -81,6 +82,13 @@ def _collect_actor_events(db: Session, actor_ids: Iterable[str]) -> list[dict[st
             ("first_seen", handle.first_seen),
             ("last_seen", handle.last_seen),
         ):
+            payload = {
+                **handle_payload,
+                # Keep the DB entity_id for SQL compatibility, but carry the
+                # canonical graph identity so Neo4j never has to infer it from
+                # an integer primary key.
+                "graph_handle_id": handle.source_handle_id or f"legacy:{handle.id}",
+            }
             item = _event(
                 f"handle:{handle.id}:{label}",
                 actor_id,
@@ -89,7 +97,7 @@ def _collect_actor_events(db: Session, actor_ids: Iterable[str]) -> list[dict[st
                 str(handle.id),
                 timestamp,
                 "handles",
-                handle_payload,
+                payload,
             )
             if item:
                 events.append(item)
@@ -262,8 +270,14 @@ def backfill_temporal_events(db: Session, actor_id: str | None = None) -> int:
     if not missing:
         return 0
 
-    db.bulk_insert_mappings(TemporalEvent, missing)
-    return len(missing)
+    # The pre-check above keeps the common path cheap, but concurrent workers
+    # can still observe the same missing key. Let PostgreSQL enforce the unique
+    # constraint atomically so materialization is idempotent under concurrency.
+    stmt = insert(TemporalEvent).values(missing).on_conflict_do_nothing(
+        index_elements=["event_key"]
+    )
+    result = db.execute(stmt)
+    return int(result.rowcount or 0)
 
 
 def sync_temporal_events_to_neo4j(db: Session, actor_id: str | None = None) -> int:

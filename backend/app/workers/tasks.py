@@ -5,7 +5,6 @@ import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
-from urllib.parse import urlparse
 from celery import Task
 from sqlalchemy.dialects.postgresql import insert
 from app.config import settings
@@ -24,13 +23,14 @@ def _allowed_hosts() -> set[str]:
     return {x.strip().lower() for x in settings.AUTOSCAN_ALLOWED_HOSTS.split(",") if x.strip()}
 
 def validate_authorized_target(target_url: str) -> None:
-    parsed = urlparse(target_url)
-    if parsed.scheme not in {"http", "https"} or not parsed.hostname:
-        raise ValueError("Autoscan target must be a valid http:// or https:// URL.")
-    host = parsed.hostname.lower()
-    if host not in _allowed_hosts():
-        allowed = ", ".join(sorted(_allowed_hosts())) or "(none)"
-        raise ValueError(f"Target host '{host}' is not in AUTOSCAN_ALLOWED_HOSTS. Allowed hosts: {allowed}")
+    # Import the shared policy only after placing the project root on sys.path;
+    # the backend container's working directory is /app/backend while infra is
+    # a sibling package under /app.
+    if str(PROJECT_ROOT) not in sys.path:
+        sys.path.insert(0, str(PROJECT_ROOT))
+    from infra.target_policy import validate_scan_target
+
+    validate_scan_target(target_url, _allowed_hosts())
 
 def effective_scan_interval_minutes(target: ScanTarget, priority_score: int | None) -> int:
     base = max(5, int(target.interval_minutes or settings.AUTOSCAN_DEFAULT_INTERVAL_MINUTES))
@@ -111,6 +111,15 @@ def run_authorized_scan_task(self: Task, job_id: int) -> dict[str, Any]:
 
         observations = run_authorized_scan(target.target_url, target.actor_id)
         inserted = _persist_observations(db, observations)
+
+        # Keep the evidence row and its tamper-evident ledger record in the
+        # same PostgreSQL transaction. A later failure rolls both back.
+        from app.services.evidence_ledger import EvidenceLedgerService
+        EvidenceLedgerService(db).append_missing_for_observations(
+            observations,
+            actor_id=target.actor_id,
+            created_by="autoscan_worker",
+        )
 
         if target.actor_id:
             try:

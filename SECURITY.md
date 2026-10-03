@@ -14,7 +14,7 @@ The scanner and autonomous mode are intended for targets that you are explicitly
 - Do not use the project to bypass access controls, deanonymize uninvolved individuals, or collect credentials.
 - Treat scanner configuration changes as security-sensitive.
 
-The current demo intentionally supports local TLS fixtures. Some scanner requests therefore disable certificate verification for the controlled test environment. This should not be copied into an unrestricted production scanner without a proper trust/verification policy.
+The normal HTTP scanner path verifies TLS by default (SCANNER_TLS_VERIFY=true) and disables redirects. The certificate-fingerprint detector intentionally uses a separate non-verifying TLS socket because it must observe certificate identity even when the certificate is self-signed or otherwise untrusted in the controlled fixture. Both paths are limited to the configured authorized-host allowlist.
 
 ## Secrets
 

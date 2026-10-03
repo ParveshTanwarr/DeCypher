@@ -124,3 +124,37 @@ def test_graph_sync_uses_handle_id_when_names_collide():
     query, params = calls[1]
     assert "MERGE (h:Handle {handle_id: row.handle_id})" in query
     assert {row["handle_id"] for row in params["rows"]} == {"H00001", "H00002"}
+
+
+def test_temporal_graph_projection_uses_canonical_handle_identity():
+    calls = []
+
+    def fake_write(query, params):
+        calls.append((query, params))
+
+    events = [
+        {
+            "event_id": "handle:1:registered",
+            "actor_id": "A00001",
+            "event_type": "handle_registered",
+            "entity_type": "handle",
+            "entity_id": "1",
+            "timestamp": "2024-01-01T00:00:00+00:00",
+            "source": "handles",
+            "payload": {
+                "graph_handle_id": "H00001",
+                "handle": "nyxinhex99",
+                "platform": "marketplace_11",
+            },
+        }
+    ]
+
+    with patch.object(graph_service.neo4j_conn, "write", side_effect=fake_write):
+        graph_service.sync_temporal_events(events)
+
+    assert len(calls) == 1
+    query, params = calls[0]
+    assert "row.payload.graph_handle_id" in query
+    assert "row.payload.handle" in query
+    assert "toString(row.entity_id)" not in query
+    assert params["rows"][0]["payload"]["graph_handle_id"] == "H00001"

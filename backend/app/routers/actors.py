@@ -345,9 +345,13 @@ def get_actor_subgraph(actor_id: str, db: Session = Depends(get_db)):
     # ---------------------------------------------------------
 
     try:
+        graph_handle_id_by_db_id = {
+            h.id: h.source_handle_id or f"legacy:{h.id}"
+            for h in graph_identity_handles
+        }
         handle_id_by_name = {
-            h.handle.strip().lower(): h.id
-            for h in handles
+            h.handle.strip().lower(): graph_handle_id_by_db_id[h.id]
+            for h in graph_identity_handles
             if h.handle
         }
 
@@ -362,8 +366,8 @@ def get_actor_subgraph(actor_id: str, db: Session = Depends(get_db)):
             ],
             handles=[
                 {
-                    "handle_id": h.id,
-                    "actor_id": actor.actor_id,
+                    "handle_id": h.source_handle_id or f"legacy:{h.id}",
+                    "actor_id": h.actor_id,
                     "handle": h.handle,
                     "platform": h.platform,
                     "status": h.status,
@@ -389,7 +393,7 @@ def get_actor_subgraph(actor_id: str, db: Session = Depends(get_db)):
         graph_service.sync_pgp_and_trust_graph(
             [
                 {
-                    "handle_id": h.id,
+                    "handle_id": h.source_handle_id or f"legacy:{h.id}",
                     "actor_id": h.actor_id,
                     "handle": h.handle,
                     "pgp_fingerprint": (
@@ -402,8 +406,14 @@ def get_actor_subgraph(actor_id: str, db: Session = Depends(get_db)):
             ],
             [
                 {
-                    "source_handle_id": link.source_handle_id,
-                    "target_handle_id": link.target_handle_id,
+                    "source_handle_id": graph_handle_id_by_db_id.get(
+                        link.source_handle_id,
+                        f"legacy:{link.source_handle_id}",
+                    ),
+                    "target_handle_id": graph_handle_id_by_db_id.get(
+                        link.target_handle_id,
+                        f"legacy:{link.target_handle_id}",
+                    ),
                     "relationship_type": link.relationship_type,
                     "confidence": link.confidence,
                     "source": link.source,

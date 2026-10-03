@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from statistics import median
 from typing import Any
 
 from sqlalchemy.orm import Session, joinedload
@@ -114,8 +113,8 @@ def _build_population(db: Session) -> dict[str, dict[str, float]]:
 
     source_diversity_by_actor: dict[str, set[str]] = defaultdict(set)
     for observation in observations:
-        actor_id = (observation.target or "").strip()
-        if actor_id in actor_set and observation.source:
+        actor_id = target_to_actor.get((observation.target or "").strip().lower())
+        if actor_id and observation.source:
             source_diversity_by_actor[actor_id].add(observation.source)
 
     population: dict[str, dict[str, float]] = {}
