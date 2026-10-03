@@ -4,7 +4,7 @@ from pathlib import Path
 from sqlalchemy.orm import Session
 
 from app.database.postgres import SessionLocal
-from app.models.advanced_models import EntityLink
+from app.models.advanced_models import EntityLink, ExternalEntity
 from app.models.sql_models import Actor, DarkWebHandle
 from app.services.advanced_intelligence import EntityLinkageService
 
@@ -17,8 +17,9 @@ def _seed_case(db: Session):
         "alphabay-wheeler": "CASE-ALPHABAY-WHEELER",
         "alphabay-herrell": "CASE-ALPHABAY-HERRELL",
     }
+    db.query(EntityLink).delete()
+    db.query(ExternalEntity).filter(ExternalEntity.source == "doj-alphabay-2017").delete()
     for actor_id in actor_ids.values():
-        db.query(EntityLink).filter(EntityLink.actor_id == actor_id).delete()
         db.query(DarkWebHandle).filter(DarkWebHandle.actor_id == actor_id).delete()
         db.query(Actor).filter(Actor.actor_id == actor_id).delete()
 
@@ -36,6 +37,18 @@ def _seed_case(db: Session):
     ]:
         db.add(Actor(actor_id=actor_id, primary_handle=primary_handle, risk_category="high"))
 
+    db.flush()
+    for alias in ("Alpha02", "Admin", "Trappy", "Penissmith", "Botah"):
+        db.add(
+            ExternalEntity(
+                entity_type="handle",
+                canonical_value=alias,
+                display_name=alias,
+                source="doj-alphabay-2017",
+                confidence=1.0,
+                entity_metadata={"case_id": "alphabay-2017-cazes", "evidence_type": "documented_alias"},
+            )
+        )
     db.flush()
     for index, (actor_id, handle, platform) in enumerate(rows, start=1):
         db.add(
@@ -81,5 +94,6 @@ def test_alphabay_public_case_entity_linkage():
             db.query(EntityLink).filter(EntityLink.actor_id == actor_id).delete()
             db.query(DarkWebHandle).filter(DarkWebHandle.actor_id == actor_id).delete()
             db.query(Actor).filter(Actor.actor_id == actor_id).delete()
+        db.query(ExternalEntity).filter(ExternalEntity.source == "doj-alphabay-2017").delete()
         db.commit()
         db.close()
