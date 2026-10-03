@@ -345,8 +345,12 @@ def get_actor_subgraph(actor_id: str, db: Session = Depends(get_db)):
     # ---------------------------------------------------------
 
     try:
+        graph_handle_id_by_db_id = {
+            h.id: h.source_handle_id or f"legacy:{h.id}"
+            for h in graph_identity_handles
+        }
         handle_id_by_name = {
-            h.handle.strip().lower(): (h.source_handle_id or f"legacy:{h.id}")
+            h.handle.strip().lower(): graph_handle_id_by_db_id[h.id]
             for h in graph_identity_handles
             if h.handle
         }
@@ -402,8 +406,14 @@ def get_actor_subgraph(actor_id: str, db: Session = Depends(get_db)):
             ],
             [
                 {
-                    "source_handle_id": next((h.source_handle_id or f"legacy:{h.id}" for h in graph_identity_handles if h.id == link.source_handle_id), f"legacy:{link.source_handle_id}"),
-                    "target_handle_id": next((h.source_handle_id or f"legacy:{h.id}" for h in graph_identity_handles if h.id == link.target_handle_id), f"legacy:{link.target_handle_id}"),
+                    "source_handle_id": graph_handle_id_by_db_id.get(
+                        link.source_handle_id,
+                        f"legacy:{link.source_handle_id}",
+                    ),
+                    "target_handle_id": graph_handle_id_by_db_id.get(
+                        link.target_handle_id,
+                        f"legacy:{link.target_handle_id}",
+                    ),
                     "relationship_type": link.relationship_type,
                     "confidence": link.confidence,
                     "source": link.source,
