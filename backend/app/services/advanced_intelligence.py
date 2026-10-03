@@ -589,7 +589,7 @@ class TorIntelligenceService:
                         status_response, settings.TOR_MAX_RESPONSE_BYTES
                     )
                     status_body = re.sub(
-                        r"\\s+", " ", status_raw.decode(
+                        r"\s+", " ", status_raw.decode(
                             status_response.encoding or "utf-8", errors="replace"
                         )
                     ).lower()
