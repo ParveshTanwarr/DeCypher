@@ -62,11 +62,11 @@ Run commands from `backend/`.
 4. At the `psql` prompt, use PostgreSQL's interactive password command:
 
    ```sql
-   \\password postgres
+   \password postgres
    ```
 
    Enter a new strong password twice. The password is not echoed and does not need to appear
-   in shell history. Exit with `\\q`.
+   in shell history. Exit with `\q`.
 
 5. Set **the same password** as `POSTGRES_PASSWORD` in `backend/.env`. Keep the host-side
    `DATABASE_URL` password in sync too if you run FastAPI outside Docker. Do not paste
