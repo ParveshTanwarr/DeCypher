@@ -72,3 +72,40 @@ def test_graph_anomaly_leaderboard(client, analyst_headers):
     payload = response.json()
     assert payload["total_actors"] >= 1
     assert len(payload["results"]) <= 5
+
+
+def test_temporal_events_project_to_neo4j_without_invalid_coalesce_endpoint():
+    """Regression test for temporal Event->Handle projection in Neo4j."""
+    from app.database.postgres import SessionLocal
+    from app.models.sql_models import TemporalEvent
+    from app.services import graph_service
+    from app.services.temporal_events import backfill_temporal_events, sync_temporal_events_to_neo4j
+
+    db = SessionLocal()
+    try:
+        backfill_temporal_events(db, actor_id="A00001")
+        db.commit()
+        event = (
+            db.query(TemporalEvent)
+            .filter(
+                TemporalEvent.actor_id == "A00001",
+                TemporalEvent.entity_type == "handle",
+            )
+            .order_by(TemporalEvent.id.asc())
+            .first()
+        )
+        assert event is not None
+
+        sync_temporal_events_to_neo4j(db, actor_id="A00001")
+
+        rows = graph_service.neo4j_conn.query(
+            """
+            MATCH (e:Event {event_id: $event_id})-[:DESCRIBES]->(h:Handle)
+            RETURN h.handle_id AS handle_id
+            """,
+            {"event_id": event.event_key},
+        )
+        assert rows
+        assert rows[0]["handle_id"]
+    finally:
+        db.close()
