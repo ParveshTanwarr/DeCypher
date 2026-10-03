@@ -63,3 +63,52 @@ def test_feedback_for_nonexistent_actor_404s(client, admin_headers):
         json={"actor_id": "DOES_NOT_EXIST", "verdict": "Confirmed"},
     )
     assert r.status_code == 404
+
+
+def test_service_account_cannot_submit_investigator_feedback(client):
+    login = client.post(
+        "/auth/token",
+        data={
+            "username": "scanner_service",
+            "password": "scanner_service_devkey_change_me",
+        },
+    )
+    assert login.status_code == 200, login.text
+
+    r = client.post(
+        "/investigator/feedback",
+        headers={"Authorization": f"Bearer {login.json()['access_token']}"},
+        json={"actor_id": "A00014", "verdict": "Confirmed"},
+    )
+    assert r.status_code == 403
+
+
+def test_repeated_feedback_does_not_compound(client, admin_headers):
+    first = client.post(
+        "/investigator/feedback",
+        headers=admin_headers,
+        json={"actor_id": "A00014", "verdict": "Confirmed"},
+    )
+    assert first.status_code == 201, first.text
+    after_first = client.get("/actors/A00014", headers=admin_headers).json()
+
+    second = client.post(
+        "/investigator/feedback",
+        headers=admin_headers,
+        json={"actor_id": "A00014", "verdict": "Confirmed"},
+    )
+    assert second.status_code == 201, second.text
+    after_second = client.get("/actors/A00014", headers=admin_headers).json()
+
+    assert after_second["confidence_score"] == after_first["confidence_score"]
+    assert after_second["priority_score"] == after_first["priority_score"]
+
+    changed = client.post(
+        "/investigator/feedback",
+        headers=admin_headers,
+        json={"actor_id": "A00014", "verdict": "False Positive"},
+    )
+    assert changed.status_code == 201, changed.text
+    after_changed = client.get("/actors/A00014", headers=admin_headers).json()
+    assert after_changed["confidence_score"] < after_second["confidence_score"]
+    assert after_changed["priority_score"] < after_second["priority_score"]
