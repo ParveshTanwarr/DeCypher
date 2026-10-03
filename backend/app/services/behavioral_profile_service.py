@@ -143,11 +143,6 @@ class BehavioralProfileService:
         interaction = self._interaction(actor, handle_ids, trust_links)
         infrastructure = self._infrastructure(observations)
 
-        if not lifecycle.get("post_activity", {}).get("available"):
-            limitations.append(
-                "No usable per-post timestamps were supplied, so posting hours, weekday patterns, and inter-post cadence are not inferred."
-            )
-
         dimension_flags = {
             "linguistic": bool(linguistic.get("available")),
             "temporal_lifecycle": bool(handles),
@@ -197,6 +192,10 @@ class BehavioralProfileService:
             "Behavioural similarity and shared operational indicators are investigative leads, not proof of common identity.",
             "If the authorship model is unavailable, any fallback similarity is explicitly labelled and must not be treated as validated model output.",
         ]
+        if not lifecycle.get("post_activity", {}).get("available"):
+            limitations.append(
+                "No usable per-post timestamps were supplied, so posting hours, weekday patterns, and inter-post cadence are not inferred."
+            )
 
         return {
             "actor_id": actor.actor_id,
