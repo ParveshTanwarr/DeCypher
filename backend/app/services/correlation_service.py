@@ -627,12 +627,24 @@ class CorrelationService:
                 for o in self._actor_observations(actor)
                 if o.timestamp
             )
-        if not dates:
+        now = datetime.now(timezone.utc)
+        normalized_dates = []
+        future_dates = 0
+        for value in dates:
+            if value.tzinfo is None:
+                value = value.replace(tzinfo=timezone.utc)
+            if value > now:
+                # Future-dated synthetic/source records must never become
+                # "current" evidence and receive a 100 recency score.
+                future_dates += 1
+                continue
+            normalized_dates.append(value)
+
+        if not normalized_dates:
             return 20.0
-        latest = max(dates)
-        if latest.tzinfo is None:
-            latest = latest.replace(tzinfo=timezone.utc)
-        age_days = max(0.0, (datetime.now(timezone.utc) - latest).total_seconds() / 86400)
+
+        latest = max(normalized_dates)
+        age_days = (now - latest).total_seconds() / 86400
         if age_days <= 7: return 100.0
         if age_days <= 30: return 80.0
         if age_days <= 90: return 60.0
