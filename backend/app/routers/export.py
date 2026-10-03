@@ -22,6 +22,7 @@ from app.database.postgres import get_db
 from app.models.sql_models import Actor, DarkWebHandle, Wallet, Observation, ScanTarget
 from app.routers.auth import require_role
 from app.services.observation_scope import build_observation_target_keys
+from app.config import settings
 
 # Bulk export is limited to authenticated investigative roles because it
 # exposes the consolidated actor intelligence result set.
@@ -534,6 +535,10 @@ def _build_report_pdf(records: List[Dict[str, Any]], graph_image: Optional[str] 
             try:
                 encoded = graph_image.split(",", 1)[1] if "," in graph_image else graph_image
                 graph_bytes = base64.b64decode(encoded, validate=True)
+                if len(graph_bytes) > settings.EXPORT_MAX_GRAPH_IMAGE_BYTES:
+                    raise ValueError(
+                        f"Graph image exceeds the {settings.EXPORT_MAX_GRAPH_IMAGE_BYTES}-byte export limit."
+                    )
                 story.append(PageBreak())
                 story.append(Paragraph("Investigation Graph Snapshot", section_style))
                 story.append(Paragraph(
