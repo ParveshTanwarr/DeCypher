@@ -12,7 +12,7 @@ from datetime import datetime, timedelta, timezone
 from email.utils import parsedate_to_datetime
 from io import BytesIO
 from typing import Any, Iterable
-from urllib.parse import urlparse
+from urllib.parse import urlparse, urlunsplit
 
 import requests
 from PIL import Image
