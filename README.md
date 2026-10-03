@@ -1,696 +1,602 @@
-# DeCypher — Dark-Web Threat Actor Intelligence Platform
+# DeCypher
+### Evidence-led threat intelligence, actor correlation & investigation platform
 
-![SIH 2026](https://img.shields.io/badge/Smart%20India%20Hackathon-2026-orange)
-![PS 26151](https://img.shields.io/badge/PS-26151-red)
-![React](https://img.shields.io/badge/Frontend-React%2019-61dafb)
-![FastAPI](https://img.shields.io/badge/Backend-FastAPI-009688)
+<p align="center">
+  <strong>Smart India Hackathon 2026 · Problem Statement 26151 · NTRO</strong>
+</p>
 
-> Smart India Hackathon 2026 · Problem Statement 26151 · National Technical Research Organisation (NTRO)
+<p align="center">
+  <img alt="Python" src="https://img.shields.io/badge/Python-3.11%2B-3776AB?logo=python&logoColor=white">
+  <img alt="FastAPI" src="https://img.shields.io/badge/API-FastAPI-009688?logo=fastapi&logoColor=white">
+  <img alt="React" src="https://img.shields.io/badge/UI-React%2019-61DAFB?logo=react&logoColor=black">
+  <img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-6-3178C6?logo=typescript&logoColor=white">
+  <img alt="PostgreSQL" src="https://img.shields.io/badge/Database-PostgreSQL-4169E1?logo=postgresql&logoColor=white">
+  <img alt="Neo4j" src="https://img.shields.io/badge/Graph-Neo4j-008CC1?logo=neo4j&logoColor=white">
+  <img alt="Docker" src="https://img.shields.io/badge/Deployment-Docker-2496ED?logo=docker&logoColor=white">
+  <img alt="License" src="https://img.shields.io/badge/License-MIT-green.svg">
+</p>
 
-DeCypher is an investigator-facing platform for collecting, storing, contextualizing and querying dark-web-style threat-actor intelligence in a controlled, ethical demonstration environment.
+**DeCypher** is an investigator-facing threat-intelligence platform for organizing evidence, exploring relationships between digital personas, and prioritizing actor investigations in a controlled demonstration environment.
 
-The platform correlates actor identities across handles, wallets, PGP fingerprints, trust relationships and infrastructure observations; exposes an evidence-oriented relationship graph; provides explainable confidence/priority scoring; and exports investigation results as CSV, JSON and PDF reports.
+It brings structured evidence, graph relationships, stylometric signals, temporal records, behavioural profiles, and investigator feedback into one workflow. Rather than treating a single indicator as decisive, DeCypher presents explainable signals and their provenance so an investigator can review how a correlation was formed.
 
-**Safety boundary:** the repository uses synthetic datasets and authorized local/mock infrastructure. It is intended for authorized defensive, investigative and academic use. Correlation scores are leads for investigator review, not proof of real-world identity.
+> **Responsible-use boundary:** The bundled data is synthetic and the scanner is designed for explicitly authorized infrastructure. Correlation, confidence, anomaly, and priority values are investigative decision-support signals—not proof of identity, intent, or wrongdoing.
 
 ---
 
-## What DeCypher provides
+## Contents
 
-### Intelligence collection and storage
-- Synthetic actor, handle, wallet, marketplace, trust-link and infrastructure datasets.
-- PostgreSQL as the structured evidence store.
-- Authorized scanner ingestion for controlled infrastructure.
-- Optional asynchronous scanning through Celery + Redis.
-- Tamper-evident SHA-256 evidence ledger with append-only chain verification.
-- Actual scan timestamps surfaced as actor last-scan dates.
+- [Why DeCypher](#why-decypher)
+- [Platform capabilities](#platform-capabilities)
+- [System architecture](#system-architecture)
+- [Correlation and scoring](#correlation-and-scoring)
+- [Behavioural profiling](#behavioural-profiling)
+- [Evidence integrity](#evidence-integrity)
+- [Technology stack](#technology-stack)
+- [Repository structure](#repository-structure)
+- [Getting started](#getting-started)
+- [Configuration](#configuration)
+- [Run the application](#run-the-application)
+- [API overview](#api-overview)
+- [Synthetic dataset](#synthetic-dataset)
+- [Security and responsible use](#security-and-responsible-use)
+- [Testing and quality checks](#testing-and-quality-checks)
+- [Documentation](#documentation)
+- [Known limitations](#known-limitations)
+- [Contributing](#contributing)
+- [License](#license)
 
-### Investigation and correlation
-- Search by actor ID, handle, wallet or PGP fingerprint.
-- Actor profiles containing:
-  - primary and associated handles
-  - risk category
-  - confidence score
-  - operational priority score
-  - first/last activity
-  - last scan date
-  - wallets
-  - marketplaces
-  - PGP fingerprints
-  - trust/persona relationships
-  - evidence trail and sources
-- Neo4j relationship graph with a PostgreSQL fallback when Neo4j is unavailable.
-- Evidence-oriented links for wallets, PGP keys, trust relationships, marketplaces, observations and infrastructure.
-- Transparent correlation scoring using wallet reuse, infrastructure reuse, TLS/certificate reuse, banner matches, descriptor timing and stylometric similarity.
+---
+
+## Why DeCypher
+
+Threat investigations can involve fragmented identifiers and evidence spread across handles, wallets, PGP keys, marketplaces, infrastructure observations, and time-stamped events. Reviewing each signal in isolation makes it difficult to understand how records relate—or why a system has suggested a connection.
+
+DeCypher provides a common investigation workspace that:
+
+- brings heterogeneous evidence into a structured actor-centric model;
+- connects related entities in an explorable graph;
+- combines independent indicators through a transparent correlation service;
+- exposes the evidence and sensitivity behind a score;
+- records investigator feedback and evidence history;
+- provides exports that can accompany an investigation.
+
+The platform is designed to assist human review. It does not autonomously declare that two online identities belong to the same real-world person.
+
+---
+
+## Platform capabilities
+
+### Actor intelligence and investigation
+
+- Actor directory with risk category, confidence, operational priority, and activity metadata.
+- Search across actor identifiers, handles, wallet addresses, and PGP fingerprints.
+- Actor detail views containing associated handles, wallets, marketplaces, PGP keys, trust relationships, and evidence.
+- Evidence timelines and actor-specific investigation context.
+- Investigator feedback with recorded verdicts and notes.
+
+### Relationship graph
+
+- Neo4j-backed graph projection for actors and related evidence entities.
+- Graph relationships across handles, wallets, marketplaces, PGP keys, trust links, observations, and infrastructure.
+- Interactive force-directed graph exploration in the frontend.
+- PostgreSQL-backed graph fallback for actor graph queries when Neo4j is unavailable.
+
+### Evidence correlation and explainability
+
+The correlation service evaluates available evidence signals, including:
+
+- wallet reuse;
+- infrastructure reuse;
+- TLS/certificate reuse;
+- service/banner matches;
+- descriptor-timing similarity;
+- stylometric similarity.
+
+The service returns signal-level evidence and an overall correlation result. It also supports leave-one-signal-out counterfactual analysis, allowing an investigator to see how the score changes when an available signal is removed.
+
+Operational priority is calculated separately from identity confidence. It is a triage aid, not an identity probability.
+
+### Stylometry and NLP
+
+- Bundled authorship-model artifacts and feature extraction for comparing text samples.
+- Domain-aware authorship comparison using the project's PAN20 and DeCypher model artifacts.
+- Linguistic markers and similarity outputs exposed through the NLP API.
+- Stylometric similarity used as one input to broader evidence correlation—not as standalone attribution.
+
+### Behavioural profiling
+
+Actor behavioural profiles aggregate evidence already recorded by the platform across five dimensions:
+
+- **Linguistic:** post-level style features and per-handle / actor-level aggregation.
+- **Lifecycle:** registration and observed activity windows, account status, overlap, and gaps.
+- **Operational:** marketplace footprint, wallet associations, and PGP-key associations.
+- **Interaction:** incoming/outgoing trust relationships, counterparties, and recorded edge confidence.
+- **Infrastructure:** provenance-tagged infrastructure observations.
+
+Profiles are versioned and fingerprinted. Refreshing an unchanged source set is idempotent, and the service can compare snapshots to describe changes over time.
+
+### Temporal and graph analytics
+
+- Normalized temporal events materialized from timestamps present in the evidence store.
+- Actor timelines with event types, sources, and time filters.
+- Population-relative graph anomaly features covering wallet/PGP reuse, trust relationships, infrastructure reuse, marketplace switching, lifecycle overlap, temporal density, and source diversity.
+- Methodology and contributing features returned with analytics results.
+
+These outputs support triage and review; they are not causal explanations or identity verdicts.
 
 ### Evidence integrity
-- SHA-256 hash-chained observation ledger stored in PostgreSQL.
-- PostgreSQL advisory locking for serialized ledger appends.
-- Full-chain verification endpoint and actor-facing integrity status.
-- Optional external blockchain anchoring is not configured in the bundled prototype.
 
-### Advanced evidence analysis
-- Leave-one-signal-out counterfactual sensitivity analysis for the current weighted correlation set.
-- Review-conditioned source reliability using leave-one-actor-out investigator feedback.
-- Reliability bounds and explicit interpretation notes prevent these estimates from being treated as source truth or causal effects.
+- Append-only SHA-256 hash chain for structured observation evidence.
+- PostgreSQL advisory locking to serialize ledger appends.
+- Observation persistence and ledger writes performed within the same transaction.
+- Chain verification and integrity-status endpoints.
+- Merkle-rooted evidence blocks with chained block hashes.
 
-### Temporal and structural analytics
-- Normalized temporal evidence events stored in PostgreSQL and projected to Neo4j.
-- Actor timeline API built only from observed timestamps; unknown periods are left unknown.
-- Population-relative graph anomaly analysis across wallet reuse, PGP reuse, trust degree, infrastructure reuse, marketplace switching, temporal overlap and source diversity.
-- Actor UI surfaces the latest temporal events and structural anomaly contributors.
-- These analytics are investigator triage signals, not identity verdicts or causal models.
+**Important distinction:** The bundled implementation provides an internal tamper-evident ledger. It does not ship a public blockchain transaction signer or automatically anchor records to an external blockchain. External anchoring is an optional deployment integration boundary.
 
-### Observability and deployment hardening
-- Prometheus metrics exposed at `/metrics`.
-- Optional local Prometheus + Grafana stack in Docker Compose.
-- Production-style backend Docker image with separate API, Celery worker and Celery Beat services.
-- Scanner defaults to TLS verification, redirect blocking, allowlisted hosts, credential-free URLs and bounded detector responses.
+### Collection and authorized scanning
 
-### AI / NLP
-- Domain-aware authorship attribution using the bundled PAN20 and DeCypher model artifacts.
-- Explainable stylometric signals.
-- Contradiction/de-confliction checks for overlapping activity windows.
-- Gemini-powered **DeCypher Copilot**, scoped to the selected actor when an actor is open.
-- Copilot is instructed to use only supplied DeCypher context and distinguish evidence, inference and unknowns.
-- Gemini is optional; the rest of the platform does not require it.
+- Controlled infrastructure scanner with bounded responses and configured host allowlists.
+- Optional scheduled scanning through Celery Beat, Redis, and Celery workers.
+- Registered collection sources supporting JSON, RSS, HTML, and configured Tor HTTP collection.
+- Tor inspection and descriptor parsing paths for explicitly allowlisted, authorized sources.
+- Scan and collection runs create structured observations that can feed graph projection and correlation.
 
-### Investigator UX
-- Dark/light theme with persistent preference.
-- Dashboard with priority queue, confidence and priority summaries.
-- Investigation search with frequently searched actors.
-- Interactive force-directed graph.
-- Actor-specific graph snapshot embedded in PDF reports.
-- Notifications and investigation Copilot.
-- CSV, JSON and PDF bulk/actor exports.
+Autonomous scanning and continuous collection are disabled by default. The default scanner/collection allowlists are loopback-oriented; do not broaden them without an explicit authorization and safety review.
+
+### Advanced intelligence
+
+The advanced intelligence API and investigator interface also include:
+
+- source-reliability estimates conditioned on investigator feedback from other actors;
+- evidence ablation and stylometry discovery workflows;
+- calibration evaluation against the bundled synthetic labels;
+- historical-case evaluation harness;
+- media fingerprinting using SHA-256 and perceptual dHash comparison;
+- technical entity linkage;
+- persisted alerts delivered to the UI over an authenticated WebSocket.
+
+### Investigator workspace
+
+The React application includes:
+
+- investigation dashboard and priority queue;
+- global search;
+- actor profile and evidence views;
+- relationship graph;
+- advanced intelligence workspace;
+- dark/light theme preference;
+- notifications and live alert updates;
+- bulk and actor-level CSV, JSON, and PDF exports.
+
+The optional DeCypher Copilot uses Gemini from the backend. The Gemini key is never required by the core platform and must never be placed in frontend configuration.
 
 ---
 
-## Architecture
+## System architecture
 
-```text
- Synthetic / Authorized Evidence
-              |
-              v
-       Collection / Ingestion
-              |
-              v
-        PostgreSQL Store
-          /           \
-         v             v
-   NLP / Correlation   Neo4j Graph
-         \             /
-          \           /
-           v         v
-        FastAPI Backend
-        JWT + RBAC + Audit
-              |
-              v
-       React / TypeScript UI
-       Dashboard / Search
-       Actor / Graph / Copilot
+```mermaid
+flowchart TD
+    A["Synthetic datasets / authorized sources"] --> B["Ingestion & scanner services"]
+    B --> C[("PostgreSQL<br/>Structured evidence · actors · events · ledger")]
+    C --> D["Correlation & behavioural profiling"]
+    C <--> E[("Neo4j<br/>Relationship graph projection")]
+    D --> F["FastAPI application"]
+    E --> F
+    G["NLP / stylometry models"] --> D
+    H["Redis + Celery worker / Beat"] --> B
+    F --> I["React 19 + TypeScript + Vite"]
+    F --> J["CSV · JSON · PDF exports"]
+    F --> K["Prometheus metrics"]
+    K --> L["Grafana dashboards"]
 ```
 
-### Main data flow
+### Data flow
 
-1. Dataset or authorized scanner produces observations.
-2. PostgreSQL stores the structured actor/evidence records.
-3. Correlation combines independent signals into an interpretable confidence and priority result.
-4. Neo4j stores relationship-oriented graph data when available.
-5. The React frontend queries actor, evidence and graph endpoints.
-6. Observations are written to PostgreSQL and the tamper-evident evidence ledger in the same transaction.
-7. Exports materialize the current result set as CSV, JSON or PDF.
-8. DeCypher Copilot receives only the selected DeCypher context plus the user's question and sends it to Gemini from the backend.
+1. Synthetic datasets or explicitly authorized sources provide actor and observation records.
+2. The ingestion layer normalizes evidence and persists structured records in PostgreSQL.
+3. Evidence relationships are projected into Neo4j for graph exploration; PostgreSQL remains the structured evidence store.
+4. Correlation and profiling services calculate explainable, evidence-derived outputs.
+5. FastAPI exposes authenticated investigation, analytics, integrity, and export endpoints.
+6. The React frontend requests data from the API and presents it for investigator review.
+7. Observation writes are accompanied by evidence-ledger entries; temporal events are materialized from known timestamps.
+8. Optional workers schedule authorized scans and collection jobs through Redis.
+
+---
+
+## Correlation and scoring
+
+DeCypher separates **evidence correlation** from **operational prioritization**.
+
+- Correlation combines the available evidence signals using the configured weighted model.
+- Counterfactual analysis removes one available signal at a time and recomputes the score to expose sensitivity to that signal.
+- Source-reliability estimates use investigator feedback from other actors, with conservative priors and bounded multipliers.
+- Operational priority combines evidence and risk-related factors to help order an investigation queue.
+- Investigator feedback is recorded and incorporated through the documented adjustment logic.
+
+A high score means that the configured evidence model found stronger support within the available records. It does not mean that identity has been established. See [Correlation Analysis](docs/correlation-analysis.md) for methodology and interpretation.
+
+---
+
+## Behavioural profiling
+
+A behavioural profile is a descriptive aggregation of recorded evidence, not a prediction of future behaviour.
+
+The current profile implementation uses existing actor, handle, wallet, PGP, trust-link, observation, and post records. It stores a profile version, source fingerprint, coverage score, generation timestamp, and structured profile data. Snapshot comparisons describe changes in measured features and evidence dimensions.
+
+**Current data limitation:** the bundled `posts.csv` profiling path does not provide usable per-post event timestamps. Posting-hour, weekday-routine, and posting-cadence analytics are therefore not available from that dataset. Coverage measures available data dimensions; it is not a confidence score or identity probability.
+
+See [Behavioural Profiling](docs/behavioral-profiling.md).
+
+---
+
+## Evidence integrity
+
+The evidence ledger is an internal, append-only SHA-256 chain stored in PostgreSQL. Each record commits to its canonical evidence payload and the preceding record hash. Verification recomputes the chain to identify broken links or changed records.
+
+Merkle-style blocks can be sealed over ledger entries and verified independently within the application.
+
+The ledger can help detect changes to records already committed to it. It cannot establish that an original observation was truthful, independently sourced, or correctly attributed. External blockchain anchoring is not active in the bundled setup.
+
+See [Evidence Integrity](docs/evidence-integrity.md) and [Advanced Intelligence](docs/advanced-intelligence.md).
 
 ---
 
 ## Technology stack
 
-### Backend
-- Python 3.11+
-- FastAPI
-- SQLAlchemy
-- PostgreSQL
-- Neo4j 5
-- JWT authentication + RBAC
-- Celery + Redis for optional autonomous scanning
-- ReportLab for PDF reports
-- Prometheus instrumentation
-- Pytest
-
-### AI / NLP
-- scikit-learn 1.9.x-compatible model artifacts
-- SciPy
-- pandas / NumPy
-- joblib
-- PAN20 + DeCypher authorship models
-- Gemini API for the optional Copilot
-
-### Frontend
-- React 19
-- TypeScript
-- Vite
-- react-force-graph-2d
-- react-router-dom
-- lucide-react
+| Layer | Technologies |
+|---|---|
+| Frontend | React 19, TypeScript, Vite, React Router, Lucide React |
+| Graph visualization | `react-force-graph-2d` |
+| API | Python 3.11+, FastAPI, Uvicorn, Pydantic |
+| Persistence | PostgreSQL, SQLAlchemy |
+| Relationship graph | Neo4j 5 |
+| Background processing | Celery, Redis |
+| Authentication | OAuth2 password flow, JWT, bcrypt, role checks |
+| NLP / ML | scikit-learn, SciPy, pandas, NumPy, joblib |
+| AI assistant (optional) | Gemini API, called server-side |
+| Reports | ReportLab (PDF), CSV, JSON |
+| Observability | Prometheus, Grafana |
+| Infrastructure | Docker, Docker Compose |
+| Testing | pytest, HTTPX, Oxlint, TypeScript, Vite build |
 
 ---
 
-## Repository layout
+## Repository structure
 
 ```text
 DeCypher/
-├── ai/nlp/
-│   ├── compare_handles.py
-│   └── models/                  # trained authorship artifacts
+├── ai/
+│   └── nlp/
+│       ├── compare_handles.py
+│       └── models/                 # Bundled authorship model artifacts
 ├── backend/
 │   ├── app/
-│   │   ├── routers/             # auth, actors, search, AI, NLP, export, scanner...
-│   │   ├── services/            # correlation, graph, temporal analytics, ingestion, NLP
-│   │   ├── models/              # SQLAlchemy + Pydantic models
-│   │   ├── database/            # PostgreSQL + Neo4j clients
-│   │   └── workers/             # Celery tasks
+│   │   ├── database/               # PostgreSQL and Neo4j clients
+│   │   ├── middleware/             # Audit logging
+│   │   ├── models/                 # SQLAlchemy and API schemas
+│   │   ├── routers/                # Auth, actors, search, analytics, exports...
+│   │   ├── services/               # Ingestion, correlation, graph, NLP, integrity...
+│   │   └── workers/                # Celery application and tasks
+│   ├── scripts/
 │   ├── tests/
 │   ├── Dockerfile
 │   ├── docker-compose.yml
-│   ├── requirements.txt
-│   └── .env.example
-├── data/                        # synthetic demo dataset
-├── docs/
-│   ├── architecture.md
-│   ├── autonomous-scanning.md
-│   ├── behavioral-profiling.md
-│   ├── correlation-analysis.md
-│   └── evidence-integrity.md
+│   ├── .env.example
+│   └── requirements.txt
+├── data/                           # Synthetic CSV and JSON evidence
+├── docs/                           # Architecture and feature methodology
 ├── frontend/
-│   └── src/
-│       ├── components/
-│       ├── pages/
-│       └── api/
-├── infra/                       # authorized infrastructure scanner
-├── mock_service/                # controlled demo service
-└── submission/                  # SIH submission artifacts
+│   ├── src/
+│   │   ├── api/                    # Typed API client
+│   │   ├── components/             # Copilot, exports, notifications
+│   │   └── pages/                  # Dashboard, search, actor, graph, advanced
+│   ├── package.json
+│   └── package-lock.json
+├── infra/                          # Authorized scanner and monitoring config
+├── mock_service/                   # Controlled local demo service
+├── submission/                     # SIH submission material
+├── CONTRIBUTING.md
+├── SECURITY.md
+└── README.md
 ```
 
 ---
 
-## Quick start
+## Getting started
 
 ### Prerequisites
 
-For the **full** stack, use:
+For the Docker-based local demo:
+
+- Git
+- Docker Desktop with Docker Compose
+- Node.js **20.19+** or **22.12+**
+- npm
+
+For running the API directly on the host instead of in Docker:
 
 - Python **3.11+**
-- Node.js 20.19+ or 22.12+
-- PostgreSQL
-- Docker Desktop (recommended for PostgreSQL/Neo4j/Redis)
-- Git
+- pip and venv
 
-Python 3.11+ is important for the bundled scikit-learn 1.9.x model artifacts and for the autonomous worker code.
-
-### 1. Clone
+### 1. Clone the repository
 
 ```bash
 git clone https://github.com/ParveshTanwarr/DeCypher.git
 cd DeCypher
 ```
 
-### 2. Configure the backend
+### 2. Configure backend environment
 
 ```bash
 cd backend
-python3.11 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
 cp .env.example .env
 ```
 
-Set a unique `SECRET_KEY` and unique application credentials before starting the API. The Dockerized Celery worker/beat services also read this `.env`. The example disables autonomous scanning by default and excludes startup-only synthetic filler evidence from correlation by default.
+Open `backend/.env` in a text editor and replace the example values. At minimum, configure:
 
-For the optional Copilot:
+| Variable | Purpose |
+|---|---|
+| `POSTGRES_PASSWORD` | PostgreSQL container password |
+| `DATABASE_URL` | Host-side database URL; its password must match `POSTGRES_PASSWORD` |
+| `NEO4J_PASSWORD` | Neo4j authentication password |
+| `SECRET_KEY` | Unique, high-entropy JWT signing secret |
+| `ADMIN_PASSWORD` | Local `admin` application account |
+| `ANALYST_PASSWORD` | Local `analyst` application account |
+| `SCANNER_SERVICE_PASSWORD` | Local scanner service account |
+| `GRAFANA_ADMIN_PASSWORD` | Grafana administrator password |
 
-```env
-GEMINI_API_KEY=your_gemini_api_key
-GEMINI_MODEL=gemini-3.6-flash
-```
+The Compose configuration overrides database and service URLs inside containers so services communicate over the Compose network. The `DATABASE_URL` in `.env` is for running the API directly on your host and should use `127.0.0.1:5433`.
 
-**Never commit `.env` or expose the Gemini key to the frontend.** The key belongs only on the backend.
+For optional Gemini Copilot access, set `GEMINI_API_KEY` in this backend-only file. Do not add secrets to frontend environment variables, screenshots, commits, or issue reports.
 
-### 3. Start infrastructure
+> **Do not commit `backend/.env`.** Use unique passwords and a unique JWT secret. The repository intentionally does not publish working demo credentials.
 
-The complete demo stack is:
+### 3. Start the backend and infrastructure with Docker Compose
 
-```bash
-cd backend
-docker compose up -d
-```
-
-This starts:
-- PostgreSQL on host port `5433` (container port `5432`)
-- Neo4j HTTP/Bolt on `7474/7687`
-- Redis on `6379`
-- Celery worker and Celery Beat for autonomous scanning
-
-If you already run PostgreSQL locally, you can keep using it and start only the services you need.
-
-### 4. Start FastAPI
+From `backend/`:
 
 ```bash
-cd backend
-source .venv/bin/activate
-python -m uvicorn app.main:app --reload --port 8000
+docker compose up -d --build
 ```
 
-API:
-- http://127.0.0.1:8000
-- Swagger: http://127.0.0.1:8000/docs
-- Health: http://127.0.0.1:8000/health
+This starts the API and its local dependencies:
 
-### Windows PowerShell note
+| Service | Local address | Purpose |
+|---|---|---|
+| FastAPI | http://127.0.0.1:8000 | Backend API |
+| PostgreSQL | `127.0.0.1:5433` | Structured evidence store |
+| Neo4j Browser | http://127.0.0.1:7474 | Graph database UI |
+| Neo4j Bolt | `127.0.0.1:7687` | Graph connection |
+| Redis | `127.0.0.1:6379` | Queue and cache broker |
+| Prometheus | http://127.0.0.1:9090 | Metrics |
+| Grafana | http://127.0.0.1:3000 | Dashboards |
 
-The commands above use POSIX-style virtual-environment activation. On Windows PowerShell, use:
+The Compose file also starts the Celery worker and Beat scheduler. Autonomous scanning and continuous collection remain disabled unless explicitly enabled in configuration.
 
-```powershell
-cd backend
-py -3.11 -m venv .venv
-.\.venv\Scripts\Activate.ps1
-python -m pip install -r requirements.txt
-Copy-Item .env.example .env
+Check service status:
+
+```bash
+docker compose ps
 ```
 
-If PowerShell blocks the activation script, you can either activate the environment from a Command Prompt with `\.venv\Scripts\activate.bat` or run the Python commands through `\.venv\Scripts\python.exe` directly.
+Check API health:
 
-### 5. Start the frontend
+```bash
+curl http://127.0.0.1:8000/health
+```
 
-In another terminal:
+Follow API logs:
+
+```bash
+docker compose logs -f api
+```
+
+Open the interactive API documentation at http://127.0.0.1:8000/docs.
+
+### 4. Start the frontend
+
+Open a **second terminal** from the repository root:
 
 ```bash
 cd frontend
-npm install
-npm run build
+npm ci
 npm run dev
 ```
 
-Frontend:
-- http://localhost:5173
+Open http://localhost:5173.
 
-The production build command is:
+The frontend's default API base URL is `http://127.0.0.1:8000`. To use another API origin, define `VITE_API_BASE_URL` in the frontend's local environment.
 
-```bash
-npm run build
-```
+### 5. Sign in
 
----
+The local application identities are configured through the backend environment:
 
-## Demo authentication
-
-The repository contains development/demo users used by the test suite:
-
-| Username | Password | Intended role |
+| Username | Environment variable | Role |
 |---|---|---|
-| `analyst` | Set `ANALYST_PASSWORD` in `backend/.env` | investigation/read access |
-| `admin` | Set `ADMIN_PASSWORD` in `backend/.env` | administrative access |
-| `scanner_service` | Set `SCANNER_SERVICE_PASSWORD` in `backend/.env` | scanner/service integration |
+| `admin` | `ADMIN_PASSWORD` | Administrator |
+| `analyst` | `ANALYST_PASSWORD` | Investigator |
+| `scanner_service` | `SCANNER_SERVICE_PASSWORD` | Service identity |
 
-The repository does not ship working demo passwords. Set local values in `backend/.env` before login.
+Use the password you configured for the selected account. There are no default public passwords.
+
+### Running the API with host Uvicorn instead
+
+Use this alternative only if you want Uvicorn on your host. Do **not** run it while the Compose `api` service is already publishing port 8000.
+
+Start only the data/queue dependencies from `backend/`:
+
+```bash
+docker compose up -d postgres neo4j redis
+python3.11 -m venv .venv
+source .venv/bin/activate
+python -m pip install -r requirements.txt
+python -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
+```
+
+On Windows PowerShell, create and activate the environment with:
+
+```powershell
+py -3.11 -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install -r requirements.txt
+python -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
+```
+
+The host-run API reads `backend/.env`; ensure its database and service URLs use the host-mapped ports.
+
+### Stopping the stack
+
+From `backend/`:
+
+```bash
+docker compose down
+```
+
+This stops containers while retaining named data volumes. Avoid `docker compose down -v` unless you deliberately intend to delete the local PostgreSQL, Neo4j, Prometheus, and Grafana volumes.
 
 ---
 
-## API surface
+## API overview
 
-All protected endpoints require a bearer JWT. `/health` and `/auth/token` are public.
+Interactive, version-specific request and response schemas are available at `/docs` when the API is running. The following is a functional overview; role requirements are enforced per route.
 
-### Authentication
-```text
-POST /auth/token
-```
-
-### Actors and evidence
-```text
-GET /actors
-GET /actors/{actor_id}
-GET /actors/{actor_id}/evidence
-GET /actors/{actor_id}/graph
-GET /integrity/status
-GET /integrity/verify
-GET /integrity/ledger
-```
-
-### Search
-```text
-GET /search?q=<actor|handle|wallet|PGP>
-```
-
-### Correlation
-```text
-GET  /correlation/actor/{actor_id}
-GET  /correlation/actor/{actor_id}/counterfactual
-GET  /correlation/actors
-
-POST /correlation/actor/{actor_id}/refresh
-POST /correlation/actors/refresh
-```
-
-GET correlation endpoints are side-effect free. Use the POST refresh endpoints when an investigator/admin explicitly wants the derived confidence and priority values persisted to the actor record.
-
-Optional actor correlation parameters:
-
-```text
-handle_a=<handle>
-handle_b=<handle>
-```
-
-### NLP
-```text
-POST /nlp/compare
-```
-
-### AI Copilot
-```text
-POST /ai/chat
-```
-
-Request shape:
-
-```json
-{
-  "message": "Summarize this actor",
-  "actor_id": "A00001",
-  "history": []
-}
-```
-
-The backend constructs the actor context and calls Gemini server-side. No Gemini credential is sent to the browser.
-
-### Export
-
-Bulk exports are available to authorized investigator/admin roles:
-
-```text
-GET /export/csv
-GET /export/json
-GET /export/report
-
-GET /export/actor/{actor_id}/csv
-GET /export/actor/{actor_id}/json
-GET /export/actor/{actor_id}/report
-POST /export/actor/{actor_id}/report
-```
-
-The actor PDF endpoint can accept an optional browser-generated graph snapshot.
-
-### Advanced analytics
-
-```text
-GET /analytics/actors/{actor_id}/timeline
-GET /analytics/actors/{actor_id}/graph-anomaly
-GET /analytics/graph-anomalies
-```
-
-The temporal endpoint materializes deterministic events from existing evidence timestamps.
-The graph-anomaly endpoints return population-relative structural outlier features.
-
-### Scanner / autonomous scanning
-
-```text
-GET  /scanner/observations
-POST /scanner/observations
-
-GET  /scanner/targets
-POST /scanner/targets
-POST /scanner/targets/{target_id}/run
-
-GET /scanner/jobs
-GET /scanner/jobs/{job_id}
-```
-
-Autonomous scanning is disabled by default and restricted to hosts listed in `AUTOSCAN_ALLOWED_HOSTS`.
-
----
-
-## Database and graph model
-
-### PostgreSQL
-
-The structured store contains entities including:
-
-- Actors
-- Dark-web handles
-- Wallets
-- Marketplaces
-- PGP keys
-- Trust links
-- Scan targets
-- Scan jobs
-- Observations
-- Investigator feedback
-- Audit logs
-
-### Neo4j
-
-The evidence graph includes relationships such as:
-
-```text
-(:Actor)-[:USES_HANDLE]->(:Handle)
-(:Handle)-[:USED_WALLET]->(:Wallet)
-(:Handle)-[:USES_MARKETPLACE]->(:Marketplace)
-(:Handle)-[:HAS_PGP_KEY]->(:PGPKey)
-(:Handle)-[:TRUSTS]->(:Handle)
-(:PGPKey)-[:TRUSTS]->(:Handle)
-(:Actor)-[:HAS_OBSERVATION]->(:Observation)
-(:Observation)-[:EVIDENCE_OF]->(:Infrastructure)
-```
-
-The graph endpoint falls back to a PostgreSQL-derived graph when Neo4j is unavailable. This keeps the investigation UI usable for local demos without requiring Neo4j.
-
----
-
-## Dataset
-
-The repository contains a fully synthetic dataset. It is designed to demonstrate correlation and attribution workflows without using real dark-web content.
-
-| File | Approx. contents |
+| Area | Representative endpoints |
 |---|---|
-| `actors.csv` | 600 ground-truth actor profiles |
-| `handles.csv` | synthetic persona/handle records |
-| `wallets.csv` | synthetic wallet associations |
-| `posts.csv` | 115,000 synthetic marketplace-style posts |
-| `infrastructure_indicators.csv` | 250 synthetic Level-2 findings |
-| `marketplaces.csv` | 20 marketplace reference records |
-| `trust_links.csv` | synthetic PGP/trust relationships |
+| Health and authentication | `GET /health`, `POST /auth/token` |
+| Actors | `GET /actors`, `GET /actors/{actor_id}` |
+| Search | `GET /search?q=...` |
+| Evidence and graph | `GET /actors/{actor_id}/evidence`, `GET /actors/{actor_id}/graph` |
+| Behavioural profiles | `GET /actors/{actor_id}/behavioral-profile`, `POST /actors/{actor_id}/behavioral-profile/refresh` |
+| Correlation | `GET /correlation/actor/{actor_id}`, `GET /correlation/actor/{actor_id}/counterfactual` |
+| Investigator feedback | `GET/POST /investigator/feedback` |
+| NLP | `POST /nlp/compare` |
+| AI Copilot | `POST /ai/chat` (optional Gemini configuration) |
+| Evidence integrity | `GET /integrity/status`, `GET /integrity/verify`, `GET /integrity/ledger` |
+| Temporal analytics | `GET /analytics/actors/{actor_id}/timeline` |
+| Graph anomalies | `GET /analytics/actors/{actor_id}/graph-anomaly`, `GET /analytics/graph-anomalies` |
+| Exports | `GET /export/csv`, `GET /export/json`, `GET /export/report` |
+| Actor exports | `GET /export/actor/{actor_id}/csv`, `GET /export/actor/{actor_id}/json`, `GET/POST /export/actor/{actor_id}/report` |
+| Authorized scanning | `/scanner/targets`, `/scanner/jobs`, `/scanner/observations` |
+| Collection | `/collection/sources`, `/collection/runs`, `/collection/status` |
+| Tor intelligence | `POST /tor/inspect`, `POST /tor/descriptor/parse` |
+| Advanced evidence | `/correlation/stylometry-discovery`, `/correlation/actor/{actor_id}/ablation`, `/media/fingerprint`, `/media/compare` |
+| Merkle integrity | `GET /integrity/merkle-status`, `GET /integrity/merkle-verify`, `POST /integrity/merkle-seal` |
+| Live alerts | `/alerts/ws` (WebSocket; token sent as the first message) |
+| Metrics | `GET /metrics` |
 
-See [data/README.md](data/README.md) for the dataset contract and intended use.
-
----
-
-## AI / NLP model
-
-The authorship pipeline combines:
-- PAN20-trained authorship model
-- DeCypher-trained authorship model
-- domain detector
-- character and word TF-IDF vectorizers
-- stylometric/token features
-- model-specific thresholds
-
-The bundled `.joblib` files are trusted project artifacts. Do not load untrusted joblib/pickle files.
-
-### Important model compatibility requirement
-
-The bundled artifacts were serialized with scikit-learn **1.9.0**. Persisted scikit-learn models are not a supported cross-version interface; use the same dependency family as the training environment or retrain/re-export the artifacts.
-
-The repository pins `scikit-learn==1.9.0` to match the bundled model artifacts. Keep that version aligned with the training environment when loading the persisted models.
+Protected routes require a bearer token. The login endpoint accepts OAuth2 form data (`application/x-www-form-urlencoded`), not a JSON body. Consult Swagger for exact schemas, parameters, and role requirements before invoking state-changing endpoints.
 
 ---
 
-## Synthetic validation
+## Synthetic dataset
 
-The repository includes an offline authorship evaluation harness that samples same-actor and
-cross-actor handle pairs from the synthetic dataset and reports accuracy, precision, recall, F1
-and ROC-AUC where both classes are present:
+The repository's bundled dataset is generated for controlled development and demonstrations. It is not a scrape of real people, real dark-web content, or real infrastructure.
 
-```bash
-python scripts/evaluate_synthetic_attribution.py --pairs 100 --seed 42
-```
+The documented source tables include:
 
-The script uses the synthetic dataset's ground-truth actor labels only as an evaluation answer key.
-Those measurements do not establish real-world attribution accuracy.
+| File | Documented contents |
+|---|---|
+| `actors.csv` | 600 synthetic actor ground-truth records |
+| `handles.csv` | 896 synthetic persona/handle records |
+| `posts.csv` | 115,000 synthetic marketplace-style text posts |
+| `wallets.csv` | 1,043 synthetic wallet records |
+| `infrastructure_indicators.csv` | 250 synthetic infrastructure indicators |
+| `marketplaces.csv` | Marketplace reference data |
+| `trust_links.csv` | Synthetic PGP-backed trust/signature relationships |
 
-## Scoring model
-
-### Correlation confidence
-
-Available evidence signals are combined with transparent weights:
-
-| Signal | Weight |
-|---|---:|
-| Wallet reuse | 0.25 |
-| Infrastructure reuse | 0.20 |
-| TLS/certificate reuse | 0.15 |
-| Banner match | 0.10 |
-| Descriptor timing | 0.10 |
-| Stylometry | 0.20 |
-
-The system normalizes over the signals actually available for the actor. This is an interpretable evidence-fusion score, **not a calibrated probability of identity**.
-
-### Operational priority
-
-Priority combines:
-
-- risk severity — 30%
-- correlation — 25%
-- evidence confidence — 20%
-- recency — 15%
-- evidence coverage — 10%
-
-Priority is a triage score used to order investigation work. It is not an identity probability.
+The ground-truth actor labels are included to support controlled evaluation. They must not be used as model input when evaluating whether the system can recover relationships. See [Dataset documentation](data/README.md) for the schema and intended use of each file.
 
 ---
 
-## Autonomous scanning
+## Security and responsible use
 
-Autonomous scanning is deliberately opt-in.
+DeCypher is a controlled defensive and academic demonstration platform.
 
-Set:
+- Use only datasets you are permitted to process.
+- Scan only infrastructure you own or have explicit authorization to assess.
+- Keep scanner and collection allowlists narrow.
+- Autonomous scanning and continuous collection are disabled by default.
+- Do not use the platform to bypass access controls, collect credentials, or target uninvolved third parties.
+- Keep JWT secrets, application passwords, database credentials, API keys, and private material out of source control.
+- Treat correlation, stylometry, graph anomaly, source-reliability, and priority outputs as reviewable leads—not proof.
+- Preserve source provenance and document the limitations of any evidence used in an investigation.
 
-```env
-AUTOSCAN_ENABLED=true
-AUTOSCAN_DEFAULT_INTERVAL_MINUTES=180
-AUTOSCAN_ALLOWED_HOSTS=127.0.0.1,localhost
-```
-
-Then run:
-
-```bash
-celery -A app.workers.celery_app.celery_app worker --loglevel=info
-celery -A app.workers.celery_app.celery_app beat --loglevel=info
-```
-
-On Windows, the worker documentation uses the `--pool=solo` option.
-
-Only scan infrastructure that you own or are explicitly authorized to test. Do not add third-party or public targets to the allowlist.
-
-See [docs/autonomous-scanning.md](docs/autonomous-scanning.md).
+See [SECURITY.md](SECURITY.md) for the security policy and [backend/NEO4J_RECOVERY.md](backend/NEO4J_RECOVERY.md) / [backend/POSTGRES_RECOVERY.md](backend/POSTGRES_RECOVERY.md) for local database recovery guidance.
 
 ---
 
-## PostgreSQL persistent-volume password recovery
+## Testing and quality checks
 
-The PostgreSQL container publishes host port `5433` and keeps container port `5432`. This avoids colliding with a PostgreSQL server already running on the developer's Mac. Compose services continue to connect to `postgres:5432` over the Docker network.
+### Backend
 
-Changing `POSTGRES_PASSWORD` in `backend/.env` does not change the password stored in an already-initialized `pgdata` volume. If the API reports `password authentication failed for user "postgres"`, preserve the volume and follow [backend/POSTGRES_RECOVERY.md](backend/POSTGRES_RECOVERY.md) to align the stored role password with the local environment. Never use `docker compose down -v` for credential recovery.
-
-## Neo4j persistent-volume password recovery
-
-If Neo4j reports an authentication failure after recreating or changing `backend/.env`, the existing named volume may still contain its original password. Do not delete the volume. Follow [backend/NEO4J_RECOVERY.md](backend/NEO4J_RECOVERY.md) to reset the password safely; the API can still start in PostgreSQL-fallback mode while Neo4j is unavailable.
-
-## Testing
-
-Backend tests require a disposable PostgreSQL database.
+From `backend/` with the project environment active:
 
 ```bash
-cd backend
-pytest
+pytest -q
 ```
 
-Neo4j is not required for the graph unit tests; the API has a PostgreSQL fallback.
+### Frontend
 
-Frontend:
+From `frontend/`:
 
 ```bash
-cd frontend
-npm run build
+npm ci
 npm run lint
+npm run build
 ```
 
----
+### Infrastructure scanner
 
-## Repository audit — 3 October 2026
+From `infra/`:
 
-A second repository-wide hardening pass was completed after the earlier integration audit. The latest pass focused on data consistency, graph identity, authorization boundaries, side-effect-free reads, export/resource limits, search semantics, and removal of shipped runtime credentials.
+```bash
+python -m pip install requests pytest
+pytest -q tests
+```
 
-### Resolved in the current main build
-
-- Inbound and outbound trust-link graph projection now includes both endpoints and preserves canonical `source_handle_id` identities.
-- PostgreSQL graph fallback and Neo4j synchronization use the same stable handle identity scheme.
-- Failed Neo4j synchronization no longer causes stale Neo4j data to be returned for the current request.
-- Temporal, anomaly, correlation, AI context and export observation resolution share the same actor/handle/scan-target key semantics.
-- Investigator feedback is role-restricted and its latest verdict replaces the previous human adjustment instead of compounding repeatedly.
-- Scanner read endpoints are investigator/admin-only; scanner writes remain restricted to admin/service roles.
-- Scanner observation ledger entries are created only for rows actually inserted by PostgreSQL `ON CONFLICT DO NOTHING` operations.
-- Correlation GET endpoints are now side-effect free. Persisted score refresh is available through explicit POST refresh endpoints.
-- Behavioural-profile refresh is restricted to investigator/admin roles.
-- Actor graph PDF exports validate base64 input and enforce a decoded-size limit.
-- Search and scanner filters escape SQL `LIKE` wildcards so literal `%`, `_` and backslashes do not broaden matches.
-- Database, Neo4j, application and scanner-service passwords are no longer shipped as source-code defaults; runtime credentials come from environment configuration.
-- Frontend login no longer pre-fills a repository-shipped demo password.
-- Regression tests cover inbound graph identity, wildcard handling, scanner authorization, behavioural refresh authorization, duplicate ledger IDs, AI actor lookup, correlation refresh semantics and graph export size limits.
-
-### AI/NLP boundary
-
-The bundled stylometry implementation and model artifacts remain unchanged. Gemini remains optional and is called only by the backend. Actor context is resolved from authoritative PostgreSQL evidence and scan-target metadata before it is sent to the configured Gemini model.
-
-### Deployment boundary
-
-- The bundled dataset remains synthetic.
-- Autonomous scanning remains opt-in and allowlisted.
-- Correlation, behavioural profiling, and graph anomaly outputs remain investigator-facing analytical signals rather than identity proof.
-- The evidence-integrity layer remains an internal PostgreSQL SHA-256 hash chain; no external blockchain anchor is configured.
-
-## Security and ethical boundary
-
-DeCypher is designed around an evidence-first workflow:
-
-- Synthetic demo data is used for the bundled dataset.
-- Scanner targets are allowlisted.
-- Autonomous scanning is disabled by default.
-- API access is authenticated with JWTs.
-- Investigator/admin permissions are applied to protected operations.
-- Requests are audit logged.
-- Correlation scores are presented as investigative evidence signals, not proof of identity.
-- Infrastructure attribution is demonstrated only against controlled/authorized targets.
-
-Never use the scanner against infrastructure without authorization.
+The GitHub Actions workflow runs backend tests against PostgreSQL, frontend lint/build checks, infrastructure tests, and a Docker image build on pushes and pull requests targeting `main`. A configured workflow is not a guarantee that every local or external integration is available; inspect the run results for the commit you intend to use.
 
 ---
 
 ## Documentation
 
-- [Architecture](docs/architecture.md)
-- [Autonomous scanning](docs/autonomous-scanning.md)
-- [Behavioural profiling](docs/behavioral-profiling.md)
-- [Correlation analysis](docs/correlation-analysis.md)
-- [Evidence integrity](docs/evidence-integrity.md)
-- [Advanced intelligence](docs/advanced-intelligence.md)
-- [Synthetic dataset](data/README.md)
-- [Backend tests](backend/tests/README.md)
+- [System Architecture](docs/architecture.md)
+- [Behavioural Profiling](docs/behavioral-profiling.md)
+- [Correlation Analysis](docs/correlation-analysis.md)
+- [Evidence Integrity Ledger](docs/evidence-integrity.md)
+- [Temporal Analytics](docs/temporal-analytics.md)
+- [Graph Anomaly Analysis](docs/graph-anomaly-analysis.md)
+- [Autonomous Scanning](docs/autonomous-scanning.md)
+- [Advanced Intelligence](docs/advanced-intelligence.md)
+- [PostgreSQL Recovery](backend/POSTGRES_RECOVERY.md)
+- [Neo4j Recovery](backend/NEO4J_RECOVERY.md)
+- [Contributing Guide](CONTRIBUTING.md)
+- [Security Policy](SECURITY.md)
 
 ---
 
-## Status
+## Known limitations
 
-DeCypher is a Smart India Hackathon prototype. The local demo path is:
+- The included evidence is synthetic. It does not establish real-world attribution performance.
+- Behavioural posting-hour, weekday, and cadence analysis is unavailable where source posts lack usable event timestamps.
+- Stylometric comparison is dependent on text quantity, language/domain, model coverage, and the quality of source material.
+- Source-reliability estimates are conditioned on available investigator feedback; they are not independent ground truth.
+- Graph anomaly values are population-relative triage features, not causal explanations.
+- Internal hash-chain/Merkle verification does not prove the truth of source observations.
+- External public-blockchain anchoring is not implemented as an active transaction workflow in the bundled project.
+- Gemini Copilot requires a separately configured backend API key.
+- Autonomous scanning, continuous collection, and Tor inspection require deliberate configuration and authorized targets.
 
-```text
-Login
-  ↓
-Dashboard
-  ↓
-Investigation Search
-  ↓
-Actor Profile
-  ├── Evidence Trail
-  ├── Correlation / Priority
-  ├── Relationship Graph
-  ├── CSV / JSON / PDF export
-  └── Gemini-powered Copilot
-```
+---
 
-The platform is intended to demonstrate an end-to-end intelligence workflow rather than claim autonomous real-world attribution.
+## Contributing
 
+Contributions are welcome. Please read [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request.
 
-## Behavioural profiling
+For changes to correlation, profiling, authentication, scanner policy, persistence, or exports, include regression tests and document any changes to interpretation or safety boundaries.
 
-The authenticated actor workspace includes an evidence-backed behavioural profile covering linguistic style, account lifecycle, operational footprint, recorded trust relationships, and infrastructure observations. Profiles are versioned and fingerprinted in PostgreSQL; changed source data creates a new snapshot and a descriptive comparison against the previous profile.
+## License
 
-See [docs/behavioral-profiling.md](docs/behavioral-profiling.md) for endpoints, feature definitions, and interpretation limits. The bundled dataset is synthetic, and post-level activity cadence is not inferred because the current post records do not provide usable event timestamps.
+This project is distributed under the [MIT License](LICENSE).
