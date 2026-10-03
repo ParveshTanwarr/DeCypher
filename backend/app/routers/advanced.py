@@ -324,14 +324,16 @@ def inspect_tor(
     observation_id = f"torinspect_{uuid.uuid4().hex}"
     observation = Observation(
         observation_id=observation_id,
-        indicator_type="tor_service_metadata",
+        indicator_type="exposed_status_page" if result.get("exposed_status_page") else "tor_service_metadata",
         detected=True,
-        value=result.get("content_sha256"),
+        value=result.get("status_page_signature") or result.get("content_sha256"),
         target=actor.actor_id if actor else safe_target_url,
         source="authorized_tor_inspection",
         timestamp=datetime.now(timezone.utc),
-        confidence=0.65,
+        confidence=0.90 if result.get("exposed_status_page") else 0.65,
         description=json.dumps({
+            "exposed_status_page": result.get("exposed_status_page", False),
+            "status_page_signature": result.get("status_page_signature"),
             "status_code": result.get("status_code"),
             "content_type": result.get("content_type"),
             "content_sha256": result.get("content_sha256"),
