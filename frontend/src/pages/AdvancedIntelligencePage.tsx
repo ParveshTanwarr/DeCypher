@@ -58,8 +58,10 @@ export default function AdvancedIntelligencePage({ actorId }: Props) {
   useEffect(() => {
     const token = sessionStorage.getItem("decypher_token");
     if (!token) return;
-    const protocol = window.location.protocol === "https:" ? "wss" : "ws";
-    const socket = new WebSocket(`${protocol}://${window.location.host}/alerts/ws`);
+    const apiBase = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000";
+    const apiUrl = new URL(apiBase);
+    const protocol = apiUrl.protocol === "https:" ? "wss" : "ws";
+    const socket = new WebSocket(`${protocol}://${apiUrl.host}/alerts/ws`);
     socket.onopen = () => socket.send(token);
     socket.onmessage = (event) => {
       try {
