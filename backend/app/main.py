@@ -16,6 +16,7 @@ from app.models.sql_models import (
     DarkWebHandle,
     Observation,
     PGPKey,
+    ScanTarget,
     TemporalEvent,
     TrustLink,
     Wallet,
