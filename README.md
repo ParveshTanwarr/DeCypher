@@ -308,11 +308,11 @@ The repository contains development/demo users used by the test suite:
 
 | Username | Password | Intended role |
 |---|---|---|
-| `analyst` | `analystpassword` | investigation/read access |
-| `admin` | `adminpassword` | administrative access |
-| `scanner_service` | service development key | scanner/service integration |
+| `analyst` | Set `ANALYST_PASSWORD` in `backend/.env` | investigation/read access |
+| `admin` | Set `ADMIN_PASSWORD` in `backend/.env` | administrative access |
+| `scanner_service` | Set `SCANNER_SERVICE_PASSWORD` in `backend/.env` | scanner/service integration |
 
-These are **development credentials only**. Replace them and the default signing secret before any non-demo deployment.
+The repository does not ship working demo passwords. Set local values in `backend/.env` before login.
 
 ---
 
@@ -651,6 +651,7 @@ Never use the scanner against infrastructure without authorization.
 - [Behavioural profiling](docs/behavioral-profiling.md)
 - [Correlation analysis](docs/correlation-analysis.md)
 - [Evidence integrity](docs/evidence-integrity.md)
+- [Advanced intelligence](docs/advanced-intelligence.md)
 - [Synthetic dataset](data/README.md)
 - [Backend tests](backend/tests/README.md)
 

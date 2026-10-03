@@ -1,0 +1,122 @@
+{
+  "case_id": "alphabay-2017",
+  "case_name": "AlphaBay public-case validation",
+  "provenance": [
+    {
+      "source": "U.S. Department of Justice",
+      "title": "AlphaBay-Cazes Forfeiture Complaint and Exhibits",
+      "url": "https://www.justice.gov/opa/press-release/file/982821/dl",
+      "scope": "Alpha02/Admin account continuity, AlphaBay founder/administrator role, first-seen/public-profile chronology."
+    },
+    {
+      "source": "U.S. Department of Justice",
+      "title": "Indictment, Case No. 1:17-CR-00144",
+      "url": "https://www.justice.gov/opa/press-release/file/982826/dl",
+      "scope": "Cazes identity, Alpha02/Admin aliases, AlphaBay organizational role."
+    },
+    {
+      "source": "U.S. Department of Justice",
+      "title": "AlphaBay spokesperson Ronald L. Wheeler III a/k/a Trappy pleads guilty",
+      "url": "https://www.justice.gov/usao-ndga/pr/alphabay-spokesperson-ronald-l-wheeler-iii-aka-trappy-pleads-guilty-conspiracy",
+      "scope": "Trappy identity and public-relations role from May 25, 2015 through early July 2017."
+    },
+    {
+      "source": "U.S. Department of Justice",
+      "title": "Colorado Man Sentenced to 11 Years in Prison for Moderating Disputes on Darknet Marketplace AlphaBay",
+      "url": "https://www.justice.gov/archives/opa/pr/colorado-man-sentenced-11-years-prison-moderating-disputes-darknet-marketplace-alphabay",
+      "scope": "Penissmith/Botah aliases and moderator/scam-watcher role."
+    }
+  ],
+  "identities": [
+    {
+      "identity_id": "cazes",
+      "documented_name": "Alexandre Cazes",
+      "aliases": ["Alpha02", "Admin"],
+      "role": "AlphaBay founder/administrator"
+    },
+    {
+      "identity_id": "wheeler",
+      "documented_name": "Ronald L. Wheeler III",
+      "aliases": ["Trappy"],
+      "role": "AlphaBay spokesperson/public-relations specialist"
+    },
+    {
+      "identity_id": "herrell",
+      "documented_name": "Colorado AlphaBay moderator",
+      "aliases": ["Penissmith", "Botah"],
+      "role": "AlphaBay moderator/scam watcher"
+    }
+  ],
+  "timeline": [
+    {
+      "event_id": "cazes-alpha02-first-seen",
+      "identity_id": "cazes",
+      "date": "2014-07-14T00:00:00Z",
+      "date_precision": "day",
+      "event_type": "handle_first_seen",
+      "entity": "Alpha02",
+      "source": "forfeiture_complaint"
+    },
+    {
+      "event_id": "cazes-admin-rename",
+      "identity_id": "cazes",
+      "date": "2015-08-01T00:00:00Z",
+      "date_precision": "month",
+      "event_type": "account_alias_change",
+      "entity": "Alpha02 -> Admin",
+      "source": "forfeiture_complaint",
+      "notes": "The source places the rename in August 2015; the first day is only a normalized month anchor, not an asserted exact event date."
+    },
+    {
+      "event_id": "wheeler-role-start",
+      "identity_id": "wheeler",
+      "date": "2015-05-25T00:00:00Z",
+      "date_precision": "day",
+      "event_type": "role_start",
+      "entity": "Trappy",
+      "source": "doj_press_release"
+    },
+    {
+      "event_id": "cazes-indictment",
+      "identity_id": "cazes",
+      "date": "2017-06-01T00:00:00Z",
+      "date_precision": "day",
+      "event_type": "indictment",
+      "entity": "Alexandre Cazes",
+      "source": "doj_press_release"
+    },
+    {
+      "event_id": "cazes-arrest",
+      "identity_id": "cazes",
+      "date": "2017-07-05T00:00:00Z",
+      "date_precision": "day",
+      "event_type": "arrest",
+      "entity": "Alexandre Cazes",
+      "source": "doj_press_release"
+    },
+    {
+      "event_id": "alphabay-takedown",
+      "identity_id": "cazes",
+      "date": "2017-07-20T00:00:00Z",
+      "date_precision": "day",
+      "event_type": "marketplace_takedown",
+      "entity": "AlphaBay",
+      "source": "doj_press_release"
+    }
+  ],
+  "expected_same_identity_pairs": [
+    ["Alpha02", "Admin"],
+    ["Penissmith", "Botah"]
+  ],
+  "expected_different_identity_pairs": [
+    ["Alpha02", "Trappy"],
+    ["Alpha02", "Penissmith"],
+    ["Admin", "Trappy"],
+    ["Admin", "Botah"]
+  ],
+  "model_limitations": [
+    "The public sources used here do not provide a complete original AlphaBay post corpus for Cazes, Wheeler, or Herrell, so stylometry is not treated as validated on this case.",
+    "The public case material does not provide a complete seized wallet transaction graph in this repository, so no transaction-level identity inference is fabricated.",
+    "Shared membership on AlphaBay is not sufficient evidence of common identity; the fixture deliberately keeps the three documented people separate."
+  ]
+}

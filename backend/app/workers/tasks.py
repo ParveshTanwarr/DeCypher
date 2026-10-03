@@ -10,6 +10,8 @@ from sqlalchemy.dialects.postgresql import insert
 from app.config import settings
 from app.database.postgres import SessionLocal
 from app.models.sql_models import Actor, Observation, ScanJob, ScanTarget
+from app.models.advanced_models import CollectionSource
+from app.services.advanced_intelligence import CollectionService, AlertService
 from app.services import graph_service
 from app.services.correlation_service import CorrelationService
 from app.workers.celery_app import celery_app
@@ -239,6 +241,69 @@ def dispatch_due_scans() -> dict[str, Any]:
                     target.last_status = "failed"
                     target.last_error = str(exc)[:2000]
                     target.next_run_at = now + timedelta(minutes=5)
+                    db.commit()
+                failures += 1
+        return {"status": "ok", "queued": queued, "failures": failures}
+    finally:
+        db.close()
+
+
+@celery_app.task(bind=True, name="decypher.run_collection_source")
+def run_collection_source_task(self: Task, source_id: int) -> dict[str, Any]:
+    db = SessionLocal()
+    try:
+        source = db.query(CollectionSource).filter(CollectionSource.id == source_id).first()
+        if not source:
+            raise ValueError(f"Collection source {source_id} does not exist.")
+        if not source.enabled:
+            return {"source_id": source_id, "status": "disabled"}
+        result = CollectionService(db).run_source(source)
+        source.next_run_at = utc_now() + timedelta(minutes=max(1, int(source.interval_minutes or 15)))
+        db.commit()
+        return {"source_id": source_id, **result}
+    except Exception as exc:
+        db.rollback()
+        source = db.query(CollectionSource).filter(CollectionSource.id == source_id).first()
+        if source:
+            source.last_status = "failed"
+            source.last_error = str(exc)[:2000]
+            source.next_run_at = utc_now() + timedelta(minutes=5)
+            db.commit()
+        raise
+    finally:
+        db.close()
+
+
+@celery_app.task(name="decypher.dispatch_due_collection")
+def dispatch_due_collection() -> dict[str, Any]:
+    if not settings.COLLECTION_ENABLED:
+        return {"status": "disabled", "queued": 0}
+    db = SessionLocal()
+    queued = 0
+    failures = 0
+    try:
+        now = utc_now()
+        sources = (
+            db.query(CollectionSource)
+            .filter(CollectionSource.enabled.is_(True), CollectionSource.next_run_at <= now)
+            .order_by(CollectionSource.next_run_at.asc(), CollectionSource.id.asc())
+            .with_for_update(skip_locked=True)
+            .limit(20)
+            .all()
+        )
+        for source in sources:
+            source.next_run_at = now + timedelta(minutes=max(1, int(source.interval_minutes or 15)))
+            try:
+                db.commit()
+                run_collection_source_task.delay(source.id)
+                queued += 1
+            except Exception as exc:
+                db.rollback()
+                source = db.query(CollectionSource).filter(CollectionSource.id == source.id).first()
+                if source:
+                    source.last_status = "failed"
+                    source.last_error = f"Queue publish failed: {exc}"[:2000]
+                    source.next_run_at = utc_now() + timedelta(minutes=5)
                     db.commit()
                 failures += 1
         return {"status": "ok", "queued": queued, "failures": failures}

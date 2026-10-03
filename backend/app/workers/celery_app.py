@@ -24,6 +24,10 @@ celery_app.conf.update(
             "task": "decypher.dispatch_due_scans",
             "schedule": 60.0,
         },
+        "dispatch-due-collection": {
+            "task": "decypher.dispatch_due_collection",
+            "schedule": max(60, settings.COLLECTION_POLL_INTERVAL_MINUTES * 60),
+        },
     },
 )
 

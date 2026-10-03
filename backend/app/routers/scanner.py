@@ -12,6 +12,7 @@ from app.models.sql_models import Observation, ScanJob, ScanTarget
 from app.models.schemas import ObservationBatchCreate, BatchIngestionResponse, ObservationResponse
 from app.routers.auth import get_current_user, require_role
 from app.workers.tasks import run_authorized_scan_task, validate_authorized_target
+from app.services.advanced_intelligence import AlertService
 
 router = APIRouter(
     prefix="/scanner",
@@ -141,6 +142,17 @@ def ingest_observations(
         created_by="scanner_api",
     )
     db.commit()
+
+    if inserted_observations:
+        AlertService(db).create(
+            alert_type="scanner_update",
+            severity="medium",
+            title="New scanner evidence",
+            message=f"{len(inserted_observations)} new authorized scanner observation(s) were ingested.",
+            actor_id=payload.actor_id,
+            payload={"inserted_count": len(inserted_observations)},
+        )
+        db.commit()
 
     if payload.actor_id:
         from app.services import graph_service

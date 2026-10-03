@@ -10,8 +10,9 @@ import SearchPage from "./pages/SearchPage";
 import ActorPage from "./pages/ActorPage";
 import GraphPage from "./pages/GraphPage";
 import ChatAssistant from "./components/ai/ChatAssistant";
+import AdvancedIntelligencePage from "./pages/AdvancedIntelligencePage";
 
-type Page = "dashboard" | "search" | "actor" | "graph";
+type Page = "dashboard" | "search" | "actor" | "graph" | "advanced";
 type NavItem = { id: Page; label: string; icon: typeof LayoutDashboard };
 interface ActorSummary { actor_id: string; primary_handle: string; risk_category: string; confidence_score: number; priority_score: number; associated_handles: string[]; last_active: string; }
 function priorityClass(score: number) { if (score >= 85) return "critical"; if (score >= 70) return "high"; if (score >= 50) return "medium"; return "low"; }
@@ -30,6 +31,34 @@ function App() {
     document.documentElement.dataset.theme = theme;
     localStorage.setItem("decypher_theme", theme);
   }, [theme]);
+
+  useEffect(() => {
+    if (!token) return;
+    const apiBase = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000";
+    const apiUrl = new URL(apiBase);
+    const protocol = apiUrl.protocol === "https:" ? "wss" : "ws";
+    const socket = new WebSocket(`${protocol}://${apiUrl.host}/alerts/ws`);
+    socket.onopen = () => socket.send(token);
+    socket.onmessage = (event) => {
+      try {
+        const alert = JSON.parse(event.data) as { id: number; title: string; message: string };
+        setNotifications((current) => [
+          {
+            id: `live-${alert.id}`,
+            title: alert.title,
+            message: alert.message,
+            time: "Live",
+            type: "warning" as const,
+            read: false,
+          },
+          ...current,
+        ].slice(0, 20));
+      } catch {
+        // Ignore malformed push events.
+      }
+    };
+    return () => socket.close();
+  }, [token]);
 
   useEffect(() => {
     if (!token) return;
@@ -139,7 +168,7 @@ function App() {
   const highPriorityCount = actors.filter((a) => Number(a.priority_score || 0) >= 70).length;
   const averageConfidence = actors.length ? actors.reduce((sum, a) => sum + Number(a.confidence_score || 0), 0) / actors.length * 100 : 0;
   const priorityStats = useMemo(() => { const scores = actors.map((a) => Number(a.priority_score || 0)); const average = scores.length ? scores.reduce((a, b) => a + b, 0) / scores.length : 0; return { average, urgent: scores.filter((s) => s >= 70).length }; }, [actors]);
-  const navItems: NavItem[] = [{ id: "dashboard", label: "Dashboard", icon: LayoutDashboard }, { id: "search", label: "Investigation Search", icon: Search }];
+  const navItems: NavItem[] = [{ id: "dashboard", label: "Dashboard", icon: LayoutDashboard }, { id: "search", label: "Investigation Search", icon: Search }, { id: "advanced", label: "Advanced Intelligence", icon: Target }];
   if (selectedActor) navItems.push({ id: "actor", label: "Actor Investigation", icon: ShieldCheck }, { id: "graph", label: "Graph Explorer", icon: GitBranch });
   if (!token) return <LoginPage onLogin={handleLogin} />;
 
@@ -216,6 +245,7 @@ function App() {
       {page === "search" && <SearchPage onSelectActor={openActor} />}
       {page === "actor" && selectedActor && <ActorPage key={selectedActor} actorId={selectedActor} onBack={() => setPage("search")} onGraph={() => setPage("graph")} />}
       {page === "graph" && selectedActor && <GraphPage key={selectedActor} actorId={selectedActor} onBack={() => setPage("actor")} />}
+      {page === "advanced" && <AdvancedIntelligencePage actorId={selectedActor || undefined} />}
     </div></main>
     <ChatAssistant actorId={selectedActor || undefined} />
   </div>;
