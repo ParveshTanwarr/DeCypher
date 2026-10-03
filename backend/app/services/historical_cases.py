@@ -130,6 +130,21 @@ class HistoricalCaseService:
                 "expected_different_identity_pairs": case.get("expected_different_identity_pairs", []),
                 "model_limitations": case.get("model_limitations", []),
                 "matched_aliases": sorted(matched_event_entities),
+                "validation_summary": {
+                    "positive_control_pairs": len(case.get("expected_same_identity_pairs", [])),
+                    "negative_control_pairs": len(case.get("expected_different_identity_pairs", [])),
+                    "modules": [
+                        "documented alias/entity linkage",
+                        "chronological event reconstruction",
+                        "evidence-ledger integrity",
+                        "graph/anomaly context",
+                    ],
+                    "stylometry_status": (
+                        "not validated on this case: original post corpus is not present in the repository"
+                        if any("post corpus" in str(item).lower() for item in case.get("model_limitations", []))
+                        else "available"
+                    ),
+                },
             })
         return matches
 
