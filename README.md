@@ -651,6 +651,7 @@ Never use the scanner against infrastructure without authorization.
 - [Behavioural profiling](docs/behavioral-profiling.md)
 - [Correlation analysis](docs/correlation-analysis.md)
 - [Evidence integrity](docs/evidence-integrity.md)
+- [Advanced intelligence](docs/advanced-intelligence.md)
 - [Synthetic dataset](data/README.md)
 - [Backend tests](backend/tests/README.md)
 
