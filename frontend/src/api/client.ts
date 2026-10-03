@@ -520,6 +520,53 @@ export function compareMedia(mediaA: string, mediaB: string): Promise<Record<str
   });
 }
 
+export interface HistoricalCaseProvenance {
+  source: string;
+  title: string;
+  url: string;
+  scope?: string;
+}
+export interface HistoricalCaseIdentityMatch {
+  identity_id: string;
+  documented_name: string;
+  aliases: string[];
+  matched_aliases: string[];
+  role?: string;
+}
+export interface HistoricalCaseTimelineEvent {
+  event_id: string;
+  identity_id: string;
+  date: string;
+  date_precision?: string;
+  event_type: string;
+  entity: string;
+  source: string;
+  notes?: string;
+  case_context?: boolean;
+  matched_identity?: string | null;
+}
+export interface HistoricalCaseContext {
+  case_id: string;
+  case_name: string;
+  matched_identities: HistoricalCaseIdentityMatch[];
+  provenance: HistoricalCaseProvenance[];
+  timeline: HistoricalCaseTimelineEvent[];
+  expected_same_identity_pairs: string[][];
+  expected_different_identity_pairs: string[][];
+  model_limitations: string[];
+  matched_aliases: string[];
+}
+export interface HistoricalCaseContextResponse {
+  actor_id: string;
+  matches: HistoricalCaseContext[];
+  note: string;
+}
+export function getHistoricalCaseContext(actorId: string): Promise<HistoricalCaseContextResponse> {
+  return request<HistoricalCaseContextResponse>(
+    `/historical-cases/context/actor/${encodeURIComponent(actorId)}`,
+  );
+}
+
 export function createCollectionSource(payload: {
   name: string;
   kind: "json" | "rss" | "html" | "tor_http";
