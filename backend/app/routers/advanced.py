@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import asyncio
-import json
 from datetime import datetime, timezone
+from urllib.parse import urlparse
 from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket, WebSocketDisconnect
@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.database.postgres import get_db
-from app.models.advanced_models import Alert, CollectionSource, ExternalEntity, MediaEvidence, EntityLink
+from app.models.advanced_models import Alert, CollectionSource, ExternalEntity, EntityLink
 from app.models.sql_models import Actor
 from app.routers.auth import get_current_user, require_role
 from app.services.advanced_intelligence import (
@@ -191,7 +191,7 @@ def inspect_tor(url: str, db: Session = Depends(get_db)):
         alert_type="tor_observation",
         severity="medium",
         title="Tor target inspected",
-        message=f"Authorized Tor observation completed for {urlparse(url).hostname if 'urlparse' in globals() else url}.",
+        message=f"Authorized Tor observation completed for {urlparse(url).hostname}.",
         payload=result,
     )
     db.commit()
