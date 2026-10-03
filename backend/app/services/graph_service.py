@@ -34,6 +34,7 @@ and other signals for investigator review.
 """
 
 from typing import Any, Dict, List, Optional
+import json
 
 from app.database.neo4j_client import neo4j_conn
 
@@ -358,9 +359,48 @@ def sync_actor_observations(
 
 
 def sync_temporal_events(events: List[Dict[str, Any]]) -> None:
-    """Project normalized temporal evidence events into Neo4j."""
+    """Project normalized temporal evidence events into Neo4j.
+
+    Neo4j node properties accept primitives/primitive arrays, not arbitrary
+    Python/JSON maps. Keep the original payload available as deterministic
+    JSON text while extracting the few fields needed for graph relationships
+    into primitive row values.
+    """
     if not events:
         return
+
+    rows = []
+    for event in events:
+        payload = event.get("payload") or {}
+        if not isinstance(payload, dict):
+            payload = {"value": str(payload)}
+
+        rows.append(
+            {
+                "event_id": event.get("event_id"),
+                "actor_id": event.get("actor_id"),
+                "event_type": event.get("event_type"),
+                "entity_type": event.get("entity_type"),
+                "entity_id": event.get("entity_id"),
+                "timestamp": event.get("timestamp"),
+                "source": event.get("source"),
+                "payload_json": json.dumps(
+                    payload,
+                    sort_keys=True,
+                    separators=(",", ":"),
+                    default=str,
+                ),
+                "graph_handle_id": (
+                    str(payload["graph_handle_id"])
+                    if payload.get("graph_handle_id") is not None
+                    else None
+                ),
+                "handle": payload.get("handle"),
+                "platform": payload.get("platform"),
+                "address": payload.get("address"),
+                "fingerprint": payload.get("fingerprint"),
+            }
+        )
 
     neo4j_conn.write(
         """
@@ -373,7 +413,7 @@ def sync_temporal_events(events: List[Dict[str, Any]]) -> None:
             e.entity_id = row.entity_id,
             e.timestamp = row.timestamp,
             e.source = row.source,
-            e.payload = row.payload
+            e.payload_json = row.payload_json
 
         MERGE (a)-[:HAS_EVENT]->(e)
 
@@ -383,13 +423,13 @@ def sync_temporal_events(events: List[Dict[str, Any]]) -> None:
         FOREACH (
             ignored IN CASE
                 WHEN row.entity_type = "handle"
-                AND row.payload.graph_handle_id IS NOT NULL
+                AND row.graph_handle_id IS NOT NULL
                 THEN [1]
                 ELSE []
             END |
-            MERGE (h:Handle {handle_id: row.payload.graph_handle_id})
-            SET h.handle = coalesce(row.payload.handle, h.handle),
-                h.platform = coalesce(row.payload.platform, h.platform)
+            MERGE (h:Handle {handle_id: row.graph_handle_id})
+            SET h.handle = coalesce(row.handle, h.handle),
+                h.platform = coalesce(row.platform, h.platform)
             MERGE (e)-[:DESCRIBES]->(h)
         )
 
@@ -398,13 +438,13 @@ def sync_temporal_events(events: List[Dict[str, Any]]) -> None:
         // Legacy events without a canonical source ID can still be attached
         // by their visible handle/platform pair, but only as a fallback.
         OPTIONAL MATCH (h_by_name:Handle {
-            handle: row.payload.handle,
-            platform: row.payload.platform
+            handle: row.handle,
+            platform: row.platform
         })
         FOREACH (
             ignored IN CASE
                 WHEN row.entity_type = "handle"
-                AND row.payload.graph_handle_id IS NULL
+                AND row.graph_handle_id IS NULL
                 AND h_by_name IS NOT NULL
                 THEN [1]
                 ELSE []
@@ -414,19 +454,19 @@ def sync_temporal_events(events: List[Dict[str, Any]]) -> None:
 
         FOREACH (
             ignored IN CASE
-                WHEN row.entity_type = "wallet" AND row.payload.address IS NOT NULL THEN [1]
+                WHEN row.entity_type = "wallet" AND row.address IS NOT NULL THEN [1]
                 ELSE []
             END |
-            MERGE (w:Wallet {address: row.payload.address})
+            MERGE (w:Wallet {address: row.address})
             MERGE (e)-[:DESCRIBES]->(w)
         )
 
         FOREACH (
             ignored IN CASE
-                WHEN row.entity_type = "pgp_key" AND row.payload.fingerprint IS NOT NULL THEN [1]
+                WHEN row.entity_type = "pgp_key" AND row.fingerprint IS NOT NULL THEN [1]
                 ELSE []
             END |
-            MERGE (p:PGPKey {fingerprint: toUpper(row.payload.fingerprint)})
+            MERGE (p:PGPKey {fingerprint: toUpper(row.fingerprint)})
             MERGE (e)-[:DESCRIBES]->(p)
         )
 
@@ -439,7 +479,7 @@ def sync_temporal_events(events: List[Dict[str, Any]]) -> None:
             MERGE (e)-[:DESCRIBES]->(o)
         )
         """,
-        {"rows": events},
+        {"rows": rows},
     )
 
 
