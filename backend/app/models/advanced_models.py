@@ -54,7 +54,7 @@ class ExternalEntity(Base):
     display_name = Column(String(512), nullable=True)
     source = Column(String(128), nullable=False)
     confidence = Column(Float, default=0.5, nullable=False)
-    metadata = Column(JSON, nullable=False, default=dict)
+    entity_metadata = Column("metadata", JSON, nullable=False, default=dict)
     created_at = Column(DateTime(timezone=True), default=utc_now, index=True)
     __table_args__ = (UniqueConstraint("entity_type", "canonical_value", "source", name="uq_external_entity"),)
 
@@ -80,7 +80,7 @@ class MediaEvidence(Base):
     mime_type = Column(String(128), nullable=True)
     width = Column(Integer, nullable=True)
     height = Column(Integer, nullable=True)
-    metadata = Column(JSON, nullable=False, default=dict)
+    metadata_json = Column("metadata", JSON, nullable=False, default=dict)
     created_at = Column(DateTime(timezone=True), default=utc_now, index=True)
 
 class StylometryDiscovery(Base):
