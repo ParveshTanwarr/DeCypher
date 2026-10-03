@@ -30,6 +30,7 @@ from app.models.advanced_models import (
 )
 from app.models.sql_models import Actor, DarkWebHandle, Observation
 from app.services.nlp_service import nlp_service
+from app.services.evidence_ledger import EvidenceLedgerService
 
 
 def utc_now() -> datetime:
@@ -286,6 +287,7 @@ class CollectionService:
                 items = self._parse_html(body)
             created_obs = 0
             created_entities = 0
+            new_observation_rows: list[dict[str, Any]] = []
             source_label = f"collection:{source.name}"
             for item in items:
                 item_json = json.dumps(item, sort_keys=True, default=str)
@@ -315,6 +317,18 @@ class CollectionService:
                 if existing:
                     continue
                 self.db.add(observation)
+                self.db.flush()
+                new_observation_rows.append({
+                    "observation_id": observation.observation_id,
+                    "indicator_type": observation.indicator_type,
+                    "detected": observation.detected,
+                    "value": observation.value,
+                    "target": observation.target,
+                    "source": observation.source,
+                    "timestamp": observation.timestamp,
+                    "confidence": observation.confidence,
+                    "description": observation.description,
+                })
                 created_obs += 1
                 for entity_type, canonical, metadata in self._extract_entities(item, source.name):
                     entity = self.db.query(ExternalEntity).filter_by(
@@ -332,6 +346,13 @@ class CollectionService:
                         self.db.add(entity)
                         self.db.flush()
                         created_entities += 1
+            if new_observation_rows:
+                EvidenceLedgerService(self.db).append_missing_for_observations(
+                    new_observation_rows,
+                    actor_id=source.actor_id,
+                    created_by=f"collector:{source.name}",
+                )
+
             run.items_seen = len(items)
             run.observations_created = created_obs
             run.entities_created = created_entities
@@ -342,6 +363,13 @@ class CollectionService:
             source.last_error = None
             source.next_run_at = utc_now()
             self.db.commit()
+            if created_obs and source.actor_id:
+                try:
+                    EntityLinkageService(self.db).link_actor(source.actor_id)
+                except Exception:
+                    # Entity linkage is additive; collection evidence remains authoritative.
+                    self.db.rollback()
+                    self.db.commit()
             if created_obs:
                 AlertService(self.db).create(
                     alert_type="collection_update",
