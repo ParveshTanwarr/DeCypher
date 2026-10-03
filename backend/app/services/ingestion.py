@@ -98,8 +98,10 @@ def _upsert_darkweb_handles(session: Session, prepared_handles: pd.DataFrame):
     df_filtered = prepared_handles[[c for c in valid_cols if c in prepared_handles.columns]].copy()
     df_filtered = df_filtered.dropna(subset=["handle"])
 
-    if "handle" in df_filtered.columns and "platform" in df_filtered.columns:
-        df_filtered = df_filtered.drop_duplicates(subset=["handle", "platform"], keep="last")
+    # The stable source handle ID is the canonical identity. Do not collapse
+    # rows merely because two actors happen to use the same visible handle on
+    # the same marketplace.
+    df_filtered = df_filtered.drop_duplicates(subset=["handle_id"], keep="last")
 
     # Persist the stable source handle ID separately from the relational model's
     # integer primary key. The source ID is the only identifier exposed to Neo4j.
@@ -110,7 +112,7 @@ def _upsert_darkweb_handles(session: Session, prepared_handles: pd.DataFrame):
 
     stmt = insert(DarkWebHandle).values(records)
     stmt = stmt.on_conflict_do_update(
-        constraint="uq_handle_platform",
+        index_elements=["source_handle_id"],
         set_={
             "source_handle_id": stmt.excluded.source_handle_id,
             "actor_id": stmt.excluded.actor_id,
@@ -198,14 +200,15 @@ def _upsert_pgp_keys_and_trust_links(
     # Attach every observed fingerprint to its handle. A handle may have
     # multiple observed keys over time, so this is intentionally many-to-many.
     handle_rows = session.query(DarkWebHandle).all()
-    handle_by_identity = {
-        (handle.handle, handle.platform): handle
+    handle_by_source_id = {
+        str(handle.source_handle_id): handle
         for handle in handle_rows
+        if handle.source_handle_id
     }
 
     association_records = []
-    for row in pgp_df[["handle", "platform", "pgp_fingerprint"]].drop_duplicates().to_dict("records"):
-        handle = handle_by_identity.get((row["handle"], row["platform"]))
+    for row in pgp_df[["handle_id", "pgp_fingerprint"]].drop_duplicates().to_dict("records"):
+        handle = handle_by_source_id.get(str(row["handle_id"]))
         key = key_by_fingerprint.get(row["pgp_fingerprint"])
         if handle and key:
             association_records.append({
@@ -234,8 +237,8 @@ def _upsert_pgp_keys_and_trust_links(
             if not source or not target:
                 continue
 
-            source_handle = handle_by_identity.get((source["handle"], source["platform"]))
-            target_handle = handle_by_identity.get((target["handle"], target["platform"]))
+            source_handle = handle_by_source_id.get(str(raw.get("source_handle_id")))
+            target_handle = handle_by_source_id.get(str(raw.get("target_handle_id")))
             if not source_handle or not target_handle:
                 continue
 
