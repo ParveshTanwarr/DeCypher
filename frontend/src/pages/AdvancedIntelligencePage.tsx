@@ -54,16 +54,14 @@ export default function AdvancedIntelligencePage({ actorId }: Props) {
       getGraphAnomalyLeaderboard(10),
       getAdvancedAlerts(),
       getMerkleStatus(),
-    ]).then(([c, s, cal, graph, a]) => {
+    ]).then(([c, s, cal, graph, a, m]) => {
       if (c.status === "fulfilled") setCollection(c.value);
       if (s.status === "fulfilled") setSources(s.value);
       if (cal.status === "fulfilled") setCalibration(cal.value);
       if (graph.status === "fulfilled") setAnomalies(graph.value.results);
       if (a.status === "fulfilled") setAlerts(a.value);
-      const m = [c, s, cal, graph, a][0];
-      if (m.status === "fulfilled") {}
+      if (m.status === "fulfilled") setMerkle(m.value);
     });
-    getMerkleStatus().then(setMerkle).catch(() => setMerkle(null));
   }, []);
 
   useEffect(() => {
@@ -116,7 +114,7 @@ export default function AdvancedIntelligencePage({ actorId }: Props) {
     const reader = new FileReader();
     reader.onload = async () => {
       const dataUrl = String(reader.result || "");
-      const id = \`image-\${slot}-\${Date.now()}\`;
+      const id = `image-${slot}-${Date.now()}`;
       const result = await fingerprintMedia(id, dataUrl, "investigator_upload", actorId);
       if (slot === "a") setMediaA(id);
       else setMediaB(id);
@@ -175,7 +173,7 @@ export default function AdvancedIntelligencePage({ actorId }: Props) {
           </p>
           <div style={{ fontFamily: "monospace", marginTop: 12 }}>
             {collection
-              ? \`\${collection.enabled_sources}/\${collection.sources} sources enabled · \${collection.poll_interval_minutes} min dispatcher\`
+              ? `${collection.enabled_sources}/${collection.sources} sources enabled · ${collection.poll_interval_minutes} min dispatcher`
               : "Loading…"}
           </div>
           <div style={{ display: "grid", gap: 8, marginTop: 12 }}>
@@ -243,10 +241,10 @@ export default function AdvancedIntelligencePage({ actorId }: Props) {
               </div>
               <div style={{ marginTop: 12 }}>
                 {(Array.isArray(calibration.bins) ? calibration.bins : []).map((bin: any) => (
-                  <div key={\`\${bin.lower}-\${bin.upper}\`} style={{ display: "grid", gridTemplateColumns: "80px 1fr", gap: 10, padding: "5px 0" }}>
+                  <div key={`${bin.lower}-${bin.upper}`} style={{ display: "grid", gridTemplateColumns: "80px 1fr", gap: 10, padding: "5px 0" }}>
                     <span>{Math.round(bin.lower * 100)}–{Math.round(bin.upper * 100)}%</span>
                     <div style={{ background: "rgba(255,255,255,.06)", height: 8, borderRadius: 8 }}>
-                      <div style={{ width: \`\${Math.max(2, Number(bin.empirical_match_rate || 0) * 100)}%\`, height: "100%", background: "#74c0fc", borderRadius: 8 }} />
+                      <div style={{ width: `${Math.max(2, Number(bin.empirical_match_rate || 0) * 100)}%`, height: "100%", background: "#74c0fc", borderRadius: 8 }} />
                     </div>
                   </div>
                 ))}
