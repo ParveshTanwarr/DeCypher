@@ -204,12 +204,13 @@ def test_collection_runs_redact_internal_error_details(client, admin_headers):
         assert "error" not in row
         assert "SUPER-SECRET" not in response.text
     finally:
+        source_id = source.id if source is not None else None
         db = SessionLocal()
         try:
             if run is not None:
                 db.query(CollectionRun).filter(CollectionRun.id == run_id).delete()
-            if source is not None:
-                db.query(CollectionSource).filter(CollectionSource.id == source.id).delete()
+            if source_id is not None:
+                db.query(CollectionSource).filter(CollectionSource.id == source_id).delete()
             db.commit()
         finally:
             db.close()
