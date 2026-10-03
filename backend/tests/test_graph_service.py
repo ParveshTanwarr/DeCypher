@@ -154,7 +154,12 @@ def test_temporal_graph_projection_uses_canonical_handle_identity():
 
     assert len(calls) == 1
     query, params = calls[0]
-    assert "row.payload.graph_handle_id" in query
-    assert "row.payload.handle" in query
-    assert "toString(row.entity_id)" not in query
-    assert params["rows"][0]["payload"]["graph_handle_id"] == "H00001"
+    assert "row.graph_handle_id" in query
+    assert "row.handle" in query
+    assert "e.payload = row.payload" not in query
+    assert "payload_json" in query
+    row = params["rows"][0]
+    assert row["graph_handle_id"] == "H00001"
+    assert row["handle"] == "nyxinhex99"
+    assert row["platform"] == "marketplace_11"
+    assert row["payload_json"]
