@@ -32,28 +32,60 @@ def test_investigator_id_comes_from_token_not_body(client, analyst_headers):
     assert listing[0]["investigator_id"] != "someone_else_entirely"
 
 
-def test_confirmed_feedback_increases_scores(client, admin_headers):
-    before = client.get("/actors/A00012", headers=admin_headers).json()
+def test_confirmed_feedback_applies_latest_verdict_to_evidence_baseline(client, admin_headers):
+    from app.database.postgres import SessionLocal
+    from app.services.correlation_service import CorrelationService
+
     client.post(
         "/investigator/feedback",
         headers=admin_headers,
         json={"actor_id": "A00012", "verdict": "Confirmed - High Risk"},
     )
     after = client.get("/actors/A00012", headers=admin_headers).json()
-    assert after["confidence_score"] > before["confidence_score"]
-    assert after["priority_score"] > before["priority_score"]
+
+    db = SessionLocal()
+    try:
+        baseline = CorrelationService(db).correlate_actor(
+            "A00012",
+            persist=False,
+            include_feedback=False,
+        )
+    finally:
+        db.close()
+
+    assert after["confidence_score"] == round(
+        min(1.0, baseline["overall_confidence"] + 0.05),
+        4,
+    )
+    assert after["priority_score"] == min(100, baseline["priority"]["base_score"] + 15)
 
 
-def test_false_positive_feedback_decreases_scores(client, admin_headers):
-    before = client.get("/actors/A00013", headers=admin_headers).json()
+def test_false_positive_feedback_applies_negative_latest_verdict(client, admin_headers):
+    from app.database.postgres import SessionLocal
+    from app.services.correlation_service import CorrelationService
+
     client.post(
         "/investigator/feedback",
         headers=admin_headers,
         json={"actor_id": "A00013", "verdict": "False Positive"},
     )
     after = client.get("/actors/A00013", headers=admin_headers).json()
-    assert after["confidence_score"] < before["confidence_score"]
-    assert after["priority_score"] < before["priority_score"]
+
+    db = SessionLocal()
+    try:
+        baseline = CorrelationService(db).correlate_actor(
+            "A00013",
+            persist=False,
+            include_feedback=False,
+        )
+    finally:
+        db.close()
+
+    assert after["confidence_score"] == round(
+        max(0.0, baseline["overall_confidence"] - 0.15),
+        4,
+    )
+    assert after["priority_score"] == max(0, baseline["priority"]["base_score"] - 15)
 
 
 def test_feedback_for_nonexistent_actor_404s(client, admin_headers):
