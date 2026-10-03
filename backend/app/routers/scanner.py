@@ -80,7 +80,8 @@ def get_observations(
     if target:
         query = query.filter(Observation.target.ilike(f"%{target}%"))
     if indicator_type:
-        query = query.filter(Observation.indicator_type.ilike(f"%{indicator_type}%"))
+        escaped_indicator = indicator_type.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        query = query.filter(Observation.indicator_type.ilike(f"%{escaped_indicator}%", escape="\\"))
     return query.order_by(Observation.timestamp.desc()).offset(offset).limit(limit).all()
 
 
@@ -151,7 +152,7 @@ def ingest_observations(
 
     return BatchIngestionResponse(
         inserted_count=len(inserted_observations),
-        message=f"Successfully ingested {int(result.rowcount or 0)} new scanner observation(s).",
+        message=f"Successfully ingested {len(inserted_observations)} new scanner observation(s).",
     )
 
 
