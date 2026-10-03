@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.database.postgres import get_db
-from app.models.advanced_models import Alert, CollectionSource, ExternalEntity, EntityLink
+from app.models.advanced_models import Alert, CollectionRun, CollectionSource, ExternalEntity, EntityLink
 from app.models.sql_models import Actor
 from app.routers.auth import get_current_user, require_role
 from app.services.advanced_intelligence import (
@@ -59,6 +59,19 @@ class CollectionSourceResponse(BaseModel):
     created_at: Optional[datetime] = None
 
 
+class CollectionRunResponse(BaseModel):
+    model_config = {"from_attributes": True}
+
+    id: int
+    source_id: int
+    started_at: Optional[datetime] = None
+    finished_at: Optional[datetime] = None
+    status: str
+    items_seen: int
+    observations_created: int
+    entities_created: int
+
+
 class HistoricalCase(BaseModel):
     case_id: str
     handle_a: str
@@ -102,7 +115,11 @@ def _safe_collection_source(source: CollectionSource) -> CollectionSourceRespons
 
 
 def _require_actor(db: Session, actor_id: str) -> Actor:
-    actor = db.query(Actor).filter(Actor.actor_id == actor_id).first()
+    actor = (
+        db.query(Actor)
+        .filter(func.lower(Actor.actor_id) == actor_id.lower())
+        .first()
+    )
     if actor is None:
         raise HTTPException(status_code=404, detail=f"Actor '{actor_id}' not found.")
     return actor
@@ -239,11 +256,19 @@ def run_collection_source(source_id: int, db: Session = Depends(get_db)):
 
 @router.get(
     "/collection/runs",
+    response_model=list[CollectionRunResponse],
     dependencies=[Depends(get_current_user)],
 )
 def collection_runs(limit: int = Query(50, ge=1, le=200), db: Session = Depends(get_db)):
-    from app.models.advanced_models import CollectionRun
-    return db.query(CollectionRun).order_by(CollectionRun.id.desc()).limit(limit).all()
+    # Do not serialize CollectionRun ORM rows directly: their internal
+    # exception text can contain source URLs/query strings. Expose only the
+    # operational counters needed by the investigator UI.
+    return (
+        db.query(CollectionRun)
+        .order_by(CollectionRun.id.desc())
+        .limit(limit)
+        .all()
+    )
 
 
 @router.get(
