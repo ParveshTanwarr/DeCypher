@@ -58,8 +58,12 @@ def _ensure_compatibility_schema() -> None:
                     source_id = (row.get("handle_id") or "").strip()
                     handle = (row.get("handle_name") or "").strip()
                     platform = (row.get("marketplace") or "").strip() or None
-                    actor_id = (row.get("actor_id") or "").strip()
-                    if not source_id or not handle:
+                    actor_id = (
+                        row.get("actor_id_ground_truth")
+                        or row.get("actor_id")
+                        or ""
+                    ).strip()
+                    if not source_id or not handle or not actor_id:
                         continue
                     connection.execute(
                         text(
