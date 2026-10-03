@@ -55,7 +55,9 @@ class DarkWebHandle(Base):
         foreign_keys="TrustLink.target_handle_id",
         back_populates="target_handle",
     )
-    __table_args__ = (UniqueConstraint("handle", "platform", name="uq_handle_platform"),)
+    # A visible handle can legitimately recur on one marketplace across
+    # different synthetic actors. The stable source_handle_id is the
+    # cross-system identity and is therefore the canonical uniqueness key.
 
 class PGPKey(Base):
     __tablename__ = "pgp_keys"
