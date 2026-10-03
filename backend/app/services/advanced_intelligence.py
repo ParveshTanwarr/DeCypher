@@ -389,22 +389,25 @@ class CollectionService:
                     description=str(item.get("description") or item.get("title") or item)[:4000],
                 )
                 existing = self.db.query(Observation).filter(Observation.observation_id == obs_id).first()
-                if existing:
-                    continue
-                self.db.add(observation)
-                self.db.flush()
-                new_observation_rows.append({
-                    "observation_id": observation.observation_id,
-                    "indicator_type": observation.indicator_type,
-                    "detected": observation.detected,
-                    "value": observation.value,
-                    "target": observation.target,
-                    "source": observation.source,
-                    "timestamp": observation.timestamp,
-                    "confidence": observation.confidence,
-                    "description": observation.description,
-                })
-                created_obs += 1
+                if existing is None:
+                    self.db.add(observation)
+                    self.db.flush()
+                    new_observation_rows.append({
+                        "observation_id": observation.observation_id,
+                        "indicator_type": observation.indicator_type,
+                        "detected": observation.detected,
+                        "value": observation.value,
+                        "target": observation.target,
+                        "source": observation.source,
+                        "timestamp": observation.timestamp,
+                        "confidence": observation.confidence,
+                        "description": observation.description,
+                    })
+                    created_obs += 1
+
+                # Entity extraction is deliberately independent of observation
+                # deduplication. A previous partial run may have persisted the
+                # observation but failed before creating its extracted entities.
                 for entity_type, canonical, metadata in self._extract_entities(item, source.name):
                     entity = self.db.query(ExternalEntity).filter_by(
                         entity_type=entity_type, canonical_value=canonical, source=source_label
@@ -440,13 +443,48 @@ class CollectionService:
                 minutes=max(1, int(source.interval_minutes or 15))
             )
             self.db.commit()
-            if created_obs and source.actor_id:
+            # Resolve newly extracted entities against the known actor corpus,
+            # even when a source is not pre-assigned to one actor. These are
+            # candidate evidence links, never identity determinations.
+            candidate_links = []
+            if created_entities:
                 try:
-                    EntityLinkageService(self.db).link_actor(source.actor_id)
-                except Exception:
-                    # Entity linkage is additive; collection evidence remains authoritative.
+                    candidate_links = EntityLinkageService(self.db).link_recent_source(
+                        source_label=source_label,
+                        created_after=run.started_at,
+                    )
+                except Exception as exc:
                     self.db.rollback()
-                    self.db.commit()
+                    print(f"[collection] Entity resolution warning: {exc}")
+
+            affected_actor_ids = sorted({row["actor_id"] for row in candidate_links if row.get("actor_id")})
+            if source.actor_id:
+                affected_actor_ids = sorted(set(affected_actor_ids) | {source.actor_id})
+
+            if new_observation_rows and source.actor_id:
+                try:
+                    from app.services import graph_service
+                    graph_service.sync_actor_observations(source.actor_id, new_observation_rows)
+                except Exception as exc:
+                    # PostgreSQL remains authoritative; graph projection can be retried.
+                    print(f"[collection] Neo4j observation projection warning: {exc}")
+
+            if candidate_links:
+                try:
+                    from app.services import graph_service
+                    graph_service.sync_external_entity_links(candidate_links)
+                except Exception as exc:
+                    print(f"[collection] Neo4j entity-link projection warning: {exc}")
+
+            # Recompute evidence-only actor correlations after new source evidence
+            # is available. Correlation scores remain triage signals, not identity probabilities.
+            for linked_actor_id in affected_actor_ids:
+                try:
+                    from app.services.correlation_service import CorrelationService
+                    CorrelationService(self.db).correlate_actor(linked_actor_id, persist=True)
+                except Exception as exc:
+                    print(f"[collection] Correlation refresh warning for {linked_actor_id}: {exc}")
+
             alert_error = None
             if created_obs:
                 try:
@@ -637,6 +675,94 @@ class StylometryDiscoveryService:
 class EntityLinkageService:
     def __init__(self, db):
         self.db = db
+
+    def link_recent_source(self, source_label: str, created_after: datetime | None = None) -> list[dict[str, Any]]:
+        """Link newly collected entities to existing records using exact identifiers.
+
+        Matching is intentionally conservative: handle, wallet, PGP fingerprint,
+        and registered scan-host equality create candidate links. It never merges
+        actor records or asserts that a candidate is a confirmed identity.
+        """
+        from app.models.sql_models import Wallet, ScanTarget
+
+        query = self.db.query(ExternalEntity).filter(ExternalEntity.source == source_label)
+        entities = query.order_by(ExternalEntity.id.asc()).all()
+        actors = self.db.query(Actor).all()
+        handles = self.db.query(DarkWebHandle).all()
+        wallets = self.db.query(Wallet).all()
+        targets = self.db.query(ScanTarget).all()
+
+        by_actor: dict[str, dict[str, set[str]]] = {
+            actor.actor_id: {"handle": set(), "wallet": set(), "pgp": set(), "domain": set()}
+            for actor in actors
+        }
+        for actor in actors:
+            by_actor[actor.actor_id]["handle"].add(_normal(actor.primary_handle))
+        for handle in handles:
+            if handle.actor_id in by_actor:
+                by_actor[handle.actor_id]["handle"].add(_normal(handle.handle))
+                for key in handle.pgp_keys:
+                    if key.fingerprint:
+                        by_actor[handle.actor_id]["pgp"].add(key.fingerprint.lower())
+        for wallet in wallets:
+            if wallet.actor_id in by_actor and wallet.address:
+                by_actor[wallet.actor_id]["wallet"].add(wallet.address.lower())
+        for target in targets:
+            if target.actor_id in by_actor:
+                host = urlparse(target.target_url).hostname
+                if host:
+                    by_actor[target.actor_id]["domain"].add(host.lower())
+
+        results: list[dict[str, Any]] = []
+        for entity in entities:
+            canonical = str(entity.canonical_value or "")
+            normalized = _normal(canonical)
+            for actor_id, values in by_actor.items():
+                matched = False
+                if entity.entity_type == "handle":
+                    matched = bool(normalized and normalized in values["handle"])
+                elif entity.entity_type == "wallet":
+                    matched = canonical.lower() in values["wallet"]
+                elif entity.entity_type == "pgp":
+                    matched = canonical.lower() in values["pgp"]
+                elif entity.entity_type == "domain":
+                    matched = canonical.lower() in values["domain"]
+                if not matched:
+                    continue
+
+                existing = self.db.query(EntityLink).filter_by(
+                    actor_id=actor_id, entity_id=entity.id
+                ).first()
+                explanation = {
+                    "entity": canonical,
+                    "source": entity.source,
+                    "basis": "exact_identifier_match",
+                    "identity_status": "candidate_only",
+                }
+                if existing:
+                    existing.score = 1.0
+                    existing.match_type = f"exact_{entity.entity_type}"
+                    existing.explanation = explanation
+                else:
+                    self.db.add(EntityLink(
+                        actor_id=actor_id,
+                        entity_id=entity.id,
+                        score=1.0,
+                        match_type=f"exact_{entity.entity_type}",
+                        explanation=explanation,
+                    ))
+                results.append({
+                    "actor_id": actor_id,
+                    "entity_id": entity.id,
+                    "entity_type": entity.entity_type,
+                    "canonical_value": canonical,
+                    "source": entity.source,
+                    "score": 1.0,
+                    "match_type": f"exact_{entity.entity_type}",
+                    "identity_status": "candidate_only",
+                })
+        self.db.commit()
+        return results
 
     def link_actor(self, actor_id: str, min_score: float = 0.70) -> list[dict[str, Any]]:
         actor = (
