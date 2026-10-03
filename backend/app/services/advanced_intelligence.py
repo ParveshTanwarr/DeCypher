@@ -48,10 +48,13 @@ def _normal(value: str) -> str:
 
 
 def image_perceptual_hash(data: bytes) -> tuple[str, int, int, str]:
-    image = Image.open(BytesIO(data)).convert("L")
-    width, height = image.size
-    resized = image.resize((9, 8))
-    pixels = list(resized.getdata())
+    with Image.open(BytesIO(data)) as original:
+        mime = Image.MIME.get(original.format or "", "image/*")
+        image = original.convert("L")
+        width, height = image.size
+        resized = image.resize((9, 8))
+        pixels = list(resized.getdata())
+
     bits = []
     for row in range(8):
         for col in range(8):
@@ -60,7 +63,7 @@ def image_perceptual_hash(data: bytes) -> tuple[str, int, int, str]:
             bits.append("1" if left > right else "0")
     bit_string = "".join(bits)
     phash = f"{int(bit_string, 2):016x}"
-    return phash, width, height, Image.MIME.get(Image.open(BytesIO(data)).format, "image/*")
+    return phash, width, height, mime
 
 
 def phash_distance(a: str, b: str) -> int:
