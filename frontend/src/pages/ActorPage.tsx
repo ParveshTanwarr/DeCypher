@@ -812,7 +812,7 @@ export default function ActorPage({
 
       {/* Evidence-backed behavioural profile */}
       <div className="card" style={{ marginTop: "20px" }}>
-        <div className="eyebrow">BEHAVIOURAL INTELLIGENCE · PROFILE v1.0</div>
+        <div className="eyebrow">BEHAVIOURAL INTELLIGENCE · PROFILE v1.2</div>
         <h2 style={{ marginTop: "8px" }}>Behavioural Profile</h2>
         {behavioralLoading ? (
           <div style={{ marginTop: "18px", opacity: 0.7 }}>Extracting linguistic, lifecycle and operational patterns…</div>
@@ -1271,7 +1271,7 @@ export default function ActorPage({
                   )}
                 </div>
                 <div style={{ marginTop: "8px", fontSize: "12px", opacity: 0.58, lineHeight: 1.5 }}>
-                  Weighted evidence-agreement score, not a calibrated identity probability. Review it with signal coverage and the underlying observations.
+                  Weighted evidence-agreement score, not a calibrated identity probability. Signal coverage shows how much of the six-signal model is actually available. Review it with the underlying observations.
                 </div>
               </div>
 
@@ -1375,7 +1375,7 @@ export default function ActorPage({
                 opacity: 0.75,
               }}
             >
-              {correlation.signal_count} / 6 signals available
+              {correlation.signal_count} / 6 signals available · {Math.round((correlation.available_weight ?? 0) * 100)}% weighted coverage
             </div>
 
             {/* Interpretation */}
