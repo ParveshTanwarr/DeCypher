@@ -343,10 +343,15 @@ GET /search?q=<actor|handle|wallet|PGP>
 
 ### Correlation
 ```text
-GET /correlation/actor/{actor_id}
-GET /correlation/actor/{actor_id}/counterfactual
-GET /correlation/actors
+GET  /correlation/actor/{actor_id}
+GET  /correlation/actor/{actor_id}/counterfactual
+GET  /correlation/actors
+
+POST /correlation/actor/{actor_id}/refresh
+POST /correlation/actors/refresh
 ```
+
+GET correlation endpoints are side-effect free. Use the POST refresh endpoints when an investigator/admin explicitly wants the derived confidence and priority values persisted to the actor record.
 
 Optional actor correlation parameters:
 
