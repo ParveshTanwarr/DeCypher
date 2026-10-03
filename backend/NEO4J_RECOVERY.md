@@ -74,10 +74,10 @@ Run all commands from the `backend/` directory.
    docker compose stop neo4j
    ```
 
-   Update `NEO4J_PASSWORD` in `backend/.env` to exactly the new password you set above, then:
+   Update `NEO4J_PASSWORD` in `backend/.env` to exactly the new password you set above, then recreate the container with the normal Compose configuration:
 
    ```bash
-   docker compose up -d neo4j
+   docker compose up -d --force-recreate neo4j
    docker compose ps neo4j
    docker compose logs neo4j --tail=80
    ```
