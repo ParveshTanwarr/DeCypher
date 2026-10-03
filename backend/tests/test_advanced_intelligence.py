@@ -1,4 +1,7 @@
 import base64
+from types import SimpleNamespace
+
+import pytest
 
 
 PNG_1X1 = (
@@ -73,7 +76,7 @@ def test_historical_case_context_is_exposed_for_matching_actor(client, admin_hea
         )
         db.commit()
 
-        response = client.get(f"/historical-cases/context/actor/{actor_id}", headers=admin_headers)
+        response = client.get(f"/historical-cases/context/actor/{actor_id.lower()}", headers=admin_headers)
         assert response.status_code == 200, response.text
         body = response.json()
         assert body["matches"]
@@ -87,3 +90,27 @@ def test_historical_case_context_is_exposed_for_matching_actor(client, admin_hea
         db.query(Actor).filter(Actor.actor_id == "CASE-ALPHABAY-UI").delete()
         db.commit()
         db.close()
+
+
+def test_media_request_enforces_bounded_data_url(client, admin_headers):
+    oversized = client.post(
+        "/media/fingerprint",
+        headers=admin_headers,
+        json={
+            "media_id": "oversized-image",
+            "data_url": "data:image/png;base64," + ("A" * 7_000_001),
+            "source": "test",
+        },
+    )
+    assert oversized.status_code == 422, oversized.text
+
+
+def test_limited_response_reader_rejects_large_stream():
+    from app.services.advanced_intelligence import _read_limited_response
+
+    response = SimpleNamespace(
+        headers={},
+        iter_content=lambda chunk_size: [b"12345", b"67890"],
+    )
+    with pytest.raises(ValueError, match="exceeds configured"):
+        _read_limited_response(response, 8)
