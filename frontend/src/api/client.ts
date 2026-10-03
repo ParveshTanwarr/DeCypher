@@ -519,3 +519,39 @@ export function compareMedia(mediaA: string, mediaB: string): Promise<Record<str
     body: JSON.stringify({ media_a: mediaA, media_b: mediaB }),
   });
 }
+
+export function createCollectionSource(payload: {
+  name: string;
+  kind: "json" | "rss" | "html" | "tor_http";
+  url: string;
+  actor_id?: string | null;
+  enabled?: boolean;
+  interval_minutes?: number;
+  headers?: Record<string, string>;
+  parser_config?: Record<string, unknown>;
+}): Promise<CollectionSource> {
+  return request<CollectionSource>("/collection/sources", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+}
+export function runHistoricalCaseValidation(cases: Array<{
+  case_id: string;
+  handle_a: string;
+  handle_b: string;
+  expected_same_actor: boolean;
+  threshold?: number;
+}>): Promise<any> {
+  return request<any>("/evaluation/historical-cases", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(cases),
+  });
+}
+export function inspectTor(url: string): Promise<Record<string, unknown>> {
+  return request<Record<string, unknown>>("/tor/inspect?url=" + encodeURIComponent(url), { method: "POST" });
+}
+export function getMerkleStatus(): Promise<Record<string, unknown>> {
+  return request<Record<string, unknown>>("/integrity/merkle-status");
+}
