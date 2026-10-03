@@ -573,7 +573,11 @@ def init_db_and_load_csvs(reset_tables: bool = False, sync_neo4j: bool = True):
                 print(f"[+] Upserted {count} records into 'darkweb_handles'")
             except Exception as e:
                 session.rollback()
-                print(f"[-] Error loading {handles_path} into 'darkweb_handles': {e}")
+                # Handle rows are foundational to actor/graph/wallet identity.
+                # Never allow startup to continue with a partial handle dataset.
+                raise RuntimeError(
+                    f"Failed to load canonical handle dataset {handles_path}: {e}"
+                ) from e
 
         if prepared_handles is not None:
             try:
