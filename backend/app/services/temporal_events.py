@@ -357,29 +357,41 @@ def get_actor_timeline(
     for candidate in candidates:
         candidate_by_key.setdefault(candidate["event_key"], candidate)
 
-    event_keys = list(candidate_by_key)
     persisted = (
         db.query(TemporalEvent)
-        .filter(
-            TemporalEvent.actor_id == actor_id,
-            TemporalEvent.event_key.in_(event_keys),
-        )
+        .filter(TemporalEvent.actor_id == actor_id)
         .all()
-        if event_keys
-        else []
     )
-    persisted_ids = {event.event_key: event.id for event in persisted}
 
-    rows = []
+    rows_by_key: dict[str, dict[str, Any]] = {}
+    for event in persisted:
+        if start and event.timestamp < start:
+            continue
+        if end and event.timestamp > end:
+            continue
+        rows_by_key[event.event_key] = {
+            "id": event.id,
+            "event_key": event.event_key,
+            "event_type": event.event_type,
+            "entity_type": event.entity_type,
+            "entity_id": event.entity_id,
+            "timestamp": _iso(event.timestamp),
+            "source": event.source,
+            "payload": event.payload,
+        }
+
+    # Include current source-derived events that have not yet been persisted.
+    # This keeps GET current without turning it into a write operation.
     for candidate in candidate_by_key.values():
         timestamp = candidate["timestamp"]
         if start and timestamp < start:
             continue
         if end and timestamp > end:
             continue
-        rows.append(
+        rows_by_key.setdefault(
+            candidate["event_key"],
             {
-                "id": persisted_ids.get(candidate["event_key"]),
+                "id": None,
                 "event_key": candidate["event_key"],
                 "event_type": candidate["event_type"],
                 "entity_type": candidate["entity_type"],
@@ -387,8 +399,10 @@ def get_actor_timeline(
                 "timestamp": _iso(timestamp),
                 "source": candidate["source"],
                 "payload": candidate["payload"],
-            }
+            },
         )
+
+    rows = list(rows_by_key.values())
 
     rows.sort(
         key=lambda event: (event["timestamp"] or "", event["id"] or 0),
