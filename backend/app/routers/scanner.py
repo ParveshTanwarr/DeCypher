@@ -78,7 +78,10 @@ def get_observations(
 ):
     query = db.query(Observation)
     if target:
-        query = query.filter(Observation.target.ilike(f"%{target}%"))
+        escaped_target = target.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        query = query.filter(
+            Observation.target.ilike(f"%{escaped_target}%", escape="\\")
+        )
     if indicator_type:
         escaped_indicator = indicator_type.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
         query = query.filter(Observation.indicator_type.ilike(f"%{escaped_indicator}%", escape="\\"))
