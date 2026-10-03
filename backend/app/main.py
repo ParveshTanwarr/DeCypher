@@ -133,6 +133,26 @@ def _bootstrap_demo_data() -> int:
 
     if actor_count == 0:
         init_db_and_load_csvs(reset_tables=False, sync_neo4j=True)
+    else:
+        # Repair an existing pre-canonical database once if its handle row count
+        # does not match the source fixture. This is intentionally gated so normal
+        # API restarts do not re-ingest the full dataset.
+        handles_path = Path(__file__).resolve().parents[2] / "data" / "handles.csv"
+        expected_handles = 0
+        if handles_path.exists():
+            with handles_path.open("r", encoding="utf-8", newline="") as file:
+                expected_handles = sum(1 for _ in csv.DictReader(file))
+        db = SessionLocal()
+        try:
+            actual_handles = int(db.query(func.count(DarkWebHandle.id)).scalar() or 0)
+        finally:
+            db.close()
+        if expected_handles and actual_handles != expected_handles:
+            print(
+                f"[*] Handle fixture reconciliation required: "
+                f"expected={expected_handles}, actual={actual_handles}"
+            )
+            init_db_and_load_csvs(reset_tables=False, sync_neo4j=False)
 
     db = SessionLocal()
     try:
