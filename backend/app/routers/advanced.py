@@ -121,19 +121,6 @@ def historical_case_context_for_actor(actor_id: str, db: Session = Depends(get_d
     }
 
 
-@router.get(
-    "/historical-cases/context",
-    dependencies=[Depends(get_current_user)],
-)
-def historical_case_context(
-    handles: list[str] = Query(default=[]),
-):
-    return {
-        "matches": HistoricalCaseService.match_handles(handles),
-        "note": "Historical-case context is read-only provenance metadata. It is shown only when supplied handles match documented case aliases.",
-    }
-
-
 @router.post(
     "/integrity/merkle-seal",
     dependencies=[Depends(require_role("admin"))],
