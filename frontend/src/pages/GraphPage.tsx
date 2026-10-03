@@ -319,7 +319,25 @@ export default function GraphPage({
         return signalLabels[indicatorType];
       }
 
-      return rawLabel.split(".")[0]?.trim() || "Evidence";
+      const lower = rawLabel.toLowerCase();
+      if (lower.includes("banner")) {
+        return "Banner correlation";
+      }
+      if (lower.includes("status page")) {
+        return "Exposed status page";
+      }
+      if (
+        lower.includes("tls") ||
+        lower.includes("certificate") ||
+        lower.includes("cert")
+      ) {
+        return "TLS / certificate reuse";
+      }
+      if (lower.includes("descriptor")) {
+        return "Descriptor timing";
+      }
+
+      return "Evidence";
     }
 
     return rawLabel || String(node.id);
@@ -335,13 +353,15 @@ export default function GraphPage({
 
     if (
       (getNodeType(node) === "wallet" ||
-        getNodeType(node) === "pgpkey") &&
-      label.length > 18
+        getNodeType(node) === "pgpkey" ||
+        getNodeType(node) === "infrastructure") &&
+      label.length > 20
     ) {
-      return `${label.slice(
-        0,
-        8,
-      )}...${label.slice(-6)}`;
+      return (
+        label.slice(0, 9) +
+        "..." +
+        label.slice(-7)
+      );
     }
 
     return label;
