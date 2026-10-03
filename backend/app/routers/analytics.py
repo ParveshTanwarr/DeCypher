@@ -43,8 +43,15 @@ def actor_graph_anomaly(
     actor_id: str,
     db: Session = Depends(get_db),
 ):
+    actor = (
+        db.query(Actor)
+        .filter(func.lower(Actor.actor_id) == actor_id.lower())
+        .first()
+    )
+    if actor is None:
+        raise HTTPException(status_code=404, detail="Actor not found.")
     try:
-        return GraphAnomalyService(db).analyze(actor_id)
+        return GraphAnomalyService(db).analyze(actor.actor_id)
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc))
 
