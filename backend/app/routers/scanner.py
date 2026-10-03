@@ -4,6 +4,7 @@ from typing import List, Optional
 from celery.exceptions import CeleryError
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
+from sqlalchemy import func
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
@@ -104,8 +105,14 @@ def ingest_observations(
 
     if payload.actor_id:
         from app.models.sql_models import Actor
-        if not db.query(Actor).filter(Actor.actor_id == payload.actor_id).first():
+        actor = (
+            db.query(Actor)
+            .filter(func.lower(Actor.actor_id) == payload.actor_id.lower())
+            .first()
+        )
+        if actor is None:
             raise HTTPException(status_code=404, detail=f"Actor '{payload.actor_id}' not found.")
+        payload.actor_id = actor.actor_id
 
     deduped = {}
     for obs in payload.observations:
@@ -185,8 +192,14 @@ def create_scan_target(payload: ScanTargetCreate, db: Session = Depends(get_db))
 
     if payload.actor_id:
         from app.models.sql_models import Actor
-        if not db.query(Actor).filter(Actor.actor_id == payload.actor_id).first():
+        actor = (
+            db.query(Actor)
+            .filter(func.lower(Actor.actor_id) == payload.actor_id.lower())
+            .first()
+        )
+        if actor is None:
             raise HTTPException(status_code=404, detail=f"Actor '{payload.actor_id}' not found.")
+        payload.actor_id = actor.actor_id
 
     if db.query(ScanTarget).filter(
         (ScanTarget.name == payload.name) | (ScanTarget.target_url == payload.target_url)
