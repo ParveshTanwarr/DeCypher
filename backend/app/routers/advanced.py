@@ -451,6 +451,9 @@ def actor_entity_links(actor_id: str, db: Session = Depends(get_db)):
     dependencies=[Depends(require_role("admin", "investigator"))],
 )
 def media_fingerprint(payload: MediaFingerprintRequest, db: Session = Depends(get_db)):
+    if payload.actor_id:
+        actor = _require_actor(db, payload.actor_id)
+        payload.actor_id = actor.actor_id
     try:
         return MediaCorrelationService(db).ingest(
             payload.media_id,
