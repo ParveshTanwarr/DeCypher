@@ -267,6 +267,16 @@ export function getActorCounterfactual(actorId: string, handleA?: string, handle
   );
 }
 export function getAllCorrelations(): Promise<{ results: CorrelationResult[] }> { return request<{ results: CorrelationResult[] }>(`/correlation/actors`); }
+export function refreshActorCorrelation(actorId: string, handleA?: string, handleB?: string): Promise<CorrelationResult> {
+  const params = new URLSearchParams();
+  if (handleA) params.set("handle_a", handleA);
+  if (handleB) params.set("handle_b", handleB);
+  const query = params.toString();
+  return request<CorrelationResult>(`/correlation/actor/${encodeURIComponent(actorId)}/refresh${query ? `?${query}` : ""}`, { method: "POST" });
+}
+export function refreshAllCorrelations(): Promise<{ results: CorrelationResult[] }> {
+  return request<{ results: CorrelationResult[] }>("/correlation/actors/refresh", { method: "POST" });
+}
 export function searchActors(query: string): Promise<SearchResponse> { return request<SearchResponse>(`/search?q=${encodeURIComponent(query)}`); }
 
 
