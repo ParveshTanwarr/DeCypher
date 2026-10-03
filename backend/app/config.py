@@ -25,5 +25,16 @@ class Settings(BaseSettings):
     # Synthetic filler evidence is excluded from correlation by default. Set true only for a controlled demo.
     CORRELATION_EXCLUDE_SYNTHETIC_DEMO_EVIDENCE: bool = True
     EXPORT_MAX_GRAPH_IMAGE_BYTES: int = 5_000_000
+    LEDGER_BLOCK_SIZE: int = 32
+    COLLECTION_ENABLED: bool = False
+    COLLECTION_POLL_INTERVAL_MINUTES: int = 5
+    COLLECTION_ALLOWED_HOSTS: str = "127.0.0.1,localhost"
+    COLLECTION_TIMEOUT_SECONDS: int = 20
+    COLLECTION_MAX_RESPONSE_BYTES: int = 2_000_000
+    TOR_SOCKS5_PROXY: str = ""
+    TOR_ALLOWED_ONION_HOSTS: str = ""
+    TOR_TIMEOUT_SECONDS: int = 30
+    TOR_DESCRIPTOR_URL: str = ""
+    MEDIA_MAX_BYTES: int = 5_000_000
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 settings = Settings()
