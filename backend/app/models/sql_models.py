@@ -30,6 +30,10 @@ class Actor(Base):
 class DarkWebHandle(Base):
     __tablename__ = "darkweb_handles"
     id = Column(Integer, primary_key=True, index=True)
+    # Stable source identifier from handles.csv (for example H00001).
+    # PostgreSQL uses the integer PK for relational joins; Neo4j uses this
+    # stable identifier so graph identity never depends on DB row ordering.
+    source_handle_id = Column(String(64), index=True, nullable=True)
     actor_id = Column(String(64), ForeignKey("actors.actor_id", ondelete="CASCADE"), index=True, nullable=True)
     handle = Column(String(128), index=True, nullable=False)
     platform = Column(String(64), nullable=True)
