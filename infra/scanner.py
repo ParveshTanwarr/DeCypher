@@ -7,6 +7,7 @@ from urllib.parse import urlparse
 from infra.evidence import save_observations
 from infra.observation_mapper import map_observations
 from infra.backend_client import send_observations
+from infra.target_policy import validate_scan_target as _validate_scan_target
 
 import requests
 
@@ -34,17 +35,7 @@ def _allowed_hosts() -> set[str]:
 
 
 def validate_scan_target(url: str) -> None:
-    parsed = urlparse(url)
-    if parsed.scheme not in {"http", "https"} or not parsed.hostname:
-        raise ValueError("Scan target must be an http:// or https:// URL with a hostname.")
-    if parsed.username or parsed.password:
-        raise ValueError("Credentials embedded in scan URLs are not allowed.")
-    host = parsed.hostname.lower()
-    if host not in _allowed_hosts():
-        allowed = ", ".join(sorted(_allowed_hosts())) or "(none)"
-        raise ValueError(
-            f"Target host '{host}' is not in AUTOSCAN_ALLOWED_HOSTS. Allowed hosts: {allowed}"
-        )
+    _validate_scan_target(url, _allowed_hosts())
 
 
 def _tls_verify() -> bool:
