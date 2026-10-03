@@ -387,14 +387,30 @@ def sync_temporal_events(events: List[Dict[str, Any]]) -> None:
             handle: row.payload.handle,
             platform: row.payload.platform
         })
+        // Prefer the stable source handle ID. Only fall back to the
+        // human-readable handle/platform pair when the stable ID is absent.
+        // Neo4j relationships require a concrete node expression; using
+        // coalesce(...) directly as the relationship endpoint is invalid
+        // Cypher, so the two cases are handled independently.
         FOREACH (
             ignored IN CASE
                 WHEN row.entity_type = "handle"
-                AND coalesce(h, h_by_name) IS NOT NULL
+                AND h IS NOT NULL
                 THEN [1]
                 ELSE []
             END |
-            MERGE (e)-[:DESCRIBES]->(coalesce(h, h_by_name))
+            MERGE (e)-[:DESCRIBES]->(h)
+        )
+
+        FOREACH (
+            ignored IN CASE
+                WHEN row.entity_type = "handle"
+                AND h IS NULL
+                AND h_by_name IS NOT NULL
+                THEN [1]
+                ELSE []
+            END |
+            MERGE (e)-[:DESCRIBES]->(h_by_name)
         )
 
         FOREACH (
