@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 import hashlib
+import ipaddress
 import json
 import re
 import time
@@ -567,12 +568,30 @@ class TorIntelligenceService:
 
     @staticmethod
     def parse_descriptor(descriptor_text: str) -> dict[str, Any]:
+        """Parse a Tor relay server descriptor and report conservative consistency checks.
+
+        This parser does not deanonymize onion services. It validates selected
+        public relay-descriptor fields and reports malformed or non-public
+        advertised router addresses as reviewable indicators.
+        """
         lines = [line.strip() for line in descriptor_text.splitlines() if line.strip()]
-        result: dict[str, Any] = {"router": None, "published": None, "platform": None, "protocols": {}, "raw_lines": len(lines)}
+        result: dict[str, Any] = {
+            "descriptor_type": "tor_relay_server_descriptor",
+            "router": None,
+            "published": None,
+            "platform": None,
+            "protocols": {},
+            "raw_lines": len(lines),
+            "anomalies": [],
+        }
         for line in lines:
             if line.startswith("router "):
                 parts = line.split()
-                result["router"] = {"nickname": parts[1] if len(parts) > 1 else None, "address": parts[2] if len(parts) > 2 else None, "or_ports": parts[3:] if len(parts) > 3 else []}
+                result["router"] = {
+                    "nickname": parts[1] if len(parts) > 1 else None,
+                    "address": parts[2] if len(parts) > 2 else None,
+                    "or_ports": parts[3:] if len(parts) > 3 else [],
+                }
             elif line.startswith("published "):
                 result["published"] = line[len("published "):]
             elif line.startswith("platform "):
@@ -582,6 +601,46 @@ class TorIntelligenceService:
                     if "=" in token:
                         key, value = token.split("=", 1)
                         result["protocols"][key] = value
+
+        anomalies = result["anomalies"]
+        router = result["router"]
+        if not router:
+            anomalies.append({"code": "missing_router_line", "severity": "review", "detail": "Descriptor has no router declaration."})
+        else:
+            address = router.get("address")
+            try:
+                parsed_address = ipaddress.ip_address(address)
+                if not parsed_address.is_global:
+                    anomalies.append({
+                        "code": "non_global_router_address",
+                        "severity": "review",
+                        "detail": "Advertised relay address is not globally routable.",
+                    })
+            except ValueError:
+                anomalies.append({"code": "invalid_router_address", "severity": "review", "detail": "Router address is not a valid IP address."})
+            ports = router.get("or_ports") or []
+            if not ports:
+                anomalies.append({"code": "missing_or_port", "severity": "review", "detail": "Router declaration has no OR port."})
+            else:
+                try:
+                    if not 1 <= int(ports[0]) <= 65535:
+                        raise ValueError
+                except (TypeError, ValueError):
+                    anomalies.append({"code": "invalid_or_port", "severity": "review", "detail": "Router OR port is outside the valid TCP port range."})
+
+        if not result["published"]:
+            anomalies.append({"code": "missing_published_timestamp", "severity": "review", "detail": "Descriptor has no published timestamp."})
+        else:
+            try:
+                datetime.strptime(result["published"], "%Y-%m-%d %H:%M:%S")
+            except ValueError:
+                anomalies.append({"code": "invalid_published_timestamp", "severity": "review", "detail": "Published timestamp does not match the Tor descriptor format."})
+
+        result["consistency_status"] = (
+            "insufficient_data" if not lines
+            else "review_required" if anomalies
+            else "no_basic_inconsistency_detected"
+        )
         result["descriptor_sha256"] = _sha256(descriptor_text)
         return result
 
