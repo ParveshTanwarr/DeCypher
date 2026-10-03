@@ -114,3 +114,51 @@ def test_limited_response_reader_rejects_large_stream():
     )
     with pytest.raises(ValueError, match="exceeds configured"):
         _read_limited_response(response, 8)
+
+
+def test_collection_sources_do_not_expose_stored_headers(client, admin_headers, analyst_headers):
+    from uuid import uuid4
+    from app.database.postgres import SessionLocal
+    from app.models.advanced_models import CollectionSource
+
+    name = f"test-secret-source-{uuid4().hex[:8]}"
+    secret = "Bearer SUPER-SECRET-TEST-TOKEN"
+    query_secret = "api_key=SUPER-SECRET-QUERY"
+    create_response = None
+
+    try:
+        create_response = client.post(
+            "/collection/sources",
+            headers=admin_headers,
+            json={
+                "name": name,
+                "kind": "json",
+                "url": f"http://localhost/intel?{query_secret}",
+                "headers": {"Authorization": secret},
+                "parser_config": {"api_key": "SUPER-SECRET-CONFIG"},
+            },
+        )
+        assert create_response.status_code == 200, create_response.text
+        created = create_response.json()
+        assert "headers" not in created
+        assert "parser_config" not in created
+        assert "last_error" not in created
+        assert query_secret not in created["url"]
+        assert secret not in create_response.text
+
+        list_response = client.get("/collection/sources", headers=analyst_headers)
+        assert list_response.status_code == 200, list_response.text
+        row = next(item for item in list_response.json() if item["name"] == name)
+        assert "headers" not in row
+        assert "parser_config" not in row
+        assert "last_error" not in row
+        assert query_secret not in row["url"]
+        assert secret not in list_response.text
+        assert "SUPER-SECRET-CONFIG" not in list_response.text
+    finally:
+        db = SessionLocal()
+        try:
+            db.query(CollectionSource).filter(CollectionSource.name == name).delete(synchronize_session=False)
+            db.commit()
+        finally:
+            db.close()
