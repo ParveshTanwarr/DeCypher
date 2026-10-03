@@ -23,6 +23,7 @@ from app.models.sql_models import (
     TrustLink,
     Wallet,
 )
+from app.services.observation_scope import build_observation_target_keys
 
 
 def _iso(value: datetime | None) -> str | None:
@@ -184,10 +185,33 @@ def _collect_actor_events(db: Session, actor_ids: Iterable[str]) -> list[dict[st
                 events.append(item)
 
     observations = db.query(Observation).all()
-    actor_by_target = {actor_id.lower(): actor_id for actor_id in actor_ids}
+    targets = db.query(ScanTarget).filter(
+        ScanTarget.actor_id.in_(actor_ids)
+    ).all()
+
+    handles_by_actor: dict[str, list[DarkWebHandle]] = defaultdict(list)
     for handle in handles:
-        if handle.handle and handle.actor_id:
-            actor_by_target[handle.handle.strip().lower()] = str(handle.actor_id)
+        if handle.actor_id:
+            handles_by_actor[str(handle.actor_id)].append(handle)
+
+    targets_by_actor: dict[str, list[ScanTarget]] = defaultdict(list)
+    for target in targets:
+        if target.actor_id:
+            targets_by_actor[str(target.actor_id)].append(target)
+
+    actor_by_target: dict[str, str] = {}
+    for actor_id in actor_ids:
+        actor = db.query(Actor).filter(Actor.actor_id == actor_id).first()
+        if not actor:
+            continue
+        for key in build_observation_target_keys(
+            actor.actor_id,
+            actor.primary_handle,
+            handles_by_actor.get(str(actor_id), []),
+            targets_by_actor.get(str(actor_id), []),
+        ):
+            actor_by_target[key] = str(actor_id)
+
     for observation in observations:
         actor_id = actor_by_target.get((observation.target or "").strip().lower())
         if not actor_id:
@@ -212,11 +236,7 @@ def _collect_actor_events(db: Session, actor_ids: Iterable[str]) -> list[dict[st
         if item:
             events.append(item)
 
-    targets = (
-        db.query(ScanTarget)
-        .filter(ScanTarget.actor_id.in_(actor_ids), ScanTarget.last_scan_at.is_not(None))
-        .all()
-    )
+    targets = [target for target in targets if target.last_scan_at is not None]
     for target in targets:
         item = _event(
             f"scan:{target.id}:last_scan",
