@@ -34,6 +34,34 @@ function App() {
 
   useEffect(() => {
     if (!token) return;
+    const apiBase = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000";
+    const apiUrl = new URL(apiBase);
+    const protocol = apiUrl.protocol === "https:" ? "wss" : "ws";
+    const socket = new WebSocket(`${protocol}://${apiUrl.host}/alerts/ws`);
+    socket.onopen = () => socket.send(token);
+    socket.onmessage = (event) => {
+      try {
+        const alert = JSON.parse(event.data) as AppNotification & { id: number; title: string; message: string };
+        setNotifications((current) => [
+          {
+            id: `live-${alert.id}`,
+            title: alert.title,
+            message: alert.message,
+            time: "Live",
+            type: "warning",
+            read: false,
+          },
+          ...current,
+        ].slice(0, 20));
+      } catch {
+        // Ignore malformed push events.
+      }
+    };
+    return () => socket.close();
+  }, [token]);
+
+  useEffect(() => {
+    if (!token) return;
     setAuthToken(token); setLoadError("");
     Promise.allSettled([getActors(), getAllCorrelations()])
       .then(([actorsResult, correlationsResult]) => {
