@@ -142,6 +142,7 @@ def test_collection_sources_do_not_expose_stored_headers(client, admin_headers, 
         created = create_response.json()
         assert "headers" not in created
         assert "parser_config" not in created
+        assert "last_error" not in created
         assert query_secret not in created["url"]
         assert secret not in create_response.text
 
@@ -150,6 +151,7 @@ def test_collection_sources_do_not_expose_stored_headers(client, admin_headers, 
         row = next(item for item in list_response.json() if item["name"] == name)
         assert "headers" not in row
         assert "parser_config" not in row
+        assert "last_error" not in row
         assert query_secret not in row["url"]
         assert secret not in list_response.text
         assert "SUPER-SECRET-CONFIG" not in list_response.text
