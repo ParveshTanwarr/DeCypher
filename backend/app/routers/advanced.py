@@ -56,7 +56,6 @@ class CollectionSourceResponse(BaseModel):
     last_run_at: Optional[datetime] = None
     next_run_at: datetime
     last_status: str
-    last_error: Optional[str] = None
     created_at: Optional[datetime] = None
 
 
@@ -98,7 +97,6 @@ def _safe_collection_source(source: CollectionSource) -> CollectionSourceRespons
         last_run_at=source.last_run_at,
         next_run_at=source.next_run_at,
         last_status=source.last_status,
-        last_error=source.last_error,
         created_at=source.created_at,
     )
 
