@@ -10,10 +10,10 @@ content, no real people, no real infrastructure — safe to use, share, and demo
 | File | Rows | Columns | What it's for |
 |---|---|---|---|
 | `posts.csv` | 115,000 | 9 | Marketplace posts — the bulk of the dataset. Text is templated but each ground-truth actor has a consistent "writing profile" (filler word, punctuation habit, typo rate, emoji use) so real stylometric similarity signal exists between an actor's different handles. |
-| `handles.csv` | 896 | 9 | One row per persona/account. Each actor has 1-3 handles; ~35% of actors have 2-3 handles simulating rebrands. |
+| `handles.csv` | 896 | 9 | One row per persona/account. Each actor has 1-3 handles; ~35% of actors have 2-3 handles simulating rebrands. Visible handle/platform names are not globally unique; `handle_id` is the canonical persona identifier. |
 | `actors.csv` | 600 | 7 | **Ground truth only** — the ground-truth actor identity and their writing profile. In a real system you would never have this table; it exists here so you can score your own AI model's accuracy (does it correctly re-link handles belonging to the same `actor_id`?). |
 | `wallets.csv` | 1,043 | 5 | Wallet addresses per handle. ~40% of the time, an actor's wallet is deliberately reused across their own multiple handles — this is your Level 1 correlation signal. |
-| `infrastructure_indicators.csv` | 250 | 8 | Level 2 data — simulated Tor misconfiguration leaks (SSL cert reuse, exposed status pages, banners) linking an actor to a clearnet domain. |
+| `infrastructure_indicators.csv` | 254 | 8 | Level 2 data — simulated Tor misconfiguration leaks (SSL cert reuse, exposed status pages, banners) linking an actor to a clearnet domain. |
 | `marketplaces.csv` | 20 | 4 | Reference table of marketplace names. |
 | `trust_links.csv` | 12 | 7 | Synthetic PGP-backed trust/signature relationships between handles for graph correlation. |
 
