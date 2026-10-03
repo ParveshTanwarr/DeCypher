@@ -15,6 +15,28 @@ collisions with a PostgreSQL server installed on the Mac at `127.0.0.1:5432`.
 Containers still connect to `postgres:5432` on the Compose network. When running FastAPI
 directly on the host, `DATABASE_URL` in `.env` must use port `5433`.
 
+## Diagnose the exact network path
+
+Run from `backend/`:
+
+```bash
+docker compose exec postgres sh -lc 'PGPASSWORD="$POSTGRES_PASSWORD" psql -h postgres -U "$POSTGRES_USER" -d "$POSTGRES_DB" -v ON_ERROR_STOP=1 -Atqc "SELECT 1"'
+```
+
+This deliberately connects through the Compose service hostname `postgres`, rather than
+loopback. It tests the same network route and password authentication used by the API.
+A successful `127.0.0.1` test inside the database container alone does not prove that
+Docker-network connections use the same `pg_hba.conf` rule.
+
+- If it prints `1`, the configured password is accepted over the Compose network. If the API
+  still fails, inspect the API's effective URL/driver configuration and PostgreSQL logs.
+- If it reports password authentication failure while a loopback test succeeds, inspect
+  `pg_hba.conf` and PostgreSQL logs; local and Docker-network connections may match different
+  authentication rules.
+
+The Compose PostgreSQL healthcheck now runs this authenticated query over the service
+hostname. Unlike `pg_isready`, it validates the credentials used by the application.
+
 ## Align the existing PostgreSQL password
 
 Run commands from `backend/`.
@@ -82,9 +104,8 @@ Run commands from `backend/`.
    curl http://127.0.0.1:8000/health
    ```
 
-   PostgreSQL's healthcheck uses `pg_isready`, which checks server readiness but does not
-   prove that the API password is correct. Confirm the API logs no longer contain an
-   authentication failure.
+   The PostgreSQL healthcheck now verifies password authentication over the Docker network.
+   Confirm the API logs no longer contain an authentication failure.
 
 ## If local administrative access fails
 
