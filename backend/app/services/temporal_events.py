@@ -304,7 +304,11 @@ def backfill_temporal_events(db: Session, actor_id: str | None = None) -> int:
     return int(result.rowcount or 0)
 
 
-def sync_temporal_events_to_neo4j(db: Session, actor_id: str | None = None) -> int:
+def sync_temporal_events_to_neo4j(
+    db: Session,
+    actor_id: str | None = None,
+    strict: bool = False,
+) -> int:
     """Project persisted temporal events into the Neo4j evidence graph."""
     from app.services import graph_service
 
@@ -331,15 +335,25 @@ def sync_temporal_events_to_neo4j(db: Session, actor_id: str | None = None) -> i
             ]
         )
     except Exception as exc:
+        if strict:
+            raise RuntimeError(f"Temporal Neo4j projection failed: {exc}") from exc
         # Postgres remains the source of truth when Neo4j is unavailable.
         logger.warning("Temporal Neo4j projection deferred: %s", exc)
     return len(events)
 
 
-def materialize_temporal_events(db: Session, actor_id: str | None = None) -> int:
+def materialize_temporal_events(
+    db: Session,
+    actor_id: str | None = None,
+    strict_neo4j: bool = False,
+) -> int:
     count = backfill_temporal_events(db, actor_id=actor_id)
     db.flush()
-    sync_temporal_events_to_neo4j(db, actor_id=actor_id)
+    sync_temporal_events_to_neo4j(
+        db,
+        actor_id=actor_id,
+        strict=strict_neo4j,
+    )
     return count
 
 
