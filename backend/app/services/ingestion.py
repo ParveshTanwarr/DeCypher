@@ -109,6 +109,10 @@ def _upsert_darkweb_handles(session: Session, prepared_handles: pd.DataFrame):
     # Persist the stable source handle ID separately from the relational model's
     # integer primary key. The source ID is the only identifier exposed to Neo4j.
     df_filtered["source_handle_id"] = prepared_handles.loc[df_filtered.index, "handle_id"]
+    # handle_id is a CSV staging field, not a PostgreSQL model column.
+    # Keep it long enough to derive source_handle_id, then remove it before
+    # constructing ORM insert records.
+    df_filtered = df_filtered.drop(columns=["handle_id"])
     records = df_filtered.where(pd.notnull(df_filtered), None).to_dict(orient="records")
     if not records:
         return 0, []
