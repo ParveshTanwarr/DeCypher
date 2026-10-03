@@ -90,6 +90,7 @@ def _upsert_darkweb_handles(session: Session, prepared_handles: pd.DataFrame):
         "handle",
         "platform",
         "actor_id",
+        "handle_id",
         "first_seen",
         "last_seen",
         "registration_date",
@@ -105,10 +106,16 @@ def _upsert_darkweb_handles(session: Session, prepared_handles: pd.DataFrame):
     if not records:
         return 0, []
 
+    # Persist the stable source handle ID so all application paths can use the
+    # same graph identity without relying on the relational integer PK.
+    df_filtered["handle_id"] = prepared_handles.loc[df_filtered.index, "handle_id"]
+    records = df_filtered.where(pd.notnull(df_filtered), None).to_dict(orient="records")
+
     stmt = insert(DarkWebHandle).values(records)
     stmt = stmt.on_conflict_do_update(
         constraint="uq_handle_platform",
         set_={
+            "source_handle_id": stmt.excluded.source_handle_id,
             "actor_id": stmt.excluded.actor_id,
             "status": stmt.excluded.status,
             "last_seen": stmt.excluded.last_seen,
