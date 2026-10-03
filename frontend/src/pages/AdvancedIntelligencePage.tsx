@@ -21,9 +21,9 @@ import {
   type GraphAnomalyResult,
 } from "../api/client";
 
-interface Props { actorId?: string; }
+interface Props { actorId?: string; liveAlert?: AdvancedAlert | null; }
 
-export default function AdvancedIntelligencePage({ actorId }: Props) {
+export default function AdvancedIntelligencePage({ actorId, liveAlert }: Props) {
   const [collection, setCollection] = useState<CollectionStatus | null>(null);
   const [sources, setSources] = useState<CollectionSource[]>([]);
   const [discovery, setDiscovery] = useState<any[]>([]);
@@ -73,25 +73,12 @@ export default function AdvancedIntelligencePage({ actorId }: Props) {
   }, [actorId]);
 
   useEffect(() => {
-    const token = sessionStorage.getItem("decypher_token");
-    if (!token) return;
-    const apiBase = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000";
-    const apiUrl = new URL(apiBase);
-    const protocol = apiUrl.protocol === "https:" ? "wss" : "ws";
-    const socket = new WebSocket(`${protocol}://${apiUrl.host}/alerts/ws`);
-    socket.onopen = () => socket.send(token);
-    socket.onmessage = (event) => {
-      try {
-        const alert = JSON.parse(event.data) as AdvancedAlert;
-        if (alert.id) {
-          setAlerts((current) => [...current.filter((item) => item.id !== alert.id), alert].slice(-25));
-        }
-      } catch {
-        // Ignore malformed live messages.
-      }
-    };
-    return () => socket.close();
-  }, []);
+    if (!liveAlert?.id) return;
+    setAlerts((current) => [
+      ...current.filter((item) => item.id !== liveAlert.id),
+      liveAlert,
+    ].slice(-25));
+  }, [liveAlert]);
 
   async function discover() {
     setActionError("");
