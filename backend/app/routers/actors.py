@@ -1073,6 +1073,12 @@ def get_actor_subgraph(actor_id: str, db: Session = Depends(get_db)):
                 label="Observation",
                 name=observation.description or observation.value or observation.indicator_type,
                 category="Observation",
+                properties={
+                    "indicator_type": observation.indicator_type,
+                    "value": observation.value,
+                    "target": observation.target,
+                    "source": observation.source,
+                },
             )
         )
         links.append(
