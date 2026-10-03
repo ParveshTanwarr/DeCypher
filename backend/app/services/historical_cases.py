@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 from typing import Any, Iterable
 
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.models.sql_models import Actor, DarkWebHandle
@@ -150,7 +151,7 @@ class HistoricalCaseService:
 
     @classmethod
     def match_actor(cls, db: Session, actor_id: str) -> list[dict[str, Any]]:
-        actor = db.query(Actor).filter(Actor.actor_id == actor_id).first()
+        actor = db.query(Actor).filter(func.lower(Actor.actor_id) == actor_id.lower()).first()
         if actor is None:
             return []
         handles = (
