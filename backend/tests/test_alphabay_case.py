@@ -9,7 +9,7 @@ from app.services.advanced_intelligence import MerkleEvidenceService, EntityLink
 from app.services.evidence_ledger import EvidenceLedgerService
 from app.services.graph_anomaly_service import GraphAnomalyService
 from app.services.nlp_service import nlp_service
-from app.services.temporal_events import get_actor_timeline, materialize_temporal_events
+from app.services.temporal_events import backfill_temporal_events, get_actor_timeline
 
 CASE_PATH = Path(__file__).resolve().parents[2] / "data" / "historical_cases" / "alphabay_2017.json"
 CASE_SOURCE = "doj-alphabay-2017"
@@ -216,7 +216,7 @@ def test_alphabay_full_historical_case_validation():
 
         # 3) Temporal materialization and chronology.
         for actor_id in ("CASE-ALPHABAY-CAZES", "CASE-ALPHABAY-WHEELER", "CASE-ALPHABAY-HERRELL"):
-            materialize_temporal_events(db, actor_id=actor_id)
+            backfill_temporal_events(db, actor_id=actor_id)
         db.commit()
 
         timeline = get_actor_timeline(db, "CASE-ALPHABAY-CAZES", limit=100)
