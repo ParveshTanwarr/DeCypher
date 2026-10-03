@@ -440,3 +440,82 @@ export function getEvidenceIntegrityStatus(): Promise<EvidenceIntegrityStatus> {
 export function verifyEvidenceIntegrity(): Promise<EvidenceIntegrityVerification> {
   return request<EvidenceIntegrityVerification>("/integrity/verify");
 }
+
+
+export interface CollectionSource {
+  id: number;
+  name: string;
+  kind: string;
+  url: string;
+  actor_id?: string | null;
+  enabled: boolean;
+  interval_minutes: number;
+  last_status: string;
+  last_error?: string | null;
+}
+export interface CollectionStatus {
+  enabled: boolean;
+  poll_interval_minutes: number;
+  sources: number;
+  enabled_sources: number;
+  continuous_collection: string;
+}
+export interface AdvancedAlert {
+  id: number;
+  actor_id?: string | null;
+  alert_type: string;
+  severity: string;
+  title: string;
+  message: string;
+  payload: Record<string, unknown>;
+  created_at?: string | null;
+}
+export interface AdvancedGraphAnomalyResponse {
+  total_actors: number;
+  results: GraphAnomalyResult[];
+  limit: number;
+}
+export function getCollectionStatus(): Promise<CollectionStatus> {
+  return request<CollectionStatus>("/collection/status");
+}
+export function getCollectionSources(): Promise<CollectionSource[]> {
+  return request<CollectionSource[]>("/collection/sources");
+}
+export function getAdvancedAlerts(sinceId = 0): Promise<AdvancedAlert[]> {
+  return request<AdvancedAlert[]>(`/alerts?since_id=${sinceId}`);
+}
+export function runStylometryDiscovery(limit = 100, actorId?: string): Promise<{ results: any[]; model_status: string }> {
+  const params = new URLSearchParams({ limit: String(limit) });
+  if (actorId) params.set("actor_id", actorId);
+  return request<{ results: any[]; model_status: string }>(`/correlation/stylometry-discovery?${params.toString()}`, { method: "POST" });
+}
+export function runEvidenceAblation(actorId: string, disabledSignals: string[]): Promise<any> {
+  return request<any>(`/correlation/actor/${encodeURIComponent(actorId)}/ablation`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ disabled_signals: disabledSignals }),
+  });
+}
+export function getCalibrationEvaluation(pairs = 100): Promise<Record<string, any>> {
+  return request<Record<string, any>>(`/evaluation/calibration?pairs=${pairs}`);
+}
+export function getActorEntityLinks(actorId: string): Promise<any[]> {
+  return request<any[]>(`/entities/actor/${encodeURIComponent(actorId)}`);
+}
+export function getMerkleIntegrityStatus(): Promise<Record<string, any>> {
+  return request<Record<string, any>>("/integrity/merkle-status");
+}
+export function fingerprintMedia(mediaId: string, dataUrl: string, source = "investigator_upload", actorId?: string): Promise<any> {
+  return request<any>("/media/fingerprint", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ media_id: mediaId, data_url: dataUrl, source, actor_id: actorId || null }),
+  });
+}
+export function compareMedia(mediaA: string, mediaB: string): Promise<Record<string, any>> {
+  return request<Record<string, any>>("/media/compare", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ media_a: mediaA, media_b: mediaB }),
+  });
+}
