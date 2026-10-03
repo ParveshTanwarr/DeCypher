@@ -67,6 +67,7 @@ def _ensure_compatibility_schema() -> None:
                             "SET source_handle_id = :source_id "
                             "WHERE handle = :handle "
                             "AND ((platform = :platform) OR (platform IS NULL AND :platform IS NULL)) "
+                            "AND (actor_id = :actor_id OR :actor_id = '') "
                             "AND (source_handle_id IS NULL OR source_handle_id <> :source_id)"
                         ),
                         {
