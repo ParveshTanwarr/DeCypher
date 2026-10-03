@@ -62,6 +62,7 @@ export default function GraphPage({
   useEffect(() => {
     setError("");
     setSelectedNode(null);
+    setHistoricalCases([]);
 
     getHistoricalCaseContext(actorId)
       .then((result) => setHistoricalCases(result.matches || []))
@@ -1008,6 +1009,12 @@ export default function GraphPage({
             </h3>
 
             {[
+              ...(caseAliases.size > 0
+                ? [[
+                    "Documented case alias",
+                    "#51cf66",
+                  ]]
+                : []),
               [
                 "Actor",
                 "#ff4d6d",
