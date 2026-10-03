@@ -139,7 +139,7 @@ def run_authorized_scan_task(self: Task, job_id: int) -> dict[str, Any]:
         priority_score = None
         correlation_score = None
         if target.actor_id:
-            correlation = CorrelationService(db).correlate_actor(target.actor_id)
+            correlation = CorrelationService(db).correlate_actor(target.actor_id, persist=True)
             correlation_score = correlation.get("overall_confidence")
             priority_score = (correlation.get("priority") or {}).get("score")
 
