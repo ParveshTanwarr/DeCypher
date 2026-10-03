@@ -1,11 +1,12 @@
 import base64
+import binascii
 import csv
 import io
 from collections import Counter
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, Depends, Response, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from fastapi.responses import JSONResponse
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -29,7 +30,11 @@ from app.config import settings
 router = APIRouter(prefix="/export", tags=["Export"], dependencies=[Depends(require_role("admin", "investigator"))])
 
 class ActorReportExportRequest(BaseModel):
-    graph_image: Optional[str] = None
+    graph_image: Optional[str] = Field(
+        None,
+        max_length=10_000_000,
+        description="Optional browser-generated graph image as a data URL/base64 string.",
+    )
 
 
 CSV_HEADERS = [
@@ -282,6 +287,17 @@ def export_actor_report_with_graph(
     db: Session = Depends(get_db),
 ):
     record = _get_actor_record(db, actor_id)
+    if payload.graph_image:
+        encoded = payload.graph_image.split(",", 1)[1] if "," in payload.graph_image else payload.graph_image
+        try:
+            graph_bytes = base64.b64decode(encoded, validate=True)
+        except (ValueError, TypeError, binascii.Error) as exc:
+            raise HTTPException(status_code=400, detail="Invalid graph image encoding.") from exc
+        if len(graph_bytes) > settings.EXPORT_MAX_GRAPH_IMAGE_BYTES:
+            raise HTTPException(
+                status_code=413,
+                detail=f"Graph image exceeds the {settings.EXPORT_MAX_GRAPH_IMAGE_BYTES}-byte export limit.",
+            )
     pdf_bytes = _build_report_pdf([record], graph_image=payload.graph_image)
     safe_id = "".join(ch if ch.isalnum() or ch in "-_" else "_" for ch in actor_id)
     return Response(
