@@ -574,6 +574,10 @@ See [docs/autonomous-scanning.md](docs/autonomous-scanning.md).
 
 ---
 
+## Neo4j persistent-volume password recovery
+
+If Neo4j reports an authentication failure after recreating or changing `backend/.env`, the existing named volume may still contain its original password. Do not delete the volume. Follow [backend/NEO4J_RECOVERY.md](backend/NEO4J_RECOVERY.md) to reset the password safely; the API can still start in PostgreSQL-fallback mode while Neo4j is unavailable.
+
 ## Testing
 
 Backend tests require a disposable PostgreSQL database.
