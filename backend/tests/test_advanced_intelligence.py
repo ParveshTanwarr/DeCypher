@@ -399,3 +399,19 @@ def test_tor_collection_cannot_bypass_onion_allowlist_with_source_parser_config(
     )
     assert CollectionService._allowed_host("http://unapproved-example.onion/", source) is False
     assert CollectionService._allowed_host("http://approved-example.onion/", source) is True
+
+
+
+def test_actor_disjoint_stylometry_holdout_endpoint_reports_split_and_metrics(client, admin_headers):
+    response = client.get(
+        "/evaluation/holdout?pairs=100&threshold=0.65",
+        headers=admin_headers,
+    )
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["metrics"]["split_strategy"] == "deterministic_actor_group_80_20"
+    assert body["metrics"]["holdout_actor_count"] > 1
+    assert body["metrics"]["pairs"] > 0
+    assert 0.0 <= body["metrics"]["precision"] <= 1.0
+    assert 0.0 <= body["metrics"]["recall"] <= 1.0
+    assert any("training-data isolation" in item for item in body["metrics"]["limitations"])
