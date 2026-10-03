@@ -71,8 +71,8 @@ def global_search(
     direct_actors = (
         db.query(Actor)
         .filter(
-            (Actor.actor_id.ilike(search_pattern))
-            | (Actor.primary_handle.ilike(search_pattern))
+            (Actor.actor_id.ilike(search_pattern, **like_kwargs))
+            | (Actor.primary_handle.ilike(search_pattern, **like_kwargs))
         )
         .limit(limit)
         .all()
@@ -94,7 +94,7 @@ def global_search(
         matched_handles = (
             db.query(DarkWebHandle, Actor)
             .join(Actor, DarkWebHandle.actor_id == Actor.actor_id)
-            .filter(DarkWebHandle.handle.ilike(search_pattern))
+            .filter(DarkWebHandle.handle.ilike(search_pattern, **like_kwargs))
             .limit(remaining)
             .all()
         )
@@ -116,7 +116,7 @@ def global_search(
         matched_wallets = (
             db.query(Wallet, Actor)
             .join(Actor, Wallet.actor_id == Actor.actor_id)
-            .filter(Wallet.address.ilike(search_pattern))
+            .filter(Wallet.address.ilike(search_pattern, **like_kwargs))
             .limit(remaining)
             .all()
         )
@@ -140,7 +140,7 @@ def global_search(
             .join(handle_pgp_keys, PGPKey.id == handle_pgp_keys.c.pgp_key_id)
             .join(DarkWebHandle, DarkWebHandle.id == handle_pgp_keys.c.handle_id)
             .join(Actor, DarkWebHandle.actor_id == Actor.actor_id)
-            .filter(PGPKey.fingerprint.ilike(search_pattern))
+            .filter(PGPKey.fingerprint.ilike(search_pattern, **like_kwargs))
             .limit(remaining)
             .all()
         )
