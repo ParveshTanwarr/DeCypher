@@ -43,6 +43,23 @@ class CollectionSourceCreate(BaseModel):
     parser_config: dict[str, Any] = Field(default_factory=dict)
 
 
+class CollectionSourceResponse(BaseModel):
+    model_config = {"from_attributes": True}
+
+    id: int
+    name: str
+    kind: str
+    url: str
+    actor_id: Optional[str] = None
+    enabled: bool
+    interval_minutes: int
+    last_run_at: Optional[datetime] = None
+    next_run_at: datetime
+    last_status: str
+    last_error: Optional[str] = None
+    created_at: Optional[datetime] = None
+
+
 class HistoricalCase(BaseModel):
     case_id: str
     handle_a: str
@@ -145,11 +162,14 @@ def merkle_verify(db: Session = Depends(get_db)):
     dependencies=[Depends(require_role("admin"))],
 )
 def create_collection_source(payload: CollectionSourceCreate, db: Session = Depends(get_db)):
+    parsed = urlparse(payload.url)
+    if parsed.scheme not in {"http", "https"} or not parsed.hostname:
+        raise HTTPException(status_code=400, detail="Collection source URL must be an http:// or https:// URL with a hostname.")
+    if parsed.username or parsed.password:
+        raise HTTPException(status_code=400, detail="Collection source URLs must not contain embedded credentials.")
     if payload.actor_id:
         _require_actor(db, payload.actor_id)
-    existing = db.query(CollectionSource).filter(CollectionSource.name == payload.name).first()
-    if existing:
-        raise HTTPException(status_code=409, detail="Collection source name already exists.")
+
     source = CollectionSource(
         name=payload.name,
         kind=payload.kind,
@@ -161,14 +181,25 @@ def create_collection_source(payload: CollectionSourceCreate, db: Session = Depe
         parser_config=payload.parser_config,
         next_run_at=datetime.now(timezone.utc),
     )
+    if not CollectionService._allowed_host(payload.url, source):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Source host is not allowlisted: {parsed.hostname}",
+        )
+
+    existing = db.query(CollectionSource).filter(CollectionSource.name == payload.name).first()
+    if existing:
+        raise HTTPException(status_code=409, detail="Collection source name already exists.")
+
     db.add(source)
     db.commit()
     db.refresh(source)
-    return source
+    return CollectionSourceResponse.model_validate(source)
 
 
 @router.get(
     "/collection/sources",
+    response_model=list[CollectionSourceResponse],
     dependencies=[Depends(get_current_user)],
 )
 def list_collection_sources(db: Session = Depends(get_db)):
@@ -222,14 +253,19 @@ def inspect_tor(url: str, db: Session = Depends(get_db)):
         result = TorIntelligenceService().inspect_onion(url)
     except Exception as exc:
         raise HTTPException(status_code=400, detail=str(exc))
-    AlertService(db).create(
-        alert_type="tor_observation",
-        severity="medium",
-        title="Tor target inspected",
-        message=f"Authorized Tor observation completed for {urlparse(url).hostname}.",
-        payload=result,
-    )
-    db.commit()
+    try:
+        AlertService(db).create(
+            alert_type="tor_observation",
+            severity="medium",
+            title="Tor target inspected",
+            message=f"Authorized Tor observation completed for {urlparse(url).hostname}.",
+            payload=result,
+        )
+        db.commit()
+    except Exception as exc:
+        db.rollback()
+        # The Tor inspection itself succeeded; alert persistence is additive.
+        print(f"[tor] Alert persistence failed: {exc}")
     return result
 
 
