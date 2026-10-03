@@ -86,9 +86,10 @@ $nlpLines = @($nlpResult | Where-Object { $_ -and $_.Trim() })
 Assert-True ($nlpLines -contains "validated_model") "Celery worker loads the validated NLP model"
 Assert-True ($nlpLines -contains "True") "Celery worker has a loaded NLP engine"
 
+$workerPing = docker compose -f $composeFile exec -T celery_worker celery -A app.workers.celery_app inspect ping 2>&1
+Assert-True (($workerPing -join "\n") -match "\bpong\b") "Celery worker responds through Redis"
+
 $workerLog = docker compose -f $composeFile logs --tail=80 celery_worker
-Assert-True ($workerLog -match "Connected to redis://redis:6379/0") "Celery worker is connected to Redis"
-Assert-True ($workerLog -match "ready\.") "Celery worker reached ready state"
 Assert-True ($workerLog -match "dispatch_due_scans.*succeeded") "Celery worker successfully executed dispatch_due_scans"
 
 Write-Host ""
