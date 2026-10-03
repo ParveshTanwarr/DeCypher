@@ -103,7 +103,7 @@ def _bootstrap_demo_data() -> int:
 
 
 def _backfill_graph_if_needed(actor_count: int) -> None:
-    """Rebuild Neo4j when its canonical entity projections are empty or incomplete."""
+    """Rebuild Neo4j when canonical projections are incomplete and re-project SQL evidence."""
     if actor_count <= 0:
         return
 
@@ -121,22 +121,22 @@ def _backfill_graph_if_needed(actor_count: int) -> None:
             "observations": int(db.query(func.count(Observation.id)).scalar() or 0),
             "temporal_events": int(db.query(func.count(TemporalEvent.id)).scalar() or 0),
         }
-    finally:
-        db.close()
 
-    try:
-        counts = {
-            "actors": int((neo4j_conn.query("MATCH (n:Actor) RETURN count(n) AS count") or [{}])[0].get("count") or 0),
-            "handles": int((neo4j_conn.query("MATCH (n:Handle) RETURN count(n) AS count") or [{}])[0].get("count") or 0),
-            "wallets": int((neo4j_conn.query("MATCH (n:Wallet) RETURN count(n) AS count") or [{}])[0].get("count") or 0),
-            "pgp_keys": int((neo4j_conn.query("MATCH (n:PGPKey) RETURN count(n) AS count") or [{}])[0].get("count") or 0),
-            "trust_links": int((neo4j_conn.query("MATCH (:Handle)-[r:TRUSTS]->(:Handle) RETURN count(r) AS count") or [{}])[0].get("count") or 0),
-            "observations": int((neo4j_conn.query("MATCH (n:Observation) RETURN count(n) AS count") or [{}])[0].get("count") or 0),
-            "temporal_events": int((neo4j_conn.query("MATCH (n:Event) RETURN count(n) AS count") or [{}])[0].get("count") or 0),
-            "numeric_handle_ids": int((neo4j_conn.query(
-                'MATCH (n:Handle) WHERE n.handle_id =~ "^[0-9]+$" RETURN count(n) AS count'
-            ) or [{}])[0].get("count") or 0),
-        }
+        try:
+            counts = {
+                "actors": int((neo4j_conn.query("MATCH (n:Actor) RETURN count(n) AS count") or [{}])[0].get("count") or 0),
+                "handles": int((neo4j_conn.query("MATCH (n:Handle) RETURN count(n) AS count") or [{}])[0].get("count") or 0),
+                "wallets": int((neo4j_conn.query("MATCH (n:Wallet) RETURN count(n) AS count") or [{}])[0].get("count") or 0),
+                "pgp_keys": int((neo4j_conn.query("MATCH (n:PGPKey) RETURN count(n) AS count") or [{}])[0].get("count") or 0),
+                "trust_links": int((neo4j_conn.query("MATCH (:Handle)-[r:TRUSTS]->(:Handle) RETURN count(r) AS count") or [{}])[0].get("count") or 0),
+                "observations": int((neo4j_conn.query("MATCH (n:Observation) RETURN count(n) AS count") or [{}])[0].get("count") or 0),
+                "temporal_events": int((neo4j_conn.query("MATCH (n:Event) RETURN count(n) AS count") or [{}])[0].get("count") or 0),
+                "numeric_handle_ids": int((neo4j_conn.query(
+                    'MATCH (n:Handle) WHERE n.handle_id =~ "^[0-9]+$" RETURN count(n) AS count'
+                ) or [{}])[0].get("count") or 0),
+            }
+        except Exception:
+            raise
 
         incomplete = any(counts[name] < expected[name] for name in expected)
         legacy_nodes = counts["numeric_handle_ids"] > 0
@@ -148,9 +148,48 @@ def _backfill_graph_if_needed(actor_count: int) -> None:
             )
             graph_service.reset_graph()
             init_db_and_load_csvs(reset_tables=False, sync_neo4j=True)
+
+        # Re-project observations from PostgreSQL after every startup. The SQL
+        # store is authoritative, and this also repairs observations inserted by
+        # the synthetic evidence seeder or background scanner.
+        actor_ids = [row[0] for row in db.query(Actor.actor_id).all()]
+        actor_set = set(actor_ids)
+        target_to_actor = {actor_id.lower(): actor_id for actor_id in actor_ids}
+        for handle in db.query(DarkWebHandle).all():
+            if handle.handle and handle.actor_id:
+                target_to_actor[handle.handle.strip().lower()] = str(handle.actor_id)
+
+        observations_by_actor: dict[str, list[dict]] = {}
+        for observation in db.query(Observation).all():
+            actor_id = target_to_actor.get((observation.target or "").strip().lower())
+            if actor_id and actor_id in actor_set:
+                observations_by_actor.setdefault(actor_id, []).append({
+                    "observation_id": observation.observation_id,
+                    "indicator_type": observation.indicator_type,
+                    "detected": observation.detected,
+                    "value": observation.value,
+                    "target": observation.target,
+                    "source": observation.source,
+                    "confidence": observation.confidence,
+                    "description": observation.description,
+                    "timestamp": observation.timestamp.isoformat() if observation.timestamp else None,
+                })
+
+        for actor_id, observations in observations_by_actor.items():
+            if observations:
+                graph_service.sync_actor_observations(actor_id, observations)
+
+        # Temporal events are SQL-backed but are projected here as part of the
+        # graph readiness repair, so a rebuilt graph is complete before startup
+        # finishes. The dedicated backfill helper remains idempotent.
+        materialize_temporal_events(db)
+        db.commit()
     except Exception as exc:
+        db.rollback()
         # The API can still use its PostgreSQL graph fallback when Neo4j is down.
         print(f"[!] Neo4j graph backfill deferred: {exc}")
+    finally:
+        db.close()
 
 
 def _seed_investigation_evidence() -> int:
@@ -194,13 +233,12 @@ async def lifespan(app: FastAPI):
     print("[*] Database tables ready.")
 
     actor_count = await asyncio.to_thread(_bootstrap_demo_data)
-    if actor_count:
-        print(f"[+] Intelligence store contains {actor_count} actors.")
-        await asyncio.to_thread(_backfill_graph_if_needed, actor_count)
-
     seeded_evidence = await asyncio.to_thread(_seed_investigation_evidence)
     if seeded_evidence:
         print(f"[+] Seeded {seeded_evidence} synthetic investigation evidence records.")
+    if actor_count:
+        print(f"[+] Intelligence store contains {actor_count} actors.")
+        await asyncio.to_thread(_backfill_graph_if_needed, actor_count)
 
     ledger_backfill = await asyncio.to_thread(_backfill_evidence_ledger)
     if ledger_backfill:
