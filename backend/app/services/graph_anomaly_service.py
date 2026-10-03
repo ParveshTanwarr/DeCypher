@@ -20,13 +20,13 @@ from app.services.observation_scope import build_observation_target_keys
 
 
 FEATURE_WEIGHTS = {
-    "cross_actor_wallet_reuse": 0.25,
-    "shared_pgp_reuse": 0.20,
-    "trust_degree": 0.15,
-    "external_infrastructure_reuse": 0.15,
-    "marketplace_switches": 0.10,
-    "temporal_handle_overlap": 0.10,
-    "observation_source_diversity": 0.05,
+    "cross_actor_wallet_reuse": 0.20,
+    "shared_pgp_reuse": 0.175,
+    "trust_degree": 0.125,
+    "external_infrastructure_reuse": 0.125,
+    "marketplace_switches": 0.075,
+    "temporal_handle_overlap": 0.075,
+    "observation_source_diversity": 0.025,
     "two_hop_trust_reach": 0.10,
     "temporal_event_density": 0.10,
 }
