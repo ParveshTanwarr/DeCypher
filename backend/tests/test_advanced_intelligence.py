@@ -353,3 +353,34 @@ def test_collection_pipeline_resolves_entities_and_exposes_candidate_graph_link(
             db.query(CollectionSource).filter(CollectionSource.id == source_id).delete(synchronize_session=False)
             db.commit()
         db.close()
+
+
+
+def test_tor_relay_descriptor_parser_reports_non_global_router_address():
+    from app.services.advanced_intelligence import TorIntelligenceService
+
+    parsed = TorIntelligenceService.parse_descriptor(
+        "router testrelay 127.0.0.1 9001 0 0\n"
+        "published 2026-10-03 10:00:00\n"
+        "platform Tor 0.4.8.12 on Linux\n"
+        "proto Cons=1 Desc=1"
+    )
+    assert parsed["descriptor_type"] == "tor_relay_server_descriptor"
+    assert parsed["consistency_status"] == "review_required"
+    assert any(
+        item["code"] == "non_global_router_address"
+        for item in parsed["anomalies"]
+    )
+
+
+def test_tor_relay_descriptor_parser_accepts_well_formed_public_router_fields():
+    from app.services.advanced_intelligence import TorIntelligenceService
+
+    parsed = TorIntelligenceService.parse_descriptor(
+        "router testrelay 8.8.8.8 9001 0 0\n"
+        "published 2026-10-03 10:00:00\n"
+        "platform Tor 0.4.8.12 on Linux\n"
+        "proto Cons=1 Desc=1"
+    )
+    assert parsed["consistency_status"] == "no_basic_inconsistency_detected"
+    assert parsed["anomalies"] == []
