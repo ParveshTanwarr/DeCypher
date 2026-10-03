@@ -446,17 +446,34 @@ class CollectionService:
                     # Entity linkage is additive; collection evidence remains authoritative.
                     self.db.rollback()
                     self.db.commit()
+            alert_error = None
             if created_obs:
-                AlertService(self.db).create(
-                    alert_type="collection_update",
-                    severity="medium",
-                    title=f"New intelligence from {source.name}",
-                    message=f"{created_obs} new evidence item(s) were collected.",
-                    actor_id=source.actor_id,
-                    payload={"source_id": source.id, "run_id": run.id, "observations_created": created_obs},
-                )
-                self.db.commit()
-            return {"run_id": run.id, "items_seen": len(items), "observations_created": created_obs, "entities_created": created_entities}
+                try:
+                    AlertService(self.db).create(
+                        alert_type="collection_update",
+                        severity="medium",
+                        title=f"New intelligence from {source.name}",
+                        message=f"{created_obs} new evidence item(s) were collected.",
+                        actor_id=source.actor_id,
+                        payload={"source_id": source.id, "run_id": run.id, "observations_created": created_obs},
+                    )
+                    self.db.commit()
+                except Exception as exc:
+                    # Collection/evidence state was already committed above.
+                    # Alert persistence is additive and must not retroactively
+                    # turn a successful collection run into a failed one.
+                    self.db.rollback()
+                    alert_error = str(exc)[:500]
+                    print(f"[collection] Alert persistence failed: {exc}")
+            result = {
+                "run_id": run.id,
+                "items_seen": len(items),
+                "observations_created": created_obs,
+                "entities_created": created_entities,
+            }
+            if alert_error:
+                result["alert_error"] = alert_error
+            return result
         except Exception as exc:
             self.db.rollback()
             run = self.db.query(CollectionRun).filter(CollectionRun.id == run.id).first()
@@ -566,16 +583,19 @@ class StylometryDiscoveryService:
                     "threshold_used": compared.get("threshold_used"),
                 },
             }
-            row = (
-                self.db.query(StylometryDiscovery)
-                .filter(
-                    StylometryDiscovery.handle_a == a.handle,
-                    StylometryDiscovery.handle_b == b.handle,
-                    StylometryDiscovery.actor_a == a.actor_id,
-                    StylometryDiscovery.actor_b == b.actor_id,
-                )
-                .first()
+            query = self.db.query(StylometryDiscovery).filter(
+                StylometryDiscovery.handle_a == a.handle,
+                StylometryDiscovery.handle_b == b.handle,
             )
+            if a.actor_id is None:
+                query = query.filter(StylometryDiscovery.actor_a.is_(None))
+            else:
+                query = query.filter(StylometryDiscovery.actor_a == a.actor_id)
+            if b.actor_id is None:
+                query = query.filter(StylometryDiscovery.actor_b.is_(None))
+            else:
+                query = query.filter(StylometryDiscovery.actor_b == b.actor_id)
+            row = query.first()
             if row is None:
                 row = StylometryDiscovery(
                     handle_a=a.handle,
