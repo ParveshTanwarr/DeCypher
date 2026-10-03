@@ -7,6 +7,8 @@ actor_id because wallets.csv only has handle_id.
 from sqlalchemy import func
 from app.database.postgres import SessionLocal
 from app.models.sql_models import Actor, DarkWebHandle, Wallet, Marketplace, Observation
+from datetime import datetime, timezone, timedelta
+
 from app.services.correlation_service import CorrelationService
 
 
@@ -157,3 +159,44 @@ def test_ingestion_is_idempotent():
         db.close()
 
     assert before == after
+
+
+def test_stable_handle_identity_preserves_same_visible_handle_across_actors():
+    """Duplicate visible handles must not collapse when their source IDs differ."""
+    db = SessionLocal()
+    try:
+        rows = (
+            db.query(DarkWebHandle.source_handle_id, DarkWebHandle.actor_id)
+            .filter(DarkWebHandle.handle == "thra_v2")
+            .all()
+        )
+        assert len(rows) == 1, "fixture should contain one thra_v2 source row"
+        assert rows[0][0] == "H00031"
+    finally:
+        db.close()
+
+
+def test_future_dated_handle_is_not_treated_as_current_recency():
+    """Future timestamps are excluded from recency rather than becoming score 100."""
+    db = SessionLocal()
+    actor_id = "TEST-FUTURE-RECENCY"
+    try:
+        db.add(Actor(
+            actor_id=actor_id,
+            primary_handle="future_test_handle",
+            risk_category="other_illicit",
+        ))
+        db.flush()
+        db.add(DarkWebHandle(
+            source_handle_id="TEST-FUTURE-H1",
+            actor_id=actor_id,
+            handle="future_test_handle",
+            platform="test",
+            last_seen=datetime.now(timezone.utc) + timedelta(days=30),
+        ))
+        db.flush()
+
+        score = CorrelationService(db)._recency_score(actor_id)
+        assert score == 20.0
+    finally:
+        db.rollback()
