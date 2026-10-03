@@ -98,7 +98,12 @@ class AblationRequest(BaseModel):
 
 def _safe_collection_source(source: CollectionSource) -> CollectionSourceResponse:
     parsed = urlparse(source.url)
-    safe_url = urlunsplit((parsed.scheme, parsed.netloc, parsed.path, "", ""))
+    # Strip query/fragment and any embedded user-info from URLs surfaced to
+    # investigators, including legacy sources created before validation existed.
+    safe_netloc = parsed.hostname or ""
+    if parsed.port:
+        safe_netloc = f"{safe_netloc}:{parsed.port}"
+    safe_url = urlunsplit((parsed.scheme, safe_netloc, parsed.path, "", ""))
     return CollectionSourceResponse(
         id=source.id,
         name=source.name,
@@ -202,7 +207,8 @@ def create_collection_source(payload: CollectionSourceCreate, db: Session = Depe
     if parsed.username or parsed.password:
         raise HTTPException(status_code=400, detail="Collection source URLs must not contain embedded credentials.")
     if payload.actor_id:
-        _require_actor(db, payload.actor_id)
+        actor = _require_actor(db, payload.actor_id)
+        payload.actor_id = actor.actor_id
 
     source = CollectionSource(
         name=payload.name,
@@ -295,12 +301,19 @@ def inspect_tor(url: str, db: Session = Depends(get_db)):
         result = TorIntelligenceService().inspect_onion(url)
     except Exception as exc:
         raise HTTPException(status_code=400, detail=str(exc))
+
+    parsed_url = urlparse(url)
+    safe_target_url = urlunsplit(
+        (parsed_url.scheme, parsed_url.hostname or "", parsed_url.path, "", "")
+    )
+    result["url"] = safe_target_url
+
     try:
         AlertService(db).create(
             alert_type="tor_observation",
             severity="medium",
             title="Tor target inspected",
-            message=f"Authorized Tor observation completed for {urlparse(url).hostname}.",
+            message=f"Authorized Tor observation completed for {parsed_url.hostname}.",
             payload=result,
         )
         db.commit()
@@ -402,8 +415,8 @@ def list_entities(
     dependencies=[Depends(require_role("admin", "investigator"))],
 )
 def link_entities(actor_id: str, db: Session = Depends(get_db)):
-    _require_actor(db, actor_id)
-    return {"actor_id": actor_id, "links": EntityLinkageService(db).link_actor(actor_id)}
+    actor = _require_actor(db, actor_id)
+    return {"actor_id": actor.actor_id, "links": EntityLinkageService(db).link_actor(actor.actor_id)}
 
 
 @router.get(
@@ -411,11 +424,11 @@ def link_entities(actor_id: str, db: Session = Depends(get_db)):
     dependencies=[Depends(get_current_user)],
 )
 def actor_entity_links(actor_id: str, db: Session = Depends(get_db)):
-    _require_actor(db, actor_id)
+    actor = _require_actor(db, actor_id)
     rows = (
         db.query(EntityLink, ExternalEntity)
         .join(ExternalEntity, EntityLink.entity_id == ExternalEntity.id)
-        .filter(EntityLink.actor_id == actor_id)
+        .filter(EntityLink.actor_id == actor.actor_id)
         .order_by(EntityLink.score.desc())
         .all()
     )
