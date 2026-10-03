@@ -89,9 +89,20 @@ function App() {
             item.priority?.score ?? 0,
           ]),
         );
+        const liveConfidence = new Map(
+          correlationRows.results.map((item) => [
+            item.candidate_actor,
+            item.overall_confidence,
+          ]),
+        );
         const mergedActors = actorRows
           .map((actor) => ({
             ...actor,
+            // CorrelationService is the backend source of truth for the
+            // current evidence-fusion score. Do not display a stale
+            // persisted confidence value when a live correlation result exists.
+            confidence_score:
+              liveConfidence.get(actor.actor_id) ?? actor.confidence_score ?? 0,
             priority_score:
               priorities.get(actor.actor_id) ?? actor.priority_score ?? 0,
           }))
