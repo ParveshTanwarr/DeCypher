@@ -45,6 +45,9 @@ export default function AdvancedIntelligencePage({ actorId }: Props) {
   const [sourceKind, setSourceKind] = useState<"json" | "rss" | "html" | "tor_http">("rss");
   const [sourceUrl, setSourceUrl] = useState("");
   const [loading, setLoading] = useState(false);
+  const [actionError, setActionError] = useState("");
+
+  const MAX_CLIENT_MEDIA_BYTES = 5_000_000;
 
   useEffect(() => {
     Promise.allSettled([
@@ -91,10 +94,13 @@ export default function AdvancedIntelligencePage({ actorId }: Props) {
   }, []);
 
   async function discover() {
+    setActionError("");
     setLoading(true);
     try {
       const result = await runStylometryDiscovery(100, actorId);
       setDiscovery(result.results);
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : "Stylometry discovery failed.");
     } finally {
       setLoading(false);
     }
@@ -102,7 +108,12 @@ export default function AdvancedIntelligencePage({ actorId }: Props) {
 
   async function ablate() {
     if (!actorId) return;
-    setAblation(await runEvidenceAblation(actorId, disabled));
+    setActionError("");
+    try {
+      setAblation(await runEvidenceAblation(actorId, disabled));
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : "Evidence ablation failed.");
+    }
   }
 
   async function uploadImage(
@@ -111,25 +122,79 @@ export default function AdvancedIntelligencePage({ actorId }: Props) {
   ) {
     const file = event.target.files?.[0];
     if (!file) return;
+    setActionError("");
+    if (file.size > MAX_CLIENT_MEDIA_BYTES) {
+      setActionError("Image exceeds " + MAX_CLIENT_MEDIA_BYTES.toLocaleString() + "-byte limit.");
+      event.target.value = "";
+      return;
+    }
+
     const reader = new FileReader();
+    reader.onerror = () => {
+      setActionError("The selected image could not be read.");
+    };
     reader.onload = async () => {
-      const dataUrl = String(reader.result || "");
-      const id = `image-${slot}-${Date.now()}`;
-      const result = await fingerprintMedia(id, dataUrl, "investigator_upload", actorId);
-      if (slot === "a") setMediaA(id);
-      else setMediaB(id);
-      setMediaResult(result);
+      try {
+        const dataUrl = String(reader.result || "");
+        const id = `image-${slot}-${Date.now()}`;
+        const result = await fingerprintMedia(id, dataUrl, "investigator_upload", actorId);
+        if (slot === "a") setMediaA(id);
+        else setMediaB(id);
+        setMediaResult(result);
+      } catch (error) {
+        setActionError(error instanceof Error ? error.message : "Image fingerprinting failed.");
+      }
     };
     reader.readAsDataURL(file);
   }
 
   async function compareImages() {
     if (!mediaA || !mediaB) return;
-    setMediaResult(await compareMedia(mediaA, mediaB));
+    setActionError("");
+    try {
+      setMediaResult(await compareMedia(mediaA, mediaB));
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : "Image comparison failed.");
+    }
   }
+
+  async function registerSource() {
+    if (!sourceName || !sourceUrl) return;
+    setActionError("");
+    try {
+      const created = await createCollectionSource({
+        name: sourceName,
+        kind: sourceKind,
+        url: sourceUrl,
+        actor_id: actorId || null,
+      });
+      setSources((current) => [...current, created]);
+      setSourceName("");
+      setSourceUrl("");
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : "Collection source registration failed.");
+    }
+  }
+
+  async function inspectTorUrl() {
+    if (!torUrl) return;
+    setActionError("");
+    try {
+      setTorResult(await inspectTor(torUrl));
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : "Tor inspection failed.");
+    }
+  }
+
 
   return (
     <section className="page-section">
+      {actionError && (
+        <div className="error" role="alert" style={{ marginBottom: 16 }}>
+          {actionError}
+        </div>
+      )}
+
       <div className="page-header">
         <div>
           <div className="eyebrow">ADVANCED INTELLIGENCE</div>
@@ -157,7 +222,7 @@ export default function AdvancedIntelligencePage({ actorId }: Props) {
           <h3 style={{ marginTop: 8 }}>Allowlisted hidden-service inspection</h3>
           <div style={{ display: "flex", gap: 8 }}>
             <input value={torUrl} onChange={(e) => setTorUrl(e.target.value)} placeholder="https://example.onion/" style={{ flex: 1 }} />
-            <button className="secondary-button" onClick={async () => { if (!torUrl) return; setTorResult(await inspectTor(torUrl)); }}>Inspect</button>
+            <button className="secondary-button" onClick={inspectTorUrl} disabled={!torUrl}>Inspect</button>
           </div>
           {torResult && <pre style={{ whiteSpace: "pre-wrap", fontSize: 11, marginTop: 10, opacity: 0.75 }}>{JSON.stringify(torResult, null, 2)}</pre>}
         </div>
@@ -182,13 +247,7 @@ export default function AdvancedIntelligencePage({ actorId }: Props) {
               <option value="rss">RSS</option><option value="json">JSON</option><option value="html">HTML</option><option value="tor_http">Tor HTTP</option>
             </select>
             <input value={sourceUrl} onChange={(e) => setSourceUrl(e.target.value)} placeholder="https://feed.example" />
-            <button className="secondary-button" onClick={async () => {
-              if (!sourceName || !sourceUrl) return;
-              const created = await createCollectionSource({ name: sourceName, kind: sourceKind, url: sourceUrl, actor_id: actorId || null });
-              setSources((current) => [...current, created]);
-              setSourceName("");
-              setSourceUrl("");
-            }}>Register source</button>
+            <button className="secondary-button" onClick={registerSource}>Register source</button>
           </div>
           <div style={{ marginTop: 12 }}>
             {sources.map((source) => (

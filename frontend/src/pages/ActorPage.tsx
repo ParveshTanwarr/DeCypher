@@ -12,6 +12,7 @@ import {
   verifyEvidenceIntegrity,
   downloadActorExport,
   downloadActorReport,
+  getHistoricalCaseContext,
 } from "../api/client";
 import type {
   BehavioralProfile,
@@ -22,6 +23,7 @@ import type {
   GraphLink,
   ActorTimeline,
   GraphAnomalyResult,
+  HistoricalCaseContext,
 } from "../api/client";
 
 interface ActorDetail {
@@ -358,6 +360,8 @@ export default function ActorPage({
   const [graphAnomaly, setGraphAnomaly] = useState<GraphAnomalyResult | null>(null);
   const [analyticsLoading, setAnalyticsLoading] = useState(true);
   const [analyticsError, setAnalyticsError] = useState("");
+  const [historicalCases, setHistoricalCases] = useState<HistoricalCaseContext[]>([]);
+  const [historicalCaseLoading, setHistoricalCaseLoading] = useState(false);
 
   const [loading, setLoading] = useState(true);
   const [correlationLoading, setCorrelationLoading] = useState(true);
@@ -390,6 +394,8 @@ export default function ActorPage({
 
     setLoadError("");
     setCorrelation(null);
+    setHistoricalCases([]);
+    setHistoricalCaseLoading(true);
     setCorrelationLoading(true);
 
     getActor(actorId)
@@ -398,6 +404,19 @@ export default function ActorPage({
 
         const actorResult = actorData as ActorDetail;
         setActor(actorResult);
+
+        setHistoricalCaseLoading(true);
+        getHistoricalCaseContext(actorId)
+          .then((result) => {
+            if (!cancelled) setHistoricalCases(result.matches || []);
+          })
+          .catch((error) => {
+            console.error("Failed to load historical case context:", error);
+            if (!cancelled) setHistoricalCases([]);
+          })
+          .finally(() => {
+            if (!cancelled) setHistoricalCaseLoading(false);
+          });
 
         setBehavioralLoading(true);
         setBehavioralError("");
@@ -709,6 +728,88 @@ export default function ActorPage({
         </div>
       </div>
 
+      {/* Documented public-case context */}
+      {(historicalCaseLoading || historicalCases.length > 0) && (
+        <div className="card" style={{ marginTop: "20px" }}>
+          <div className="eyebrow">DOCUMENTED CASE CONTEXT</div>
+          {historicalCaseLoading ? (
+            <div style={{ marginTop: "12px", opacity: 0.6 }}>Checking documented public-case provenance…</div>
+          ) : (
+            historicalCases.map((caseContext) => (
+              <div key={caseContext.case_id} style={{ marginTop: "14px" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "flex-start", flexWrap: "wrap" }}>
+                  <div>
+                    <h2 style={{ margin: "4px 0 6px" }}>{caseContext.case_name}</h2>
+                    <div style={{ fontSize: "12px", opacity: 0.62 }}>
+                      Matched documented alias{caseContext.matched_aliases.length === 1 ? "" : "es"}:{" "}
+                      <strong>{caseContext.matched_aliases.join(", ")}</strong>
+                    </div>
+                  </div>
+                  <span style={{ fontSize: "10px", padding: "5px 8px", borderRadius: "999px", background: "rgba(116,192,252,0.12)", border: "1px solid rgba(116,192,252,0.28)" }}>
+                    PROVENANCE MATCH
+                  </span>
+                </div>
+
+                {caseContext.matched_identities.map((identity) => (
+                  <div key={identity.identity_id} style={{ marginTop: "12px", padding: "12px", borderRadius: "8px", background: "rgba(255,255,255,0.025)" }}>
+                    <strong>{identity.documented_name}</strong>
+                    {identity.role && <div style={{ fontSize: "11px", opacity: 0.55, marginTop: "4px" }}>{identity.role}</div>}
+                    <div style={{ fontSize: "11px", marginTop: "7px" }}>
+                      Documented aliases: {identity.aliases.join(", ")}
+                    </div>
+                    <div style={{ fontSize: "11px", opacity: 0.7, marginTop: "4px" }}>
+                      Matched on this actor: {identity.matched_aliases.join(", ")}
+                    </div>
+                  </div>
+                ))}
+
+                <div style={{ marginTop: "14px", display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: "8px" }}>
+                  <div style={{ padding: "9px", borderRadius: "7px", background: "rgba(255,255,255,0.025)" }}>
+                    <div className="eyebrow">POSITIVE CONTROLS</div>
+                    <strong>{caseContext.validation_summary.positive_control_pairs}</strong>
+                  </div>
+                  <div style={{ padding: "9px", borderRadius: "7px", background: "rgba(255,255,255,0.025)" }}>
+                    <div className="eyebrow">NEGATIVE CONTROLS</div>
+                    <strong>{caseContext.validation_summary.negative_control_pairs}</strong>
+                  </div>
+                  <div style={{ padding: "9px", borderRadius: "7px", background: "rgba(255,255,255,0.025)" }}>
+                    <div className="eyebrow">STYLOMETRY</div>
+                    <strong style={{ fontSize: "11px" }}>{caseContext.validation_summary.stylometry_status}</strong>
+                  </div>
+                </div>
+
+                <div style={{ marginTop: "12px", fontSize: "11px", opacity: 0.58 }}>
+                  Validation scope: {caseContext.validation_summary.modules.join(" · ")}.
+                </div>
+
+                {caseContext.provenance.length > 0 && (
+                  <div style={{ marginTop: "14px" }}>
+                    <div className="eyebrow">SOURCE RECORDS</div>
+                    {caseContext.provenance.slice(0, 4).map((source) => (
+                      <div key={source.url} style={{ marginTop: "7px", fontSize: "11px" }}>
+                        <a href={source.url} target="_blank" rel="noreferrer" style={{ textDecoration: "none" }}>
+                          {source.title}
+                        </a>
+                        {source.scope && <span style={{ opacity: 0.52 }}> · {source.scope}</span>}
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {caseContext.model_limitations.length > 0 && (
+                  <details style={{ marginTop: "14px", fontSize: "11px" }}>
+                    <summary style={{ cursor: "pointer", opacity: 0.65 }}>Case validation limits</summary>
+                    <ul style={{ paddingLeft: "18px", opacity: 0.58, lineHeight: 1.5 }}>
+                      {caseContext.model_limitations.map((item) => <li key={item}>{item}</li>)}
+                    </ul>
+                  </details>
+                )}
+              </div>
+            ))
+          )}
+        </div>
+      )}
+
       {/* Evidence-backed behavioural profile */}
       <div className="card" style={{ marginTop: "20px" }}>
         <div className="eyebrow">BEHAVIOURAL INTELLIGENCE · PROFILE v1.0</div>
@@ -1004,6 +1105,20 @@ export default function ActorPage({
                     </div>
                   ))}
                 </div>
+                {historicalCases.some((item) => item.timeline.length > 0) && (
+                  <div style={{ marginTop: "14px", paddingTop: "12px", borderTop: "1px solid rgba(116,192,252,0.14)" }}>
+                    <div className="eyebrow">DOCUMENTED CASE CHRONOLOGY</div>
+                    {historicalCases.flatMap((item) => item.timeline).slice(0, 8).map((event) => (
+                      <div key={event.event_id} style={{ display: "grid", gridTemplateColumns: "110px minmax(120px, 1fr)", gap: "10px", padding: "7px 0", borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
+                        <div style={{ fontSize: "10px", opacity: 0.48 }}>{event.date}</div>
+                        <div>
+                          <div style={{ fontSize: "10px", fontWeight: 700 }}>{event.event_type.replace(/_/g, " ")}</div>
+                          <div style={{ fontSize: "10px", opacity: 0.48 }}>{event.entity} · {event.source}</div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
                 <div style={{ fontSize: "10px", opacity: 0.42, marginTop: "10px", lineHeight: 1.5 }}>
                   Normalized from observed timestamps only; missing activity is not inferred.
                 </div>

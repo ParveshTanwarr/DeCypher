@@ -1,4 +1,7 @@
 import base64
+from types import SimpleNamespace
+
+import pytest
 
 
 PNG_1X1 = (
@@ -49,3 +52,65 @@ def test_collection_status_is_exposed(client, admin_headers):
     body = response.json()
     assert "continuous_collection" in body
     assert "sources" in body
+
+
+def test_historical_case_context_is_exposed_for_matching_actor(client, admin_headers):
+    from app.database.postgres import SessionLocal
+    from app.models.sql_models import Actor, DarkWebHandle
+
+    db = SessionLocal()
+    try:
+        actor_id = "CASE-ALPHABAY-UI"
+        db.query(DarkWebHandle).filter(DarkWebHandle.actor_id == actor_id).delete()
+        db.query(Actor).filter(Actor.actor_id == actor_id).delete()
+        actor = Actor(actor_id=actor_id, primary_handle="Alpha02", risk_category="historical_case")
+        db.add(actor)
+        db.flush()
+        db.add(
+            DarkWebHandle(
+                source_handle_id="CASE-ALPHABAY-UI-H001",
+                actor_id=actor_id,
+                handle="Alpha02",
+                platform="AlphaBay",
+            )
+        )
+        db.commit()
+
+        response = client.get(f"/historical-cases/context/actor/{actor_id.lower()}", headers=admin_headers)
+        assert response.status_code == 200, response.text
+        body = response.json()
+        assert body["matches"]
+        match = next(item for item in body["matches"] if item["case_id"] == "alphabay-2017")
+        assert "Alpha02" in match["matched_aliases"]
+        assert match["matched_identities"][0]["documented_name"]
+        assert match["provenance"]
+        assert match["timeline"]
+    finally:
+        db.query(DarkWebHandle).filter(DarkWebHandle.actor_id == "CASE-ALPHABAY-UI").delete()
+        db.query(Actor).filter(Actor.actor_id == "CASE-ALPHABAY-UI").delete()
+        db.commit()
+        db.close()
+
+
+def test_media_request_enforces_bounded_data_url(client, admin_headers):
+    oversized = client.post(
+        "/media/fingerprint",
+        headers=admin_headers,
+        json={
+            "media_id": "oversized-image",
+            "data_url": "data:image/png;base64," + ("A" * 7_000_001),
+            "source": "test",
+        },
+    )
+    assert oversized.status_code == 422, oversized.text
+
+
+def test_limited_response_reader_rejects_large_stream():
+    from app.services.advanced_intelligence import _read_limited_response
+
+    response = SimpleNamespace(
+        headers={},
+        iter_content=lambda chunk_size: [b"12345", b"67890"],
+    )
+    with pytest.raises(ValueError, match="exceeds configured"):
+        _read_limited_response(response, 8)

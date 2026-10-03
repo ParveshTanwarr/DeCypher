@@ -7,6 +7,7 @@ from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel, Field
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.config import settings
@@ -26,6 +27,7 @@ from app.services.advanced_intelligence import (
 )
 from app.services.correlation_service import CorrelationService
 from app.services.nlp_service import nlp_service
+from app.services.historical_cases import HistoricalCaseService
 
 router = APIRouter(tags=["Advanced Intelligence"])
 
@@ -51,7 +53,7 @@ class HistoricalCase(BaseModel):
 
 class MediaFingerprintRequest(BaseModel):
     media_id: str = Field(..., min_length=1, max_length=128)
-    data_url: str = Field(..., min_length=32)
+    data_url: str = Field(..., min_length=32, max_length=7_000_000)
     source: str = Field("investigator_upload", min_length=1, max_length=128)
     actor_id: Optional[str] = Field(None, max_length=64)
 
@@ -84,6 +86,39 @@ def merkle_status(db: Session = Depends(get_db)):
             settings.BLOCKCHAIN_ANCHOR_RPC_URL and settings.BLOCKCHAIN_ANCHOR_CONTRACT
         ),
         **verification,
+    }
+
+
+@router.get(
+    "/historical-cases",
+    dependencies=[Depends(get_current_user)],
+)
+def list_historical_cases():
+    return HistoricalCaseService.list_cases()
+
+
+@router.get(
+    "/historical-cases/{case_id}",
+    dependencies=[Depends(get_current_user)],
+)
+def get_historical_case(case_id: str):
+    case = HistoricalCaseService.get_case(case_id)
+    if case is None:
+        raise HTTPException(status_code=404, detail=f"Historical case '{case_id}' not found.")
+    return case
+
+
+@router.get(
+    "/historical-cases/context/actor/{actor_id}",
+    dependencies=[Depends(get_current_user)],
+)
+def historical_case_context_for_actor(actor_id: str, db: Session = Depends(get_db)):
+    if db.query(Actor.actor_id).filter(func.lower(Actor.actor_id) == actor_id.lower()).first() is None:
+        raise HTTPException(status_code=404, detail=f"Actor '{actor_id}' not found.")
+    return {
+        "actor_id": actor_id,
+        "matches": HistoricalCaseService.match_actor(db, actor_id),
+        "note": "Historical-case context is read-only provenance metadata. It is shown only when the actor's recorded handles match documented case aliases.",
     }
 
 

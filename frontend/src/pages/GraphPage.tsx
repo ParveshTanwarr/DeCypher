@@ -7,11 +7,12 @@ import {
 
 import ForceGraph2D from "react-force-graph-2d";
 
-import { getActorGraph } from "../api/client";
+import { getActorGraph, getHistoricalCaseContext } from "../api/client";
 
 import type {
   GraphLink,
   GraphNode,
+  HistoricalCaseContext,
 } from "../api/client";
 
 interface GraphPageProps {
@@ -51,6 +52,7 @@ export default function GraphPage({
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [historicalCases, setHistoricalCases] = useState<HistoricalCaseContext[]>([]);
 
   const [selectedNode, setSelectedNode] =
     useState<GraphNode | null>(null);
@@ -60,6 +62,11 @@ export default function GraphPage({
   useEffect(() => {
     setError("");
     setSelectedNode(null);
+    setHistoricalCases([]);
+
+    getHistoricalCaseContext(actorId)
+      .then((result) => setHistoricalCases(result.matches || []))
+      .catch(() => setHistoricalCases([]));
 
     getActorGraph(actorId)
       .then((data) => {
@@ -171,9 +178,31 @@ export default function GraphPage({
     return "unknown";
   }
 
+  const caseAliases = useMemo(
+    () => new Set(
+      historicalCases.flatMap((item) =>
+        item.matched_identities.flatMap((identity) =>
+          identity.matched_aliases.map((alias) => alias.toLowerCase()),
+        ),
+      ),
+    ),
+    [historicalCases],
+  );
+
+  function isDocumentedCaseNode(node: GraphNode): boolean {
+    return (
+      getNodeType(node) === "handle" &&
+      caseAliases.has(getNodeDisplayLabel(node).toLowerCase())
+    );
+  }
+
   function getNodeColor(
     node: GraphNode,
   ) {
+    if (isDocumentedCaseNode(node)) {
+      return "#51cf66";
+    }
+
     switch (getNodeType(node)) {
       case "actor":
         return "#ff4d6d";
@@ -487,6 +516,17 @@ export default function GraphPage({
               {actorId}
             </strong>
           </p>
+
+          {historicalCases.length > 0 && (
+            <div style={{ marginTop: "12px", display: "flex", flexWrap: "wrap", gap: "8px", alignItems: "center" }}>
+              <span className="eyebrow">DOCUMENTED CASE CONTEXT</span>
+              {historicalCases.map((item) => (
+                <span key={item.case_id} style={{ fontSize: "11px", padding: "5px 8px", borderRadius: "999px", background: "rgba(81,207,102,0.12)", border: "1px solid rgba(81,207,102,0.28)" }}>
+                  {item.case_name} · {item.matched_aliases.join(", ")}
+                </span>
+              ))}
+            </div>
+          )}
         </div>
 
         <button
@@ -514,6 +554,11 @@ export default function GraphPage({
           <strong>
             {graph.links.length}
           </strong>
+        </div>
+
+        <div className="stat-card">
+          <span>Case-linked handles</span>
+          <strong>{caseAliases.size}</strong>
         </div>
 
         <div className="stat-card">
@@ -859,7 +904,16 @@ export default function GraphPage({
             </div>
           ) : (
             <>
-              <div className="node-details">
+              {selectedNode && isDocumentedCaseNode(selectedNode) && (
+            <div style={{ marginBottom: "12px", padding: "10px 12px", borderRadius: "8px", background: "rgba(81,207,102,0.08)", border: "1px solid rgba(81,207,102,0.22)", fontSize: "11px" }}>
+              <strong>Documented case alias</strong>
+              <div style={{ opacity: 0.65, marginTop: "3px" }}>
+                This handle matches a documented public-case alias. The graph highlight is provenance context, not an independent identity conclusion.
+              </div>
+            </div>
+          )}
+
+          <div className="node-details">
                 <div className="detail-row">
                   <span>
                     Type
@@ -955,6 +1009,12 @@ export default function GraphPage({
             </h3>
 
             {[
+              ...(caseAliases.size > 0
+                ? [[
+                    "Documented case alias",
+                    "#51cf66",
+                  ]]
+                : []),
               [
                 "Actor",
                 "#ff4d6d",
