@@ -48,7 +48,7 @@ function App() {
             title: alert.title,
             message: alert.message,
             time: "Live",
-            type: "warning",
+            type: "warning" as const,
             read: false,
           },
           ...current,
