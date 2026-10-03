@@ -52,3 +52,32 @@ def test_scanner_network_failure_is_reported_as_failed_scan(monkeypatch):
 
     with pytest.raises(RuntimeError, match="Authorized scan request failed"):
         scanner.scan_target("http://127.0.0.1:9000/")
+
+
+
+def test_banner_detector_collects_standard_service_headers_without_calling_them_vulnerable():
+    from types import SimpleNamespace
+    from infra.detectors.banner import detect_banner
+
+    response = SimpleNamespace(headers={"Server": "Apache/2.4.58", "X-Powered-By": "PHP"})
+    assert detect_banner(response) == "Server: Apache/2.4.58"
+
+
+def test_banner_detector_prefers_controlled_fixture_marker():
+    from types import SimpleNamespace
+    from infra.detectors.banner import detect_banner
+
+    response = SimpleNamespace(headers={
+        "X-DeCypher-Test-Banner": "DE-CYPHER-FIXTURE",
+        "Server": "Apache/2.4.58",
+    })
+    assert detect_banner(response) == "DE-CYPHER-FIXTURE"
+
+
+def test_status_detector_recognizes_apache_mod_status_signature_only_with_multiple_markers():
+    from infra.detectors.status_page import _classify_status_page
+
+    assert _classify_status_page(
+        "Apache Server Status: Server uptime: 2 hours. Total accesses: 42. Scoreboard: _W"
+    ) == "apache_mod_status_signature"
+    assert _classify_status_page("A normal page mentions server uptime: once.") is None
