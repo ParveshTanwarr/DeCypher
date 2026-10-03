@@ -25,6 +25,7 @@ from app.services.advanced_intelligence import (
     TorIntelligenceService,
 )
 from app.services.correlation_service import CorrelationService
+from app.services.nlp_service import nlp_service
 
 router = APIRouter(tags=["Advanced Intelligence"])
 
