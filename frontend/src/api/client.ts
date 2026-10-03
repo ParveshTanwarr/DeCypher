@@ -555,6 +555,12 @@ export interface HistoricalCaseContext {
   expected_different_identity_pairs: string[][];
   model_limitations: string[];
   matched_aliases: string[];
+  validation_summary: {
+    positive_control_pairs: number;
+    negative_control_pairs: number;
+    modules: string[];
+    stylometry_status: string;
+  };
 }
 export interface HistoricalCaseContextResponse {
   actor_id: string;
