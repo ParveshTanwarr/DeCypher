@@ -7,7 +7,7 @@ import re
 import time
 import uuid
 from collections import defaultdict
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from email.utils import parsedate_to_datetime
 from io import BytesIO
 from typing import Any, Iterable
@@ -67,6 +67,30 @@ def phash_distance(a: str, b: str) -> int:
     return (int(a, 16) ^ int(b, 16)).bit_count()
 
 
+def _read_limited_response(response: requests.Response, max_bytes: int) -> bytes:
+    """Read an HTTP response without allowing unbounded response buffering."""
+    limit = max(1, int(max_bytes))
+    declared = response.headers.get("content-length")
+    if declared:
+        try:
+            declared_length = int(declared)
+        except ValueError:
+            declared_length = None
+        if declared_length is not None and declared_length > limit:
+            raise ValueError(f"Response exceeds configured {limit}-byte limit.")
+
+    chunks: list[bytes] = []
+    total = 0
+    for chunk in response.iter_content(chunk_size=64 * 1024):
+        if not chunk:
+            continue
+        total += len(chunk)
+        if total > limit:
+            raise ValueError(f"Response exceeds configured {limit}-byte limit.")
+        chunks.append(chunk)
+    return b"".join(chunks)
+
+
 def _merkle_root(hashes: list[str]) -> str:
     if not hashes:
         return _sha256(b"DECYPHER-EMPTY-MERKLE")
@@ -85,8 +109,10 @@ class MerkleEvidenceService:
         self.db = db
 
     def seal_pending(self) -> int:
-        entries = self.db.query("EvidenceLedgerEntry") if False else None
         from app.models.sql_models import EvidenceLedgerEntry
+
+        EvidenceLedgerService(self.db)._lock_chain()
+
         all_entries = (
             self.db.query(EvidenceLedgerEntry)
             .order_by(EvidenceLedgerEntry.id.asc())
@@ -99,25 +125,18 @@ class MerkleEvidenceService:
             .first()
         )
         next_index = (existing_last.block_index + 1) if existing_last else 0
-        next_sequence = (existing_last.last_sequence_id + 1) if existing_last else 1
-        created = 0
         previous_block_hash = existing_last.block_hash if existing_last else _sha256(
             b"DECYPHER-EVIDENCE-BLOCK-GENESIS-v1"
         )
+        sealed_until = existing_last.last_sequence_id if existing_last else 0
 
-        while next_sequence <= len(all_entries):
-            chunk = [
-                entry for entry in all_entries
-                if next_sequence <= entry.id < next_sequence + block_size
-            ]
-            if not chunk:
-                break
-            if (
-                existing_last
-                and chunk[-1].id <= existing_last.last_sequence_id
-            ):
-                next_sequence = existing_last.last_sequence_id + 1
-                continue
+        # Sequence IDs are database primary keys and may contain gaps after
+        # deletes/repairs. Never use the numeric ID as an array offset.
+        pending_entries = [entry for entry in all_entries if entry.id > sealed_until]
+        created = 0
+
+        for offset in range(0, len(pending_entries), block_size):
+            chunk = pending_entries[offset:offset + block_size]
             root = _merkle_root([entry.record_hash for entry in chunk])
             block_payload = {
                 "block_index": next_index,
@@ -127,8 +146,10 @@ class MerkleEvidenceService:
                 "merkle_root": root,
                 "entry_count": len(chunk),
             }
-            block_hash = _sha256(json.dumps(block_payload, sort_keys=True, separators=(",", ":")))
-            block = EvidenceLedgerBlock(
+            block_hash = _sha256(
+                json.dumps(block_payload, sort_keys=True, separators=(",", ":"))
+            )
+            self.db.add(EvidenceLedgerBlock(
                 block_index=next_index,
                 first_sequence_id=chunk[0].id,
                 last_sequence_id=chunk[-1].id,
@@ -136,12 +157,11 @@ class MerkleEvidenceService:
                 merkle_root=root,
                 block_hash=block_hash,
                 entry_count=len(chunk),
-            )
-            self.db.add(block)
+            ))
             created += 1
             previous_block_hash = block_hash
             next_index += 1
-            next_sequence = chunk[-1].id + 1
+
         return created
 
     def verify(self) -> dict[str, Any]:
@@ -149,10 +169,26 @@ class MerkleEvidenceService:
         blocks = self.db.query(EvidenceLedgerBlock).order_by(EvidenceLedgerBlock.block_index.asc()).all()
         entries = self.db.query(EvidenceLedgerEntry).order_by(EvidenceLedgerEntry.id.asc()).all()
         previous_hash = _sha256(b"DECYPHER-EVIDENCE-BLOCK-GENESIS-v1")
-        for block in blocks:
-            chunk = [e for e in entries if block.first_sequence_id <= e.id <= block.last_sequence_id]
+        covered_entry_ids: set[int] = set()
+        previous_last_sequence = 0
+
+        for index, block in enumerate(blocks):
+            if block.block_index != index:
+                return {"valid": False, "reason": f"Unexpected block index {block.block_index}; expected {index}.", "block_index": block.block_index}
+            if block.first_sequence_id > block.last_sequence_id:
+                return {"valid": False, "reason": f"Invalid sequence range in block {block.block_index}.", "block_index": block.block_index}
+            if block.first_sequence_id <= previous_last_sequence:
+                return {"valid": False, "reason": f"Overlapping block sequence range at block {block.block_index}.", "block_index": block.block_index}
+
+            chunk = [
+                e for e in entries
+                if block.first_sequence_id <= e.id <= block.last_sequence_id
+            ]
             if len(chunk) != block.entry_count:
                 return {"valid": False, "reason": f"Block {block.block_index} entry count mismatch.", "block_index": block.block_index}
+            if len({entry.id for entry in chunk}) != len(chunk):
+                return {"valid": False, "reason": f"Duplicate ledger entry coverage in block {block.block_index}.", "block_index": block.block_index}
+
             root = _merkle_root([e.record_hash for e in chunk])
             if root != block.merkle_root or block.previous_block_hash != previous_hash:
                 return {"valid": False, "reason": f"Merkle/block-chain verification failed at block {block.block_index}.", "block_index": block.block_index}
@@ -166,7 +202,24 @@ class MerkleEvidenceService:
             }, sort_keys=True, separators=(",", ":")))
             if expected != block.block_hash:
                 return {"valid": False, "reason": f"Block hash mismatch at block {block.block_index}.", "block_index": block.block_index}
+
+            covered_entry_ids.update(entry.id for entry in chunk)
+            previous_last_sequence = block.last_sequence_id
             previous_hash = block.block_hash
+
+        entry_ids = {entry.id for entry in entries}
+        unsealed = sorted(entry_ids - covered_entry_ids)
+        if unsealed:
+            return {
+                "valid": False,
+                "reason": "One or more evidence ledger entries are not covered by any Merkle block.",
+                "unsealed_sequence_ids": unsealed[:100],
+                "unsealed_count": len(unsealed),
+                "entry_count": len(entries),
+                "block_count": len(blocks),
+                "head_block_hash": previous_hash,
+            }
+
         return {
             "valid": True,
             "block_count": len(blocks),
@@ -174,6 +227,7 @@ class MerkleEvidenceService:
             "head_block_hash": previous_hash,
             "merkle_roots": [b.merkle_root for b in blocks[-10:]],
         }
+
 
 
 class CollectionService:
@@ -189,12 +243,25 @@ class CollectionService:
     @staticmethod
     def _allowed_host(url: str, source: CollectionSource) -> bool:
         host = (urlparse(url).hostname or "").lower()
-        configured = set(str(x).lower() for x in (source.parser_config or {}).get("allowed_hosts", []))
-        global_allowed = {x.strip().lower() for x in settings.COLLECTION_ALLOWED_HOSTS.split(",") if x.strip()}
+        configured = {
+            str(x).strip().lower()
+            for x in (source.parser_config or {}).get("allowed_hosts", [])
+            if str(x).strip()
+        }
+        global_allowed = {
+            x.strip().lower()
+            for x in settings.COLLECTION_ALLOWED_HOSTS.split(",")
+            if x.strip()
+        }
+        onion_allowed = {
+            x.strip().lower()
+            for x in settings.TOR_ALLOWED_ONION_HOSTS.split(",")
+            if x.strip()
+        }
         if host in configured or host in global_allowed:
             return True
         if host.endswith(".onion"):
-            return host in {x for x in settings.TOR_ALLOWED_ONION_HOSTS.split(",") if x.strip()}
+            return host in onion_allowed
         return False
 
     def _request(self, source: CollectionSource) -> tuple[int, str, str]:
@@ -209,17 +276,21 @@ class CollectionService:
             if not parsed.hostname or not parsed.hostname.endswith(".onion"):
                 raise ValueError("tor_http sources must target an allowlisted .onion host.")
             proxies = {"http": settings.TOR_SOCKS5_PROXY, "https": settings.TOR_SOCKS5_PROXY}
-        response = requests.get(
+        with requests.get(
             source.url,
             headers=headers,
             timeout=settings.COLLECTION_TIMEOUT_SECONDS,
             allow_redirects=False,
             verify=settings.SCANNER_TLS_VERIFY,
             proxies=proxies,
-        )
-        response.raise_for_status()
-        raw = response.content[:settings.COLLECTION_MAX_RESPONSE_BYTES]
-        return response.status_code, response.headers.get("content-type", ""), raw.decode(response.encoding or "utf-8", errors="replace")
+            stream=True,
+        ) as response:
+            response.raise_for_status()
+            raw = _read_limited_response(response, settings.COLLECTION_MAX_RESPONSE_BYTES)
+            status_code = response.status_code
+            content_type = response.headers.get("content-type", "")
+            encoding = response.encoding or "utf-8"
+        return status_code, content_type, raw.decode(encoding, errors="replace")
 
     @staticmethod
     def _parse_rss(body: str) -> list[dict[str, Any]]:
@@ -361,7 +432,9 @@ class CollectionService:
             source.last_run_at = run.finished_at
             source.last_status = "completed"
             source.last_error = None
-            source.next_run_at = utc_now()
+            source.next_run_at = run.finished_at + timedelta(
+                minutes=max(1, int(source.interval_minutes or 15))
+            )
             self.db.commit()
             if created_obs and source.actor_id:
                 try:
@@ -392,7 +465,8 @@ class CollectionService:
             if source:
                 source.last_status = "failed"
                 source.last_error = str(exc)[:2000]
-                source.next_run_at = utc_now().replace(microsecond=0)
+                retry_minutes = min(5, max(1, int(source.interval_minutes or 15)))
+                source.next_run_at = utc_now() + timedelta(minutes=retry_minutes)
             self.db.commit()
             raise
 
@@ -409,23 +483,29 @@ class TorIntelligenceService:
         if not settings.TOR_SOCKS5_PROXY:
             raise ValueError("TOR_SOCKS5_PROXY is not configured.")
         proxies = {"http": settings.TOR_SOCKS5_PROXY, "https": settings.TOR_SOCKS5_PROXY}
-        response = requests.get(
+        if parsed.scheme not in {"http", "https"}:
+            raise ValueError("Tor inspection requires an http:// or https:// URL.")
+        with requests.get(
             url,
             timeout=settings.TOR_TIMEOUT_SECONDS,
             allow_redirects=False,
             proxies=proxies,
             headers={"User-Agent": "DeCypher-Tor-Inspector/1.0"},
-        )
-        return {
-            "url": url,
-            "status_code": response.status_code,
-            "content_type": response.headers.get("content-type"),
-            "content_sha256": _sha256(response.content),
-            "content_length": len(response.content),
-            "server": response.headers.get("server"),
-            "title": (re.search(r"<title[^>]*>(.*?)</title>", response.text, re.I | re.S).group(1).strip() if re.search(r"<title[^>]*>(.*?)</title>", response.text, re.I | re.S) else None),
-            "observed_at": utc_now().isoformat(),
-        }
+            stream=True,
+        ) as response:
+            raw = _read_limited_response(response, settings.TOR_MAX_RESPONSE_BYTES)
+            body = raw.decode(response.encoding or "utf-8", errors="replace")
+            title_match = re.search(r"<title[^>]*>(.*?)</title>", body, re.I | re.S)
+            return {
+                "url": url,
+                "status_code": response.status_code,
+                "content_type": response.headers.get("content-type"),
+                "content_sha256": _sha256(raw),
+                "content_length": len(raw),
+                "server": response.headers.get("server"),
+                "title": title_match.group(1).strip() if title_match else None,
+                "observed_at": utc_now().isoformat(),
+            }
 
     @staticmethod
     def parse_descriptor(descriptor_text: str) -> dict[str, Any]:
@@ -474,17 +554,39 @@ class StylometryDiscoveryService:
                 compared = nlp_service.compare(a.handle, b.handle)
             except Exception as exc:
                 compared = {"similarity_score": 0.0, "is_same_author": False, "engine_status": "error", "error": str(exc)}
-            row = StylometryDiscovery(
-                handle_a=a.handle,
-                handle_b=b.handle,
-                actor_a=a.actor_id,
-                actor_b=b.actor_id,
-                similarity=float(compared.get("similarity_score") or 0.0),
-                same_author=bool(compared.get("is_same_author")),
-                model_status=str(compared.get("engine_status") or "unknown"),
-                evidence={"shared_markers": compared.get("shared_markers", []), "threshold_used": compared.get("threshold_used")},
+            values = {
+                "similarity": float(compared.get("similarity_score") or 0.0),
+                "same_author": bool(compared.get("is_same_author")),
+                "model_status": str(compared.get("engine_status") or "unknown"),
+                "evidence": {
+                    "shared_markers": compared.get("shared_markers", []),
+                    "threshold_used": compared.get("threshold_used"),
+                },
+            }
+            row = (
+                self.db.query(StylometryDiscovery)
+                .filter(
+                    StylometryDiscovery.handle_a == a.handle,
+                    StylometryDiscovery.handle_b == b.handle,
+                    StylometryDiscovery.actor_a == a.actor_id,
+                    StylometryDiscovery.actor_b == b.actor_id,
+                )
+                .first()
             )
-            self.db.add(row)
+            if row is None:
+                row = StylometryDiscovery(
+                    handle_a=a.handle,
+                    handle_b=b.handle,
+                    actor_a=a.actor_id,
+                    actor_b=b.actor_id,
+                    **values,
+                )
+                self.db.add(row)
+            else:
+                row.similarity = values["similarity"]
+                row.same_author = values["same_author"]
+                row.model_status = values["model_status"]
+                row.evidence = values["evidence"]
             results.append({
                 "handle_a": a.handle,
                 "handle_b": b.handle,
