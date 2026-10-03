@@ -378,6 +378,10 @@ def sync_temporal_events(events: List[Dict[str, Any]]) -> None:
 
         MERGE (a)-[:HAS_EVENT]->(e)
 
+        // A WITH clause is required before starting the OPTIONAL MATCH
+        // section after MERGE/SET in Neo4j's query grammar.
+        WITH e, row
+
         // Handle identity is resolved against the canonical graph handle
         // projection. Never MERGE a Handle from the relational integer PK.
         OPTIONAL MATCH (h:Handle {
