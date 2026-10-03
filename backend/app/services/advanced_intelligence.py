@@ -263,10 +263,13 @@ class CollectionService:
             for x in settings.TOR_ALLOWED_ONION_HOSTS.split(",")
             if x.strip()
         }
+        # Tor sources must pass the dedicated onion allowlist even when a
+        # per-source parser allowlist is present; this prevents that optional
+        # setting from bypassing the Tor scope boundary.
+        if source.kind == "tor_http":
+            return host.endswith(".onion") and host in onion_allowed
         if host in configured or host in global_allowed:
             return True
-        if host.endswith(".onion"):
-            return host in onion_allowed
         return False
 
     def _request(self, source: CollectionSource) -> tuple[int, str, str]:
@@ -539,6 +542,8 @@ class TorIntelligenceService:
         allowed = {x.strip().lower() for x in settings.TOR_ALLOWED_ONION_HOSTS.split(",") if x.strip()}
         if not host.endswith(".onion") or host not in allowed:
             raise ValueError("Only explicitly allowlisted .onion hosts may be inspected.")
+        if parsed.username or parsed.password:
+            raise ValueError("Credentials embedded in Tor inspection URLs are not allowed.")
         if not settings.TOR_SOCKS5_PROXY:
             raise ValueError("TOR_SOCKS5_PROXY is not configured.")
         proxies = {"http": settings.TOR_SOCKS5_PROXY, "https": settings.TOR_SOCKS5_PROXY}
