@@ -35,8 +35,6 @@ It brings structured evidence, graph relationships, stylometric signals, tempora
 - [Technology stack](#technology-stack)
 - [Repository structure](#repository-structure)
 - [Getting started](#getting-started)
-- [Configuration](#configuration)
-- [Run the application](#run-the-application)
 - [API overview](#api-overview)
 - [Synthetic dataset](#synthetic-dataset)
 - [Security and responsible use](#security-and-responsible-use)
@@ -140,10 +138,10 @@ These outputs support triage and review; they are not causal explanations or ide
 - Controlled infrastructure scanner with bounded responses and configured host allowlists.
 - Optional scheduled scanning through Celery Beat, Redis, and Celery workers.
 - Registered collection sources supporting JSON, RSS, HTML, and configured Tor HTTP collection.
-- Tor inspection and descriptor parsing paths for explicitly allowlisted, authorized sources.
+- Tor inspection and descriptor parsing paths for explicitly allowlisted, authorized sources. Descriptor parsing can process supplied descriptor text; live hidden-service inspection requires a configured SOCKS5 Tor proxy and an explicitly allowlisted onion host.
 - Scan and collection runs create structured observations that can feed graph projection and correlation.
 
-Autonomous scanning and continuous collection are disabled by default. The default scanner/collection allowlists are loopback-oriented; do not broaden them without an explicit authorization and safety review.
+Autonomous scanning and continuous collection are disabled by default. The default scanner/collection allowlists are loopback-oriented, and no live collection source or public onion target is bundled. Configure only sources and targets you are authorized to access, and do not broaden allowlists without an explicit authorization and safety review.
 
 ### Advanced intelligence
 
@@ -587,7 +585,8 @@ The GitHub Actions workflow runs backend tests against PostgreSQL, frontend lint
 - Internal hash-chain/Merkle verification does not prove the truth of source observations.
 - External public-blockchain anchoring is not implemented as an active transaction workflow in the bundled project.
 - Gemini Copilot requires a separately configured backend API key.
-- Autonomous scanning, continuous collection, and Tor inspection require deliberate configuration and authorized targets.
+- Autonomous scanning, continuous collection, and live Tor inspection require deliberate configuration and authorized targets. Live Tor inspection additionally requires a working `TOR_SOCKS5_PROXY` and an allowlisted onion host; descriptor parsing alone does not perform network collection.
+- The repository does not include live dark-web collection credentials, a preconfigured Tor proxy, or real-world attribution validation infrastructure.
 
 ---
 
