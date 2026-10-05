@@ -93,7 +93,20 @@ The correlation service evaluates available evidence signals, including:
 
 The service returns signal-level evidence and an overall correlation result. It also supports leave-one-signal-out counterfactual analysis, allowing an investigator to see how the score changes when an available signal is removed.
 
-Operational priority is calculated separately from identity confidence. It is a triage aid, not an identity probability.
+The default evidence-fusion weights are explicit and interpretable:
+
+| Signal | Default weight |
+|---|---:|
+| Wallet reuse | 0.25 |
+| Infrastructure reuse | 0.20 |
+| TLS/certificate reuse | 0.15 |
+| Banner match | 0.10 |
+| Descriptor timing | 0.10 |
+| Stylometry | 0.20 |
+
+These are model weights, **not calibrated probabilities**. In demo mode, deterministic startup filler observations are kept visible for the investigation UI but are excluded from correlation by default so the demo does not contaminate its own scoring evidence.
+
+Operational priority is calculated separately from identity confidence. The default priority components are risk severity (0.30), correlation (0.25), evidence confidence (0.20), recency (0.15), and evidence coverage (0.10). It is a triage aid, not an identity probability.
 
 ### Stylometry and NLP
 
@@ -359,6 +372,8 @@ When startup completes, open:
 - API: http://127.0.0.1:8000
 - API docs: http://127.0.0.1:8000/docs
 
+The first startup may take a few minutes because the API performs database initialization, deterministic demo-data validation, graph projection checks, evidence-ledger backfill, and service readiness checks before the frontend is launched.
+
 The bootstrap prints the generated local application credentials:
 
 ```text
@@ -395,7 +410,7 @@ Demo startup also validates the bundled historical date fields against the froze
 
 ### Existing local databases
 
-The normal bootstrap does **not** delete Docker volumes or existing PostgreSQL/Neo4j state.
+The normal bootstrap does **not** delete Docker volumes or existing PostgreSQL/Neo4j state, and it does not silently replace non-placeholder credentials already present in `backend/.env`.
 
 If a machine contains stale demo volumes from an older DeCypher checkout and the goal is to recreate the clean bundled demonstration state, use the explicit destructive reset:
 
