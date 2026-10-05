@@ -343,30 +343,6 @@ export default function GraphPage({
     return rawLabel || String(node.id);
   }
 
-  function getShortLabel(
-    node: GraphNode,
-  ): string {
-    const label =
-      getNodeDisplayLabel(
-        node,
-      );
-
-    if (
-      (getNodeType(node) === "wallet" ||
-        getNodeType(node) === "pgpkey" ||
-        getNodeType(node) === "infrastructure") &&
-      label.length > 20
-    ) {
-      return (
-        label.slice(0, 9) +
-        "..." +
-        label.slice(-7)
-      );
-    }
-
-    return label;
-  }
-
   function getEndpointId(
     endpoint: unknown,
   ): string {
@@ -777,10 +753,6 @@ export default function GraphPage({
 
               linkDirectionalArrowRelPos={
                 0.96
-              }
-
-              linkDistance={(link) =>
-                getLinkDistance(link as GraphLink)
               }
 
               linkWidth={(link) => {

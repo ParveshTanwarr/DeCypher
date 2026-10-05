@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from typing import Optional
 
 from app.database.postgres import engine, Base, SessionLocal
+from app.config import settings
 from app.models.sql_models import (
     DarkWebHandle,
     Wallet,
@@ -422,7 +423,14 @@ def ensure_investigation_evidence_for_all_actors(session: Session) -> int:
         if target and indicator_type
     }
 
-    now = datetime.now(timezone.utc)
+    if settings.DEMO_MODE:
+        now = datetime.combine(
+            settings.DEMO_REFERENCE_DATE,
+            datetime.max.time(),
+            tzinfo=timezone.utc,
+        )
+    else:
+        now = datetime.now(timezone.utc)
     records = []
 
     for actor in actors:

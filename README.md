@@ -304,126 +304,139 @@ DeCypher/
 
 ## Getting started
 
-### Prerequisites
+### Fastest path: local SIH demo
 
-For the Docker-based local demo:
+You do not need to create or edit `backend/.env` manually for the normal local demonstration.
+
+#### Windows PowerShell
+
+Prerequisites:
 
 - Git
 - Docker Desktop with Docker Compose
 - Node.js **20.19+** or **22.12+**
 - npm
 
-For running the API directly on the host instead of in Docker:
+Clone and start:
 
-- Python **3.11+**
-- pip and venv
+```powershell
+git clone https://github.com/ParveshTanwarr/DeCypher.git
+cd DeCypher
+powershell -ExecutionPolicy Bypass -File .\scripts\start_demo.ps1
+```
 
-### 1. Clone the repository
+The bootstrap creates or repairs only known template placeholders in `backend/.env`, generates local secrets, keeps autonomous scanning and continuous collection disabled, starts the Docker stack, waits for the dependency-aware API health check, installs frontend dependencies when needed, and starts Vite.
+
+#### Linux / macOS
+
+Prerequisites:
+
+- Git
+- Docker Engine or Docker Desktop with Docker Compose
+- Node.js **20.19+** or **22.12+**
+- npm
+- `curl`
+
+Clone and start:
 
 ```bash
 git clone https://github.com/ParveshTanwarr/DeCypher.git
 cd DeCypher
+bash ./scripts/start_demo.sh
 ```
 
-### 2. Configure backend environment
+The shell bootstrap provides the same local-demo behavior. It does not require Python on the host.
+
+When startup completes, open:
+
+- Frontend: http://localhost:5173
+- API: http://127.0.0.1:8000
+- API docs: http://127.0.0.1:8000/docs
+
+The bootstrap prints the generated local application credentials:
+
+```text
+admin   : <generated password>
+analyst : <generated password>
+```
+
+The generated `backend/.env` is local-only and is ignored by Git. Database passwords, the JWT secret, and Grafana credentials are not printed by the bootstrap.
+
+### What the demo bootstrap checks
+
+The bootstrap fails early with a direct message when:
+
+- Docker is missing or its engine is not running;
+- Docker Compose is unavailable;
+- Node.js/npm are missing or the Node.js version is too old;
+- the repository is incomplete;
+- required environment credentials cannot be established;
+- Docker Compose fails to start the stack;
+- the dependency-aware API health check does not become healthy within five minutes;
+- frontend dependency installation fails.
+
+It uses the existing `/health/live` endpoint only for container liveness; the final bootstrap readiness gate uses `/health` so PostgreSQL, Neo4j, Redis, and the validated NLP engine must be healthy.
+
+### Demo reproducibility
+
+The bundled SIH demonstration uses a frozen reference date of **2026-10-05** and dataset version `2026-10-05-v1`.
+
+In demo mode, correlation recency is calculated against that fixed reference date rather than the machine's wall clock. This keeps the same bundled historical evidence from changing priority scores simply because the demo is opened on a different machine or at a different time.
+
+The repository also validates the bundled historical date fields before demo startup. Future-dated source records cause startup to fail rather than being silently clamped at display time.
+
+### Existing local databases
+
+The normal bootstrap does **not** delete Docker volumes or existing PostgreSQL/Neo4j state.
+
+If a machine contains stale demo volumes from an older DeCypher checkout and the goal is to recreate the clean bundled demonstration state, use the explicit destructive reset:
+
+Windows:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\reset_demo.ps1
+```
+
+Linux/macOS:
 
 ```bash
-cd backend
-cp .env.example .env
+bash ./scripts/reset_demo.sh
 ```
 
-Open `backend/.env` in a text editor and replace the example values. At minimum, configure:
+The reset command removes local PostgreSQL, Neo4j, Prometheus, and Grafana Docker volumes. Do not use it when local investigation data must be preserved.
+
+### Manual developer setup
+
+The traditional manual setup remains available when you need host-side API development or custom configuration.
+
+Copy the template:
+
+```text
+backend/.env.example → backend/.env
+```
+
+The Docker Compose configuration uses these environment values for local container credentials and overrides service-to-service URLs inside the Compose network.
+
+At minimum, configure:
 
 | Variable | Purpose |
 |---|---|
 | `POSTGRES_PASSWORD` | PostgreSQL container password |
-| `DATABASE_URL` | Host-side database URL; its password must match `POSTGRES_PASSWORD` |
+| `DATABASE_URL` | Host-side database URL; its password should match `POSTGRES_PASSWORD` |
 | `NEO4J_PASSWORD` | Neo4j authentication password |
-| `SECRET_KEY` | Unique, high-entropy JWT signing secret |
+| `SECRET_KEY` | Unique JWT signing secret |
 | `ADMIN_PASSWORD` | Local `admin` application account |
 | `ANALYST_PASSWORD` | Local `analyst` application account |
 | `SCANNER_SERVICE_PASSWORD` | Local scanner service account |
 | `GRAFANA_ADMIN_PASSWORD` | Grafana administrator password |
 
-The Compose configuration overrides database and service URLs inside containers so services communicate over the Compose network. The `DATABASE_URL` in `.env` is for running the API directly on your host and should use `127.0.0.1:5433`.
+Do not commit `backend/.env`. The repository intentionally does not publish universal working credentials.
 
-For optional Gemini Copilot access, set `GEMINI_API_KEY` in this backend-only file. Do not add secrets to frontend environment variables, screenshots, commits, or issue reports.
+### Host Uvicorn development
 
-> **Do not commit `backend/.env`.** Use unique passwords and a unique JWT secret. The repository intentionally does not publish working demo credentials.
+Use host Uvicorn only when you intentionally want the API process outside Docker. Do not run host Uvicorn alongside the Compose `api` service on port 8000.
 
-### 3. Start the backend and infrastructure with Docker Compose
-
-From `backend/`:
-
-```bash
-docker compose up -d --build
-```
-
-This starts the API and its local dependencies:
-
-| Service | Local address | Purpose |
-|---|---|---|
-| FastAPI | http://127.0.0.1:8000 | Backend API |
-| PostgreSQL | `127.0.0.1:5433` | Structured evidence store |
-| Neo4j Browser | http://127.0.0.1:7474 | Graph database UI |
-| Neo4j Bolt | `127.0.0.1:7687` | Graph connection |
-| Redis | `127.0.0.1:6379` | Queue and cache broker |
-| Prometheus | http://127.0.0.1:9090 | Metrics |
-| Grafana | http://127.0.0.1:3000 | Dashboards |
-
-The Compose file also starts the Celery worker and Beat scheduler. Autonomous scanning and continuous collection remain disabled unless explicitly enabled in configuration.
-
-Check service status:
-
-```bash
-docker compose ps
-```
-
-Check API health:
-
-```bash
-curl http://127.0.0.1:8000/health
-```
-
-Follow API logs:
-
-```bash
-docker compose logs -f api
-```
-
-Open the interactive API documentation at http://127.0.0.1:8000/docs.
-
-### 4. Start the frontend
-
-Open a **second terminal** from the repository root:
-
-```bash
-cd frontend
-npm ci
-npm run dev
-```
-
-Open http://localhost:5173.
-
-The frontend's default API base URL is `http://127.0.0.1:8000`. To use another API origin, define `VITE_API_BASE_URL` in the frontend's local environment.
-
-### 5. Sign in
-
-The local application identities are configured through the backend environment:
-
-| Username | Environment variable | Role |
-|---|---|---|
-| `admin` | `ADMIN_PASSWORD` | Administrator |
-| `analyst` | `ANALYST_PASSWORD` | Investigator |
-| `scanner_service` | `SCANNER_SERVICE_PASSWORD` | Service identity |
-
-Use the password you configured for the selected account. There are no default public passwords.
-
-### Running the API with host Uvicorn instead
-
-Use this alternative only if you want Uvicorn on your host. Do **not** run it while the Compose `api` service is already publishing port 8000.
-
-Start only the data/queue dependencies from `backend/`:
+Start dependencies from `backend/`:
 
 ```bash
 docker compose up -d postgres neo4j redis
@@ -433,16 +446,15 @@ python -m pip install -r requirements.txt
 python -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 ```
 
-On Windows PowerShell, create and activate the environment with:
+On Windows PowerShell:
 
 ```powershell
+docker compose up -d postgres neo4j redis
 py -3.11 -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install -r requirements.txt
 python -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 ```
-
-The host-run API reads `backend/.env`; ensure its database and service URLs use the host-mapped ports.
 
 ### Stopping the stack
 
@@ -452,9 +464,9 @@ From `backend/`:
 docker compose down
 ```
 
-This stops containers while retaining named data volumes. Avoid `docker compose down -v` unless you deliberately intend to delete the local PostgreSQL, Neo4j, Prometheus, and Grafana volumes.
+This stops containers while retaining named data volumes.
 
----
+Avoid `docker compose down -v` unless you deliberately intend to delete local database and monitoring state.
 
 ## API overview
 

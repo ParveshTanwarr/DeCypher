@@ -29,6 +29,7 @@ from app.services.nlp_service import nlp_service
 from app.services.temporal_events import materialize_temporal_events
 from app.services.observation_scope import build_observation_target_keys
 from app.services.advanced_intelligence import MerkleEvidenceService
+from app.services.demo_data import validate_bundled_demo_data
 
 
 
@@ -287,6 +288,15 @@ def _backfill_evidence_ledger() -> int:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    if settings.DEMO_MODE:
+        data_dir = Path(__file__).resolve().parents[2] / "data"
+        fingerprint = validate_bundled_demo_data(data_dir, settings.DEMO_REFERENCE_DATE)
+        print(
+            f"[+] Validated demo dataset {settings.DEMO_DATASET_VERSION} "
+            f"(reference date {settings.DEMO_REFERENCE_DATE.isoformat()}, "
+            f"fingerprint {fingerprint[:12]}...)."
+        )
+
     print("[*] Creating and verifying database tables...")
     await asyncio.to_thread(Base.metadata.create_all, bind=engine)
     await asyncio.to_thread(_ensure_compatibility_schema)
