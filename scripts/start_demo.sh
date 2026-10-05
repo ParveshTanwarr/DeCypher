@@ -47,17 +47,17 @@ random_hex() {
 
 get_env() {
   local name="\$1"
-  grep -E "^\\\\\${name}=" "\$ENV_FILE" | tail -n 1 | cut -d= -f2- || true
+  grep -E "^\${name}=" "\$ENV_FILE" | tail -n 1 | cut -d= -f2- || true
 }
 
 set_env() {
   local name="\$1"
   local value="\$2"
-  if grep -qE "^\\\\\${name}=" "\$ENV_FILE"; then
-    sed -i.bak "s|^\\\\\${name}=.*$|\\\\\${name}=\\\\\${value}|" "\$ENV_FILE"
-    rm -f "\${ENV_FILE}.bak"
+  if grep -qE "^\${name}=" "\$ENV_FILE"; then
+    sed -i.bak "s|^\${name}=.*$|\${name}=\${value}|" "\$ENV_FILE"
+    rm -f "\$ENV_FILE.bak"
   else
-    printf '%s\\n' "\${name}=\${value}" >> "\$ENV_FILE"
+    printf '%s\n' "\${name}=\${value}" >> "\$ENV_FILE"
   fi
 }
 
