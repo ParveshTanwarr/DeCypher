@@ -632,7 +632,17 @@ class CorrelationService:
         latest = max(dates)
         if latest.tzinfo is None:
             latest = latest.replace(tzinfo=timezone.utc)
-        age_days = max(0.0, (datetime.now(timezone.utc) - latest).total_seconds() / 86400)
+        if settings.DEMO_MODE:
+            reference = datetime(
+                settings.DEMO_REFERENCE_DATE.year,
+                settings.DEMO_REFERENCE_DATE.month,
+                settings.DEMO_REFERENCE_DATE.day,
+                tzinfo=timezone.utc,
+            )
+        else:
+            reference = datetime.now(timezone.utc)
+
+        age_days = max(0.0, (reference - latest).total_seconds() / 86400)
         if age_days <= 7: return 100.0
         if age_days <= 30: return 80.0
         if age_days <= 90: return 60.0
