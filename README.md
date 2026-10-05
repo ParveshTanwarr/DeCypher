@@ -93,7 +93,20 @@ The correlation service evaluates available evidence signals, including:
 
 The service returns signal-level evidence and an overall correlation result. It also supports leave-one-signal-out counterfactual analysis, allowing an investigator to see how the score changes when an available signal is removed.
 
-Operational priority is calculated separately from identity confidence. It is a triage aid, not an identity probability.
+The default evidence-fusion weights are explicit and interpretable:
+
+| Signal | Default weight |
+|---|---:|
+| Wallet reuse | 0.25 |
+| Infrastructure reuse | 0.20 |
+| TLS/certificate reuse | 0.15 |
+| Banner match | 0.10 |
+| Descriptor timing | 0.10 |
+| Stylometry | 0.20 |
+
+These are model weights, **not calibrated probabilities**. In demo mode, deterministic startup filler observations are kept visible for the investigation UI but are excluded from correlation by default so the demo does not contaminate its own scoring evidence.
+
+Operational priority is calculated separately from identity confidence. The default priority components are risk severity (0.30), correlation (0.25), evidence confidence (0.20), recency (0.15), and evidence coverage (0.10). It is a triage aid, not an identity probability.
 
 ### Stylometry and NLP
 
@@ -278,6 +291,12 @@ DeCypher/
 │   │   ├── services/               # Ingestion, correlation, graph, NLP, integrity...
 │   │   └── workers/                # Celery application and tasks
 │   ├── scripts/
+│   │   ├── start_demo.ps1              # Deterministic Windows demo bootstrap
+│   │   ├── start_demo.sh               # Deterministic Linux/macOS demo bootstrap
+│   │   ├── reset_demo.ps1              # Destructive Windows demo reset
+│   │   ├── reset_demo.sh               # Destructive Linux/macOS demo reset
+│   │   ├── evaluate_synthetic_attribution.py
+│   │   └── runtime_smoke_test.ps1
 │   ├── tests/
 │   ├── Dockerfile
 │   ├── docker-compose.yml
@@ -325,7 +344,7 @@ cd DeCypher
 powershell -ExecutionPolicy Bypass -File .\scripts\start_demo.ps1
 ```
 
-The bootstrap creates or repairs only known template placeholders in `backend/.env`, generates local secrets, keeps autonomous scanning and continuous collection disabled, starts the Docker stack, waits for the dependency-aware API health check, installs frontend dependencies when needed, and starts Vite.
+The bootstrap creates or repairs the local demo configuration in `backend/.env`, generates secrets only when template placeholders need replacing, keeps autonomous scanning and continuous collection disabled, starts the Docker stack, waits for the dependency-aware API health check, installs frontend dependencies when needed, and starts Vite. It preserves existing non-placeholder credentials so a local environment is not unexpectedly rotated.
 
 #### Linux / macOS
 
@@ -353,6 +372,8 @@ When startup completes, open:
 - API: http://127.0.0.1:8000
 - API docs: http://127.0.0.1:8000/docs
 
+The first startup may take a few minutes because the API performs database initialization, deterministic demo-data validation, graph projection checks, evidence-ledger backfill, and service readiness checks before the frontend is launched.
+
 The bootstrap prints the generated local application credentials:
 
 ```text
@@ -361,6 +382,8 @@ analyst : <generated password>
 ```
 
 The generated `backend/.env` is local-only and is ignored by Git. Database passwords, the JWT secret, and Grafana credentials are not printed by the bootstrap.
+
+> **Deterministic demo note:** the demo freezes the **reference date used for recency calculations**, not the machine clock. The same bundled evidence therefore produces stable demo prioritization across fresh clones, while live/authorized features can still use normal runtime time when explicitly enabled.
 
 ### What the demo bootstrap checks
 
@@ -383,11 +406,11 @@ The bundled SIH demonstration uses a frozen reference date of **2026-10-05** and
 
 In demo mode, correlation recency is calculated against that fixed reference date rather than the machine's wall clock. This keeps the same bundled historical evidence from changing priority scores simply because the demo is opened on a different machine or at a different time.
 
-The repository also validates the bundled historical date fields before demo startup. Future-dated source records cause startup to fail rather than being silently clamped at display time.
+Demo startup also validates the bundled historical date fields against the frozen reference date. Future-dated source records cause demo startup to fail instead of being silently clamped at display time.
 
 ### Existing local databases
 
-The normal bootstrap does **not** delete Docker volumes or existing PostgreSQL/Neo4j state.
+The normal bootstrap does **not** delete Docker volumes or existing PostgreSQL/Neo4j state, and it does not silently replace non-placeholder credentials already present in `backend/.env`.
 
 If a machine contains stale demo volumes from an older DeCypher checkout and the goal is to recreate the clean bundled demonstration state, use the explicit destructive reset:
 
@@ -403,7 +426,7 @@ Linux/macOS:
 bash ./scripts/reset_demo.sh
 ```
 
-The reset command removes local PostgreSQL, Neo4j, Prometheus, and Grafana Docker volumes. Do not use it when local investigation data must be preserved.
+The reset command removes local PostgreSQL, Neo4j, Prometheus, and Grafana Docker volumes and then rebuilds the deterministic demo state. Do not use it when local investigation data must be preserved.
 
 ### Manual developer setup
 
@@ -546,6 +569,8 @@ From `backend/` with the project environment active:
 ```bash
 pytest -q
 ```
+
+The deterministic-demo coverage includes `backend/tests/test_demo_data.py`, which verifies the frozen 2026-10-05 reference-date rules, stable bundled-data fingerprinting, and rejection of future-dated demo rows.
 
 ### Frontend
 
