@@ -2,9 +2,8 @@ from __future__ import annotations
 
 import csv
 import hashlib
-from datetime import date, datetime
+from datetime import date
 from pathlib import Path
-from typing import Iterable
 
 DATASET_FILES: tuple[str, ...] = (
     "actors.csv",
