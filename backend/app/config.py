@@ -1,4 +1,7 @@
+from datetime import date
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
 
 class Settings(BaseSettings):
     DATABASE_URL: str = ""
@@ -22,8 +25,16 @@ class Settings(BaseSettings):
     SCANNER_TLS_VERIFY: bool = True
     SCANNER_CONNECT_TIMEOUT_SECONDS: int = 10
     SCANNER_MAX_RESPONSE_BYTES: int = 1_000_000
-    # Synthetic filler evidence is excluded from correlation by default. Set true only for a controlled demo.
+
+    # Synthetic filler evidence is excluded from correlation by default.
     CORRELATION_EXCLUDE_SYNTHETIC_DEMO_EVIDENCE: bool = True
+
+    # Frozen reference settings make the bundled SIH demonstration reproducible
+    # across machines without freezing the clock for live/authorized scanning.
+    DEMO_MODE: bool = False
+    DEMO_DATASET_VERSION: str = "2026-10-05-v1"
+    DEMO_REFERENCE_DATE: date = date(2026, 10, 5)
+
     EXPORT_MAX_GRAPH_IMAGE_BYTES: int = 5_000_000
     LEDGER_BLOCK_SIZE: int = 32
     BLOCKCHAIN_ANCHOR_RPC_URL: str = ""
@@ -39,5 +50,8 @@ class Settings(BaseSettings):
     TOR_MAX_RESPONSE_BYTES: int = 2_000_000
     TOR_DESCRIPTOR_URL: str = ""
     MEDIA_MAX_BYTES: int = 5_000_000
+
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+
+
 settings = Settings()
