@@ -541,3 +541,113 @@ html[data-theme="light"] .dashboard-view .error{
     z-index:70;
   }
 }
+
+
+/* ---------- Relationship graph presentation ---------- */
+.graph-page-header{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:18px;
+}
+.graph-header-actions{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  flex:none;
+}
+.graph-panel-header{
+  align-items:center;
+}
+.graph-panel-hint{
+  color:var(--dim);
+  font-size:9px;
+  letter-spacing:.3px;
+}
+.graph-case-context{
+  display:flex;
+  flex-wrap:wrap;
+  align-items:center;
+  gap:8px;
+  margin-top:12px;
+}
+.graph-case-chip{
+  padding:5px 8px;
+  border:1px solid rgba(81,207,102,.28);
+  border-radius:999px;
+  background:rgba(81,207,102,.08);
+  color:#b9e7c2;
+  font-size:10px;
+}
+.graph-detail-empty{
+  padding:22px 18px;
+  color:var(--muted);
+}
+.graph-detail-empty strong{
+  display:block;
+  color:var(--text);
+  font-size:12px;
+}
+.graph-detail-empty p{
+  margin:7px 0 10px;
+  line-height:1.55;
+  font-size:11px;
+}
+.graph-detail-empty span{
+  display:block;
+  color:var(--dim);
+  font-size:9px;
+  line-height:1.5;
+}
+.graph-case-note{
+  margin:0 0 12px;
+  padding:10px 12px;
+  border:1px solid rgba(81,207,102,.22);
+  border-radius:8px;
+  background:rgba(81,207,102,.07);
+}
+.graph-case-note strong{
+  display:block;
+  color:#b9e7c2;
+  font-size:10px;
+}
+.graph-case-note span{
+  display:block;
+  margin-top:4px;
+  color:var(--dim);
+  font-size:9px;
+  line-height:1.45;
+}
+.legend-heading{
+  display:flex;
+  align-items:baseline;
+  justify-content:space-between;
+  gap:10px;
+}
+.legend-heading h3{
+  margin:0;
+}
+.legend-heading span{
+  color:var(--dim);
+  font-size:8px;
+  text-transform:uppercase;
+  letter-spacing:.6px;
+}
+.legend-note{
+  margin:12px 0 0;
+  color:var(--dim);
+  font-size:8px;
+  line-height:1.45;
+}
+@media(max-width:700px){
+  .graph-page-header{
+    flex-direction:column;
+  }
+  .graph-header-actions{
+    width:100%;
+  }
+  .graph-header-actions .secondary-button{
+    flex:1;
+  }
+}
+

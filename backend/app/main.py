@@ -48,59 +48,60 @@ def _ensure_compatibility_schema() -> None:
             connection.exec_driver_sql(
                 "ALTER TABLE darkweb_handles ADD COLUMN source_handle_id VARCHAR(64)"
             )
-        # Backfill the stable source IDs for existing synthetic rows. The
-        # relational integer PK remains unchanged and continues to serve SQL
-        # foreign keys; the source ID is exclusively the cross-system identity.
+
+        # Rebuild stable source IDs deterministically inside one transaction.
+        # This prevents a transient UNIQUE violation when an already-populated
+        # row owns a CSV source ID and another row is being repaired to that ID.
+        #
+        # The relational integer PK remains authoritative for SQL foreign keys;
+        # source_handle_id is the cross-system identity used by Neo4j.
+        connection.execute(
+            text(
+                "UPDATE darkweb_handles "
+                "SET source_handle_id = 'legacy:' || id::text"
+            )
+        )
+
         handles_path = Path(__file__).resolve().parents[2] / "data" / "handles.csv"
         if handles_path.exists():
             with handles_path.open("r", encoding="utf-8", newline="") as file:
                 for row in csv.DictReader(file):
                     source_id = (row.get("handle_id") or "").strip()
                     handle = (row.get("handle_name") or "").strip()
+                    actor_id = (row.get("actor_id_ground_truth") or "").strip()
                     platform = (row.get("marketplace") or "").strip() or None
-                    if not source_id or not handle:
+
+                    if not source_id or not handle or not actor_id:
                         continue
+
                     connection.execute(
                         text(
                             "UPDATE darkweb_handles "
                             "SET source_handle_id = :source_id "
-                            "WHERE handle = :handle "
-                            "AND ((platform = :platform) OR (platform IS NULL AND :platform IS NULL)) "
-                            "AND (source_handle_id IS NULL OR source_handle_id <> :source_id)"
+                            "WHERE id = ("
+                            "SELECT id FROM darkweb_handles "
+                            "WHERE actor_id = :actor_id "
+                            "AND handle = :handle "
+                            "AND ((platform = :platform) "
+                            "OR (platform IS NULL AND :platform IS NULL)) "
+                            "ORDER BY id ASC LIMIT 1"
+                            ")"
                         ),
                         {
                             "source_id": source_id,
+                            "actor_id": actor_id,
                             "handle": handle,
                             "platform": platform,
                         },
                     )
 
-        # Repair accidental duplicate canonical IDs after CSV backfill, then
-        # enforce uniqueness for the canonical cross-system identity.
-        connection.exec_driver_sql(
-            """
-            WITH ranked AS (
-                SELECT
-                    id,
-                    ROW_NUMBER() OVER (
-                        PARTITION BY source_handle_id
-                        ORDER BY id ASC
-                    ) AS rn
-                FROM darkweb_handles
-                WHERE source_handle_id IS NOT NULL
+        # Rows not represented in the current CSV retain deterministic legacy IDs.
+        connection.execute(
+            text(
+                "UPDATE darkweb_handles "
+                "SET source_handle_id = 'legacy:' || id::text "
+                "WHERE source_handle_id IS NULL"
             )
-            UPDATE darkweb_handles AS target
-            SET source_handle_id = 'legacy:' || target.id::text
-            FROM ranked
-            WHERE target.id = ranked.id
-              AND ranked.rn > 1
-            """
-        )
-
-        connection.exec_driver_sql(
-            "UPDATE darkweb_handles "
-            "SET source_handle_id = 'legacy:' || id::text "
-            "WHERE source_handle_id IS NULL"
         )
 
         connection.exec_driver_sql(
@@ -363,6 +364,12 @@ app.include_router(ai.router)
 app.include_router(integrity.router)
 app.include_router(analytics.router)
 app.include_router(advanced.router)
+
+
+@app.get("/health/live", tags=["Health"])
+def liveness_check():
+    """Return process liveness without requiring optional dependencies."""
+    return {"status": "ok", "service": "Threat Intel API"}
 
 
 @app.get("/health", tags=["Health"])

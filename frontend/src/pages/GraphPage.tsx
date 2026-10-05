@@ -56,6 +56,8 @@ export default function GraphPage({
 
   const [selectedNode, setSelectedNode] =
     useState<GraphNode | null>(null);
+  const [showEvidenceNodes, setShowEvidenceNodes] =
+    useState(false);
 
   const graphRef = useRef<any>(null);
 
@@ -126,20 +128,35 @@ export default function GraphPage({
   }, [actorId]);
 
   const graphData = useMemo(
-    () => ({
-      nodes: graph.nodes.map(
-        (node) => ({
-          ...node,
-        }),
-      ),
+    () => {
+      const nodes = graph.nodes.filter(
+        (node) =>
+          showEvidenceNodes ||
+          getNodeType(node) !== "observation",
+      );
 
-      links: graph.links.map(
-        (link) => ({
+      const visibleIds = new Set(
+        nodes.map((node) => String(node.id)),
+      );
+
+      const links = graph.links.filter(
+        (link) =>
+          visibleIds.has(getEndpointId(link.source)) &&
+          visibleIds.has(getEndpointId(link.target)) &&
+          getEndpointId(link.source) !==
+            getEndpointId(link.target),
+      );
+
+      return {
+        nodes: nodes.map((node) => ({
+          ...node,
+        })),
+        links: links.map((link) => ({
           ...link,
-        }),
-      ),
-    }),
-    [graph],
+        })),
+      };
+    },
+    [graph, showEvidenceNodes],
   );
 
   function getNodeType(
@@ -269,30 +286,61 @@ export default function GraphPage({
   function getNodeDisplayLabel(
     node: GraphNode,
   ): string {
-    const label = String(
-  node.name ??
-    node.label ??
-    node.id ??
-    "",
-);
+    const type = getNodeType(node);
+    const rawLabel = String(
+      node.name ??
+        node.label ??
+        node.id ??
+        "",
+    )
+      .replace(
+        /\s*(?:Synthetic evidence generated.*?controlled SIH demonstration;|not a real-world observation\.?)/gi,
+        "",
+      )
+      .replace(/\s{2,}/g, " ")
+      .trim();
 
-    const labelIsType =
-      ENTITY_TYPES.includes(
-        label
-          .trim()
-          .toLowerCase(),
-      );
+    if (type === "observation") {
+      const indicatorType = String(
+        node.properties?.indicator_type || "",
+      ).trim().toLowerCase();
 
-    if (labelIsType) {
-      return String(
-        node.id ?? label,
-      );
+      const signalLabels: Record<string, string> = {
+        default_banner: "Default service banner",
+        ssl_cert_reuse: "TLS / certificate reuse",
+        exposed_status_page: "Exposed status page",
+        descriptor_timing: "Descriptor timing",
+        banner: "Banner correlation",
+        tls: "TLS / certificate",
+        infrastructure: "Infrastructure signal",
+      };
+
+      if (signalLabels[indicatorType]) {
+        return signalLabels[indicatorType];
+      }
+
+      const lower = rawLabel.toLowerCase();
+      if (lower.includes("banner")) {
+        return "Banner correlation";
+      }
+      if (lower.includes("status page")) {
+        return "Exposed status page";
+      }
+      if (
+        lower.includes("tls") ||
+        lower.includes("certificate") ||
+        lower.includes("cert")
+      ) {
+        return "TLS / certificate reuse";
+      }
+      if (lower.includes("descriptor")) {
+        return "Descriptor timing";
+      }
+
+      return "Evidence";
     }
 
-    return (
-      label ||
-      String(node.id)
-    );
+    return rawLabel || String(node.id);
   }
 
   function getShortLabel(
@@ -305,13 +353,15 @@ export default function GraphPage({
 
     if (
       (getNodeType(node) === "wallet" ||
-        getNodeType(node) === "pgpkey") &&
-      label.length > 18
+        getNodeType(node) === "pgpkey" ||
+        getNodeType(node) === "infrastructure") &&
+      label.length > 20
     ) {
-      return `${label.slice(
-        0,
-        8,
-      )}...${label.slice(-6)}`;
+      return (
+        label.slice(0, 9) +
+        "..." +
+        label.slice(-7)
+      );
     }
 
     return label;
@@ -360,7 +410,7 @@ export default function GraphPage({
         ),
       );
 
-      graph.links.forEach(
+      graphData.links.forEach(
         (link) => {
           const source =
             getEndpointId(
@@ -391,7 +441,7 @@ export default function GraphPage({
       return ids;
     }, [
       selectedNode,
-      graph.links,
+      graphData.links,
     ]);
 
   const selectedRelationships =
@@ -400,7 +450,7 @@ export default function GraphPage({
         return [];
       }
 
-      return graph.links.filter(
+      return graphData.links.filter(
         (link) => {
           const source =
             getEndpointId(
@@ -422,7 +472,7 @@ export default function GraphPage({
       );
     }, [
       selectedNode,
-      graph.links,
+      graphData.links,
     ]);
 
   function getConnectedNode(
@@ -448,20 +498,84 @@ export default function GraphPage({
         ? target
         : source;
 
-    return graph.nodes.find(
+    return graphData.nodes.find(
       (node) =>
         node.id === otherId,
     );
   }
 
+  function getLinkDistance(
+    link: GraphLink,
+  ): number {
+    switch (
+      String(link.relation || "").toUpperCase()
+    ) {
+      case "USES_HANDLE":
+        return 135;
+      case "SHARES_WALLET":
+      case "ALSO_USED_BY":
+        return 145;
+      case "HAS_PGP_KEY":
+        return 125;
+      case "USES_MARKETPLACE":
+        return 120;
+      case "TRUSTS":
+        return 155;
+      case "EVIDENCE_OF":
+        return 115;
+      case "POSSIBLE_MATCH":
+        return 145;
+      case "HAS_OBSERVATION":
+        return 105;
+      default:
+        return 130;
+    }
+  }
+
   function resetView() {
     setSelectedNode(null);
+    graphRef.current?.d3ReheatSimulation?.();
 
-    graphRef.current?.zoomToFit(
-      500,
-      60,
-    );
+    window.setTimeout(() => {
+      graphRef.current?.zoomToFit?.(650, 54);
+    }, 80);
   }
+
+  useEffect(() => {
+    const graphApi = graphRef.current;
+
+    if (!graphApi || !graphData.nodes.length) {
+      return;
+    }
+
+    graphApi
+      .d3Force?.("charge")
+      ?.strength?.(-430)
+      ?.distanceMax?.(720);
+
+    graphApi
+      .d3Force?.("link")
+      ?.distance?.((link: GraphLink) =>
+        getLinkDistance(link),
+      );
+
+    graphApi
+      .d3Force?.("center")
+      ?.strength?.(0.08);
+
+    graphApi.d3ReheatSimulation?.();
+
+    const timer = window.setTimeout(() => {
+      graphApi.zoomToFit?.(650, 54);
+    }, 220);
+
+    return () =>
+      window.clearTimeout(timer);
+  }, [
+    graphData.nodes.length,
+    graphData.links.length,
+    showEvidenceNodes,
+  ]);
 
   if (loading) {
     return (
@@ -529,12 +643,25 @@ export default function GraphPage({
           )}
         </div>
 
-        <button
-          className="secondary-button"
-          onClick={resetView}
-        >
-          Reset View
-        </button>
+        <div className="graph-header-actions">
+          <button
+            className="secondary-button"
+            onClick={() =>
+              setShowEvidenceNodes((value) => !value)
+            }
+          >
+            {showEvidenceNodes
+              ? "Hide evidence nodes"
+              : "Show evidence nodes"}
+          </button>
+
+          <button
+            className="secondary-button"
+            onClick={resetView}
+          >
+            Fit graph
+          </button>
+        </div>
       </div>
 
       <div className="stats">
@@ -542,7 +669,7 @@ export default function GraphPage({
           <span>Nodes</span>
 
           <strong>
-            {graph.nodes.length}
+            {graphData.nodes.length}
           </strong>
         </div>
 
@@ -552,7 +679,7 @@ export default function GraphPage({
           </span>
 
           <strong>
-            {graph.links.length}
+            {graphData.links.length}
           </strong>
         </div>
 
@@ -585,9 +712,11 @@ export default function GraphPage({
               </div>
 
               <h2>
-                Infrastructure &
-                Identity Correlation
+                Infrastructure & Identity Correlation
               </h2>
+              <span className="graph-panel-hint">
+                Select a node to inspect relationships
+              </span>
             </div>
           </div>
 
@@ -647,7 +776,11 @@ export default function GraphPage({
               }
 
               linkDirectionalArrowRelPos={
-                1
+                0.96
+              }
+
+              linkDistance={(link) =>
+                getLinkDistance(link as GraphLink)
               }
 
               linkWidth={(link) => {
@@ -708,13 +841,17 @@ export default function GraphPage({
 
               backgroundColor="#0b0f17"
 
-              cooldownTicks={150}
+              cooldownTicks={190}
 
-              warmupTicks={50}
+              warmupTicks={70}
 
-              d3VelocityDecay={0.3}
+              d3VelocityDecay={0.47}
 
-              d3AlphaDecay={0.025}
+              d3AlphaDecay={0.035}
+
+              minZoom={0.35}
+
+              maxZoom={5}
 
               onEngineStop={() => {
                 graphRef.current?.zoomToFit(
@@ -729,6 +866,10 @@ export default function GraphPage({
                 );
               }}
 
+              onBackgroundClick={() => {
+                setSelectedNode(null);
+              }}
+
               nodeCanvasObject={(
                 node,
                 ctx,
@@ -738,10 +879,8 @@ export default function GraphPage({
                   node as GraphNodeWithPosition;
 
                 if (
-                  typeof n.x !==
-                    "number" ||
-                  typeof n.y !==
-                    "number"
+                  typeof n.x !== "number" ||
+                  typeof n.y !== "number"
                 ) {
                   return;
                 }
@@ -749,8 +888,8 @@ export default function GraphPage({
                 const graphNode =
                   n as GraphNode;
 
-                const label =
-                  getShortLabel(
+                const type =
+                  getNodeType(
                     graphNode,
                   );
 
@@ -760,27 +899,39 @@ export default function GraphPage({
                   );
 
                 const isSelected =
-                  selectedNode?.id ===
-                  n.id;
+                  selectedNode?.id === n.id;
 
                 const isConnected =
                   !selectedNode ||
                   connectedNodeIds.has(
-                    n.id,
+                    String(n.id),
                   );
-
-                const opacity =
-                  isConnected
-                    ? 1
-                    : 0.25;
 
                 ctx.save();
 
                 ctx.globalAlpha =
-                  opacity;
+                  isConnected ? 1 : 0.2;
+
+                if (isSelected) {
+                  ctx.beginPath();
+                  ctx.arc(
+                    n.x,
+                    n.y,
+                    radius +
+                      5 /
+                        Math.max(
+                          globalScale,
+                          0.4,
+                        ),
+                    0,
+                    2 * Math.PI,
+                  );
+                  ctx.fillStyle =
+                    "rgba(255,255,255,0.08)";
+                  ctx.fill();
+                }
 
                 ctx.beginPath();
-
                 ctx.arc(
                   n.x,
                   n.y,
@@ -793,31 +944,66 @@ export default function GraphPage({
                   getNodeColor(
                     graphNode,
                   );
-
                 ctx.fill();
 
                 ctx.strokeStyle =
                   isSelected
                     ? "#ffffff"
-                    : "rgba(255,255,255,0.35)";
+                    : "rgba(255,255,255,0.28)";
 
                 ctx.lineWidth =
-                  isSelected
-                    ? 3 /
-                      globalScale
-                    : 1 /
-                      globalScale;
+                  (isSelected ? 2.8 : 1) /
+                  Math.max(
+                    globalScale,
+                    0.45,
+                  );
 
                 ctx.stroke();
 
+                const primaryType =
+                  type === "actor" ||
+                  type === "handle" ||
+                  type === "trustedhandle";
+
+                const labelVisible =
+                  isSelected ||
+                  (primaryType &&
+                    globalScale >= 0.78) ||
+                  (!primaryType &&
+                    globalScale >= 1.25);
+
+                if (!labelVisible) {
+                  ctx.restore();
+                  return;
+                }
+
+                const rawLabel =
+                  getNodeDisplayLabel(
+                    graphNode,
+                  );
+
+                const label =
+                  rawLabel.length > 22 &&
+                  !primaryType
+                    ? rawLabel.slice(0, 10) +
+                      "..." +
+                      rawLabel.slice(-7)
+                    : rawLabel;
+
                 const fontSize =
                   Math.max(
-                    11 /
-                      globalScale,
+                    10 /
+                      Math.max(
+                        globalScale,
+                        0.45,
+                      ),
                     4,
                   );
 
-                ctx.font = `600 ${fontSize}px Inter, Arial, sans-serif`;
+                ctx.font =
+                  "600 " +
+                  fontSize +
+                  "px Inter, Arial, sans-serif";
 
                 ctx.textAlign =
                   "center";
@@ -830,19 +1016,16 @@ export default function GraphPage({
                     label,
                   ).width;
 
-                const padding = 5;
+                const paddingX = 5;
+                const paddingY = 3;
 
                 const boxWidth =
                   textWidth +
-                  padding * 2;
+                  paddingX * 2;
 
                 const boxHeight =
                   fontSize +
-                  padding;
-
-                const labelX =
-                  n.x -
-                  boxWidth / 2;
+                  paddingY * 2;
 
                 const labelY =
                   n.y +
@@ -850,17 +1033,40 @@ export default function GraphPage({
                   8;
 
                 ctx.fillStyle =
-                  "rgba(11,15,23,0.88)";
+                  "rgba(11,15,23,0.86)";
 
-                ctx.fillRect(
-                  labelX,
-                  labelY,
-                  boxWidth,
-                  boxHeight,
-                );
+                const left =
+                  n.x -
+                  boxWidth / 2;
+
+                if (
+                  typeof ctx.roundRect ===
+                  "function"
+                ) {
+                  ctx.beginPath();
+                  ctx.roundRect(
+                    left,
+                    labelY,
+                    boxWidth,
+                    boxHeight,
+                    4 /
+                      Math.max(
+                        globalScale,
+                        0.45,
+                      ),
+                  );
+                  ctx.fill();
+                } else {
+                  ctx.fillRect(
+                    left,
+                    labelY,
+                    boxWidth,
+                    boxHeight,
+                  );
+                }
 
                 ctx.fillStyle =
-                  "#f1f3f5";
+                  "#edf2f7";
 
                 ctx.textBaseline =
                   "top";
@@ -869,7 +1075,7 @@ export default function GraphPage({
                   label,
                   n.x,
                   labelY +
-                    padding / 2,
+                    paddingY,
                 );
 
                 ctx.restore();
@@ -897,10 +1103,10 @@ export default function GraphPage({
 
           {!selectedNode ? (
             <div className="empty-state">
-              Click any node in
-              the graph to inspect
-              the entity and its
-              relationships.
+              Click an actor, handle, wallet, marketplace, PGP key,
+              or infrastructure node to inspect its relationships.
+              Evidence records are hidden from the canvas by default
+              to keep the network readable.
             </div>
           ) : (
             <>
@@ -1035,10 +1241,14 @@ export default function GraphPage({
                 "Infrastructure",
                 "#da77f2",
               ],
-              [
-                "Observation",
-                "#ffa94d",
-              ],
+              ...(showEvidenceNodes
+                ? [
+                    [
+                      "Evidence",
+                      "#ffa94d",
+                    ],
+                  ]
+                : []),
               [
                 "PGP Key",
                 "#f783ac",

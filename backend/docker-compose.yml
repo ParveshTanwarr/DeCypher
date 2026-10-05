@@ -83,11 +83,14 @@ services:
           "CMD",
           "python",
           "-c",
-          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3).read()"
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/live', timeout=3).read()"
         ]
       interval: 15s
       timeout: 5s
       retries: 10
+      # API startup performs DB/graph/evidence initialization before Uvicorn
+      # accepts requests. Give the container time to finish that first boot.
+      start_period: 120s
 
   celery_worker:
     <<: *backend-common
