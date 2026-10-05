@@ -41,7 +41,7 @@ random_hex() {
   if command -v openssl >/dev/null 2>&1; then
     openssl rand -hex "$bytes"
   else
-    LC_ALL=C tr -dc 'a-f0-9' < /dev/urandom | head -c "$((bytes * 2))"
+    od -An -N "$bytes" -tx1 /dev/urandom | tr -d ' \n'
   fi
 }
 
