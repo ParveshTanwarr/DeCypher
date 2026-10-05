@@ -366,6 +366,12 @@ app.include_router(analytics.router)
 app.include_router(advanced.router)
 
 
+@app.get("/health/live", tags=["Health"])
+def liveness_check():
+    """Return process liveness without requiring optional dependencies."""
+    return {"status": "ok", "service": "Threat Intel API"}
+
+
 @app.get("/health", tags=["Health"])
 def health_check():
     """Return dependency-aware health without hiding partial outages."""
