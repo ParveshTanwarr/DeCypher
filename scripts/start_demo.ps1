@@ -24,7 +24,7 @@ function New-HexSecret([int]$Bytes = 24) {
     $buffer = New-Object byte[] $Bytes
     $rng = [System.Security.Cryptography.RandomNumberGenerator]::Create()
     try { $rng.GetBytes($buffer) } finally { $rng.Dispose() }
-    return [Convert]::ToHexString($buffer)
+    return ([BitConverter]::ToString($buffer)).Replace("-", "")
 }
 
 function Get-EnvValue([string]$Text, [string]$Name) {
