@@ -131,6 +131,26 @@ $envText = Set-EnvValue $envText "DEMO_REFERENCE_DATE" "2026-10-05"
 $envText = Set-EnvValue $envText "AUTOSCAN_ENABLED" "false"
 $envText = Set-EnvValue $envText "COLLECTION_ENABLED" "false"
 
+# Re-read the final values. Existing real credentials are preserved and are
+# the values used for derived settings such as DATABASE_URL and the console output.
+$postgresPassword = Get-EnvValue $envText "POSTGRES_PASSWORD"
+$neo4jPassword = Get-EnvValue $envText "NEO4J_PASSWORD"
+$grafanaPassword = Get-EnvValue $envText "GRAFANA_ADMIN_PASSWORD"
+$secretKey = Get-EnvValue $envText "SECRET_KEY"
+$adminPassword = Get-EnvValue $envText "ADMIN_PASSWORD"
+$analystPassword = Get-EnvValue $envText "ANALYST_PASSWORD"
+$scannerPassword = Get-EnvValue $envText "SCANNER_SERVICE_PASSWORD"
+
+if ([string]::IsNullOrWhiteSpace($postgresPassword) -or
+    [string]::IsNullOrWhiteSpace($neo4jPassword) -or
+    [string]::IsNullOrWhiteSpace($grafanaPassword) -or
+    [string]::IsNullOrWhiteSpace($secretKey) -or
+    [string]::IsNullOrWhiteSpace($adminPassword) -or
+    [string]::IsNullOrWhiteSpace($analystPassword) -or
+    [string]::IsNullOrWhiteSpace($scannerPassword)) {
+    Fail "backend/.env is missing one or more required credentials."
+}
+
 $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
 [System.IO.File]::WriteAllText($envPath, $envText, $utf8NoBom)
 
