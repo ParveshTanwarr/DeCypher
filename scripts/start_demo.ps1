@@ -120,9 +120,10 @@ $envText = Set-EnvPlaceholder $envText "ADMIN_PASSWORD" $adminPassword @("replac
 $envText = Set-EnvPlaceholder $envText "ANALYST_PASSWORD" $analystPassword @("replace-with-a-strong-investigator-password")
 $envText = Set-EnvPlaceholder $envText "SCANNER_SERVICE_PASSWORD" $scannerPassword @("replace-with-a-strong-service-password")
 
+$finalPostgresPassword = Get-EnvValue $envText "POSTGRES_PASSWORD"
 $databaseValue = Get-EnvValue $envText "DATABASE_URL"
 if ([string]::IsNullOrWhiteSpace($databaseValue) -or $databaseValue -match "change-this-in-local-env") {
-    $envText = Set-EnvValue $envText "DATABASE_URL" "postgresql+psycopg2://postgres:$postgresPassword@127.0.0.1:5433/threat_intel"
+    $envText = Set-EnvValue $envText "DATABASE_URL" "postgresql+psycopg2://postgres:$finalPostgresPassword@127.0.0.1:5433/threat_intel"
 }
 
 $envText = Set-EnvValue $envText "DEMO_MODE" "true"
