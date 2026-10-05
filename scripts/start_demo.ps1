@@ -206,7 +206,7 @@ if (-not $NoFrontend) {
     try {
         if (-not (Test-Path (Join-Path $frontendDir "node_modules"))) {
             Info "Installing frontend dependencies with npm ci..."
-            & npm ci
+            & npm.cmd ci
             if ($LASTEXITCODE -ne 0) {
                 Fail "npm ci failed."
             }
@@ -232,7 +232,7 @@ if (-not $NoFrontend) {
         Write-Host "========================================" -ForegroundColor Cyan
         Write-Host ""
 
-        & npm run dev -- --host 127.0.0.1
+        & npm.cmd run dev -- --host 127.0.0.1
     }
     finally {
         Pop-Location
